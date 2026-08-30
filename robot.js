@@ -102,7 +102,7 @@ class Robot {
       this.diagnostic.status = 'LOADING';
       this.diagnostic.mainPattern = `Aguardando dados (${this.history.length}/${this.resultsToAnalyze})`;
       this.diagnostic.confidence = 0;
-      this.diagnostic.suggestedEntry = null;
+      this.diagnostic.suggestedEntry = this.getFixedTargetColor() || null;
       this.diagnostic.patternScores = {};
       this.diagnostic.totalScore = 0;
       this.diagnostic.filterResults = {};
@@ -112,6 +112,11 @@ class Robot {
     }
 
     this.diagnostic.status = 'ANALYZING';
+
+    const fixedTarget = this.getFixedTargetColor();
+    if (fixedTarget) {
+      this.diagnostic.suggestedEntry = fixedTarget;
+    }
 
     const strategies = RobotEngine.strategies;
     const strategyNames = Object.keys(strategies);
