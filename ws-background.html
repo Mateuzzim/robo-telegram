@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>WS Background</title>
+</head>
+<body>
+<p id="status" style="font:12px monospace;color:#666;padding:8px">WebSocket Background rodando...</p>
+<script src="config.js"></script>
+<script src="store.js"></script>
+<script src="event-bus.js"></script>
+<script src="utils.js"></script>
+<script src="ws-source.js"></script>
+<script src="robot.js"></script>
+<script src="robot-engine.js"></script>
+<script src="telegram.js"></script>
+<script src="app.js"></script>
+<script>
+App.init();
+
+const statusEl = document.getElementById('status');
+
+const KEYS = { wheel: 'historico-wheel-v1', double: 'historico-double-v1' };
+const MAX_RESULTS = 100;
+
+function loadHistory(key) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(key) || 'null');
+    if (Array.isArray(saved)) return saved;
+  } catch {}
+  return [];
+}
+
+function saveHistory(key, data) {
+  localStorage.setItem(key, JSON.stringify(data.slice(0, MAX_RESULTS)));
+}
+
+function normalizeColor(color) {
+  return String(color || '').toLowerCase();
+}
+
+function resultKey(r) {
+  const number = r.cellIndex ?? r.number ?? '';
+  const color = normalizeColor(r.cellColor ?? r.color);
+  return number + ':' + color + ':' + (r.multiplier || '');
+}
+
+function isDuplicate(history, item) {
+  const key = resultKey(item);
+  for (let i = 0; i < Math.min(history.length, 5); i++) {
+    if (resultKey(history[i]) === key) return true;
+  }
+  return false;
+}
+
+function addResult(label, data) {
+  const key = KEYS[label];
+  if (!key) return;
+  const history = loadHistory(key);
+  let item;
+  if (label === 'wheel') {
+    item = { cellIndex: data.number, cellColor: normalizeColor(data.color), multiplier: data.multiplier, time: Date.now() };
+  } else {
+    item = { number: data.number, color: normalizeColor(data.color), time: Date.now() };
+  }
+  if (isDuplicate(history, item)) return;
+  history.unshift(item);
+  saveHistory(key, history);
+  updateStatus(label, item);
+}
+
+function mergeHistory(label, results) {
+  const key = KEYS[label];
+  if (!key) return;
+  const history = loadHistory(key);
+  const existing = new Set(history.map(r => resultKey(r)));
+  const incoming = results.map(r => {
+    if (label === 'wheel') {
+      return { cellIndex: r.number, cellColor: normalizeColor(r.color), multiplier: r.multiplier, time: Date.now() };
+    }
+    return { number: r.number, color: normalizeColor(r.color), time: Date.now() };
+  });
+  const newItems = incoming.filter(r => !existing.has(resultKey(r)));
+  const merged = newItems.concat(history).slice(0, MAX_RESULTS);
+  saveHistory(key, merged);
+  updateStatus(label, merged[0]);
+}
+
+function updateStatus(label, item) {
+  if (!item) return;
+  const history = loadHistory(KEYS[label]);
+  const color = normalizeColor(item.cellColor ?? item.color);
+  const number = item.cellIndex ?? item.number ?? '--';
+  statusEl.textContent = `[${new Date().toLocaleTimeString()}] ${label}: ${history.length} resultados | ultimo ${color} ${number}`;
+}
+
+EventBus.on('result:new', (d) => {
+  if (d.label === 'wheel' || d.label === 'double') {
+    addResult(d.label, d);
+  }
+});
+
+EventBus.on('results:history', (d) => {
+  if (d.label === 'wheel' || d.label === 'double') {
+    mergeHistory(d.label, d.results);
+  }
+});
+
+EventBus.on('ws-status', (d) => {
+  statusEl.textContent = `[${new Date().toLocaleTimeString()}] ${d.label}: ${d.connected ? 'Online' : 'Offline'}`;
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    if (Sources.wheel && !Sources.wheel.connected) Sources.wheel.connect();
+    if (Sources.double && !Sources.double.connected) Sources.double.connect();
+  }
+});
+
+window.addEventListener('beforeunload', () => {
+  if (Sources.wheel) Sources.wheel.disconnect();
+  if (Sources.double) Sources.double.disconnect();
+});
+</script>
+</body>
+</html>

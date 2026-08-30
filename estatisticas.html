@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Estatisticas</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="nav">
+  <span class="nav-brand">ROBOS</span>
+  <div class="nav-links">
+    <a href="index.html">Dashboard</a><a href="monitoramento.html">Monitoramento</a><a href="robos.html">Robos</a>
+    <a href="configuracoes.html">Config</a><a href="estatisticas.html" class="active">Estatisticas</a><a href="logs.html">Logs</a>
+    <a href="mensagens.html">Mensagens</a>
+  </div>
+  <div class="nav-status"><a href="ws-background.html" target="_blank" style="font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text3)">BG</a></div>
+</nav>
+<div class="container">
+  <div class="grid-4" id="globalStats" style="margin-bottom:20px"></div>
+  <div class="card">
+    <div class="card-header"><span class="card-title">Estatisticas por Robo</span></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Robo</th><th>Jogo</th><th>Sinais</th><th>Wins</th><th>Loss</th><th>Assertividade</th></tr></thead>
+      <tbody id="statsTable"></tbody>
+    </table></div>
+  </div>
+</div>
+<script src="config.js"></script>
+<script src="store.js"></script>
+<script src="event-bus.js"></script>
+<script src="utils.js"></script>
+<script src="ws-source.js"></script>
+<script src="robot.js"></script>
+<script src="robot-engine.js"></script>
+<script src="telegram.js"></script>
+<script src="app.js"></script>
+<script>
+App.init();
+function renderStats() {
+  const robots = RobotEngine.getAllStates();
+  const totalSignals = robots.reduce((s,r)=>s+(r.stats?.signals||0),0);
+  const totalWins = robots.reduce((s,r)=>s+(r.stats?.wins||0),0);
+  const totalLoss = robots.reduce((s,r)=>s+(r.stats?.losses||0),0);
+  const assertividade = totalSignals>0?Math.round((totalWins/totalSignals)*100):0;
+  document.getElementById('globalStats').innerHTML =
+    createStatCard('Total Sinais',totalSignals,'blue')+
+    createStatCard('Total Wins',totalWins,'green')+
+    createStatCard('Total Loss',totalLoss,'red')+
+    createStatCard('Assertividade',assertividade+'%','blue');
+  document.getElementById('statsTable').innerHTML = robots.map(r=>{
+    const s=r.stats||{};
+    const a=s.signals>0?Math.round((s.wins/s.signals)*100):0;
+    return `<tr><td><strong>${r.name}</strong></td><td>${r.game}</td><td>${s.signals||0}</td><td style="color:var(--green)">${s.wins||0}</td><td style="color:var(--red)">${s.losses||0}</td><td>${a}%</td></tr>`;
+  }).join('');
+}
+renderStats();
+EventBus.on('robots:synced', renderStats);
+</script>
+</body>
+</html>

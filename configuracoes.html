@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Configuracoes</title>
+<link rel="stylesheet" href="style.css">
+<style>
+.ch-list{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.ch-item{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px}
+.ch-item span{font-size:13px;color:var(--text)}
+.ch-item .ch-id{font-size:11px;color:var(--text3);font-family:monospace}
+.robot-link{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)}
+.robot-link:last-child{border-bottom:none}
+.robot-link select{padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px}
+.robot-link label{font-size:12px;color:var(--text2)}
+.test-result{margin-top:8px;padding:8px 12px;border-radius:6px;font-size:12px;font-weight:600;display:none}
+.test-ok{display:block;background:rgba(41,217,120,.12);color:var(--green)}
+.test-err{display:block;background:rgba(255,74,85,.12);color:var(--red)}
+</style>
+</head>
+<body>
+<nav class="nav">
+  <span class="nav-brand">ROBOS</span>
+  <div class="nav-links">
+    <a href="index.html">Dashboard</a><a href="monitoramento.html">Monitoramento</a><a href="robos.html">Robos</a>
+    <a href="configuracoes.html" class="active">Config</a><a href="estatisticas.html">Estatisticas</a><a href="logs.html">Logs</a>
+    <a href="mensagens.html">Mensagens</a>
+  </div>
+  <div class="nav-status"><a href="ws-background.html" target="_blank" style="font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text3)">BG</a></div>
+</nav>
+<div class="container" style="max-width:700px">
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header"><span class="card-title">WebSocket</span></div>
+    <div class="form-group"><label>URL Wheel</label><input id="cfgWheel" placeholder="wss://..."></div>
+    <div class="form-group"><label>URL Double</label><input id="cfgDouble" placeholder="wss://..."></div>
+    <div><button class="btn btn-green btn-sm" onclick="saveWsConfig()">Salvar WS</button></div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header"><span class="card-title">Telegram Bot</span></div>
+    <div class="form-group"><label>Token do Bot</label><input id="tgToken" placeholder="123456:ABC-DEF..." type="password"></div>
+    <div class="form-group"><label>Dono Oficial</label><input id="tgOwner" placeholder="@usuario ou nome"></div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="btn btn-green btn-sm" onclick="saveToken()">Salvar Telegram</button>
+      <button class="btn btn-ghost btn-sm" onclick="testToken()">Testar Conexao</button>
+      <button class="btn btn-ghost btn-sm" onclick="clearTelegramMessages()">Resetar Mensagens</button>
+    </div>
+    <div id="testResult" class="test-result"></div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header">
+      <span class="card-title">Canais / Grupos</span>
+      <button class="btn btn-green btn-sm" onclick="showAddChannel()">+ Adicionar</button>
+    </div>
+    <div id="addChannelForm" style="display:none;margin-bottom:12px">
+      <div style="display:flex;gap:8px">
+        <input id="chName" placeholder="Nome (ex: Sinais VIP)" style="flex:1;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
+        <input id="chId" placeholder="Chat ID (-100...)" style="flex:1;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
+        <button class="btn btn-green btn-sm" onclick="addChannel()">Add</button>
+        <button class="btn btn-ghost btn-sm" onclick="hideAddChannel()">Cancelar</button>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:6px">Para descobrir o Chat ID: envie uma mensagem no grupo e acesse <code>https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code></div>
+    </div>
+    <div id="channelsList" class="ch-list"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="card-title">Vincular Robos aos Canais</span></div>
+    <div id="robotLinks"></div>
+    <div style="margin-top:12px"><button class="btn btn-green btn-sm" onclick="saveRobotLinks()">Salvar Vinculos</button></div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <div class="card-header"><span class="card-title">Status</span></div>
+    <div id="statusInfo" style="font-size:13px"></div>
+  </div>
+
+</div>
+<script src="config.js"></script>
+<script src="store.js"></script>
+<script src="event-bus.js"></script>
+<script src="utils.js"></script>
+<script src="ws-source.js"></script>
+<script src="robot.js"></script>
+<script src="robot-engine.js"></script>
+<script src="telegram.js"></script>
+<script src="app.js"></script>
+<script>
+App.init();
+
+const TOKEN_KEY = 'telegram-bot-token';
+const CHANNELS_KEY = 'telegram-channels';
+const OWNER_KEY = 'telegram-owner-name';
+
+function getToken() { return localStorage.getItem(TOKEN_KEY) || ''; }
+function getOwner() { return localStorage.getItem(OWNER_KEY) || ''; }
+function getChannels() { try { return JSON.parse(localStorage.getItem(CHANNELS_KEY) || '[]'); } catch { return []; } }
+function saveChannels(ch) { localStorage.setItem(CHANNELS_KEY, JSON.stringify(ch)); }
+
+function getPendingRobotLinks() {
+  const pending = {};
+  RobotEngine.getAllStates().forEach(r => {
+    const enabledEl = document.getElementById('tgEnabled_' + r.id);
+    const channelEl = document.getElementById('tgChannel_' + r.id);
+    if (enabledEl || channelEl) {
+      pending[r.id] = {
+        enabled: enabledEl ? enabledEl.checked : !!r.telegram?.enabled,
+        channelId: channelEl ? channelEl.value : (r.telegram?.channelId || '')
+      };
+    }
+  });
+  return pending;
+}
+
+document.getElementById('cfgWheel').value = CONFIG.wheel.wsUrl;
+document.getElementById('cfgDouble').value = CONFIG.double.wsUrl;
+document.getElementById('tgToken').value = getToken();
+document.getElementById('tgOwner').value = getOwner();
+
+function saveWsConfig() {
+  CONFIG.wheel.wsUrl = document.getElementById('cfgWheel').value;
+  CONFIG.double.wsUrl = document.getElementById('cfgDouble').value;
+  alert('Configuracao salva. Recarregue a pagina para reconectar.');
+}
+
+function saveToken() {
+  const t = document.getElementById('tgToken').value.trim();
+  const owner = document.getElementById('tgOwner').value.trim();
+  localStorage.setItem(TOKEN_KEY, t);
+  localStorage.setItem(OWNER_KEY, owner);
+  alert('Token salvo.');
+}
+
+function clearTelegramMessages() {
+  if (!confirm('Limpar IDs das mensagens salvas do Telegram? As proximas atualizacoes enviarao novas mensagens.')) return;
+  localStorage.removeItem('telegram-live-messages-v1');
+  localStorage.removeItem('telegram-signal-messages-v1');
+  localStorage.removeItem('telegram-entry-messages-v1');
+  localStorage.removeItem('telegram-entry-events-v1');
+  alert('Mensagens do Telegram resetadas.');
+}
+
+async function testToken() {
+  const token = getToken();
+  const el = document.getElementById('testResult');
+  if (!token) { el.className = 'test-result test-err'; el.textContent = 'Salve o token primeiro.'; return; }
+  try {
+    const r = await fetch('https://api.telegram.org/bot' + token + '/getMe');
+    const d = await r.json();
+    if (d.ok) {
+      el.className = 'test-result test-ok';
+      el.textContent = 'Conectado: @' + d.result.username + ' (' + d.result.first_name + ')';
+    } else {
+      el.className = 'test-result test-err';
+      el.textContent = 'Erro: ' + (d.description || 'Token invalido');
+    }
+  } catch (e) {
+    el.className = 'test-result test-err';
+    el.textContent = 'Falha na conexao: ' + e.message;
+  }
+}
+
+function showAddChannel() { document.getElementById('addChannelForm').style.display = 'block'; }
+function hideAddChannel() { document.getElementById('addChannelForm').style.display = 'none'; document.getElementById('chName').value = ''; document.getElementById('chId').value = ''; }
+
+function addChannel() {
+  const name = document.getElementById('chName').value.trim();
+  const id = document.getElementById('chId').value.trim();
+  if (!name || !id) { alert('Preencha nome e Chat ID.'); return; }
+  const channels = getChannels();
+  if (channels.find(c => c.id === id)) { alert('Este Chat ID ja existe.'); return; }
+  channels.push({ name, id });
+  saveChannels(channels);
+  hideAddChannel();
+  renderChannels();
+  renderRobotLinks();
+  renderStatus();
+}
+
+function removeChannel(id) {
+  if (!confirm('Remover este canal?')) return;
+  saveChannels(getChannels().filter(c => c.id !== id));
+  renderChannels();
+  renderRobotLinks();
+  renderStatus();
+}
+
+function renderChannels() {
+  const channels = getChannels();
+  const el = document.getElementById('channelsList');
+  if (!channels.length) { el.innerHTML = '<div style="font-size:13px;color:var(--text3);padding:8px 0">Nenhum canal adicionado.</div>'; return; }
+  el.innerHTML = channels.map(c => `
+    <div class="ch-item">
+      <div><span>${escapeHtml(c.name)}</span><div class="ch-id">${c.id}</div></div>
+      <button class="btn btn-sm btn-ghost" onclick="removeChannel('${c.id}')">Remover</button>
+    </div>`).join('');
+}
+
+function renderRobotLinks() {
+  const pendingLinks = getPendingRobotLinks();
+  const robots = RobotEngine.getAllStates();
+  const channels = getChannels();
+  const el = document.getElementById('robotLinks');
+  if (!robots.length) { el.innerHTML = '<div style="font-size:13px;color:var(--text3)">Nenhum robo criado.</div>'; return; }
+  el.innerHTML = robots.map(r => {
+    const pending = pendingLinks[r.id] || {};
+    const current = pending.channelId !== undefined ? pending.channelId : (r.telegram?.channelId || '');
+    const enabled = pending.enabled !== undefined ? pending.enabled : !!r.telegram?.enabled;
+    return `<div class="robot-link">
+      <div>
+        <strong style="font-size:13px">${escapeHtml(r.name)}</strong>
+        <span style="font-size:11px;color:var(--text3);margin-left:8px">${r.game}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <label><input type="checkbox" id="tgEnabled_${r.id}" ${enabled ? 'checked' : ''} style="margin-right:4px">Ativar</label>
+        <select id="tgChannel_${r.id}">
+          <option value="">Sem canal</option>
+          ${channels.map(c => `<option value="${c.id}" ${current === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
+        </select>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function saveRobotLinks() {
+  const robots = RobotEngine.getAllRobots();
+  robots.forEach(r => {
+    const enabled = document.getElementById('tgEnabled_' + r.id)?.checked || false;
+    const channelId = document.getElementById('tgChannel_' + r.id)?.value || '';
+    r.telegram = { enabled, channelId };
+  });
+  RobotEngine.save();
+  renderRobotLinks();
+  renderStatus();
+  alert('Vinculos salvos.');
+}
+
+function renderStatus() {
+  const robots = RobotEngine.getAllStates();
+  const online = robots.filter(r => r.status === 'online').length;
+  const withTg = robots.filter(r => r.telegram?.enabled).length;
+  const token = getToken();
+  const wheelStatus = Store.get('source-status-wheel', {});
+  const doubleStatus = Store.get('source-status-double', {});
+  document.getElementById('statusInfo').innerHTML = `
+    <div>Robos: <strong>${robots.length}</strong> (${online} online)</div>
+    <div>Telegram: <strong style="color:${token ? 'var(--green)' : 'var(--red)'}">${token ? 'Configurado' : 'Sem token'}</strong></div>
+    <div>Canais: <strong>${getChannels().length}</strong></div>
+    <div>Robos com Telegram: <strong>${withTg}</strong></div>
+    <div>Fonte Wheel: <strong style="color:${wheelStatus.connected ? 'var(--green)' : 'var(--red)'}">${wheelStatus.connected ? 'Online' : 'Offline'}</strong></div>
+    <div>Fonte Double: <strong style="color:${doubleStatus.connected ? 'var(--green)' : 'var(--red)'}">${doubleStatus.connected ? 'Online' : 'Offline'}</strong></div>`;
+}
+
+renderChannels();
+renderRobotLinks();
+renderStatus();
+EventBus.on('robots:synced', renderStatus);
+EventBus.on('robots:synced', renderRobotLinks);
+window.addEventListener('storage', (e) => {
+  if (e.key === CHANNELS_KEY) {
+    renderChannels();
+    renderRobotLinks();
+    renderStatus();
+  }
+});
+setInterval(renderStatus, 2000);
+</script>
+</body>
+</html>

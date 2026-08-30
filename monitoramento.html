@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Monitoramento - Sistema de Robos</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="monitoramento.css">
+</head>
+<body>
+<nav class="nav">
+  <span class="nav-brand">ROBOS</span>
+  <div class="nav-links">
+    <a href="index.html">Dashboard</a>
+    <a href="monitoramento.html" class="active">Monitoramento</a>
+    <a href="robos.html">Robos</a>
+    <a href="configuracoes.html">Config</a>
+    <a href="estatisticas.html">Estatisticas</a>
+    <a href="logs.html">Logs</a>
+    <a href="mensagens.html">Mensagens</a>
+  </div>
+  <div class="nav-status">
+    <a href="ws-background.html" target="_blank" style="font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text3);margin-right:8px">BG</a>
+    <div class="dot" id="connDot"></div><span id="connText" style="font-size:12px;color:var(--text2)">Conectando...</span></div>
+</nav>
+<div class="container">
+  <div class="grid-5" id="stats" style="margin-bottom:20px"></div>
+  <div class="monitor-section">
+    <div class="card-header"><span class="card-title">Robos</span></div>
+    <div class="robot-grid" id="robotGrid"></div>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <div class="card-header"><span class="card-title">Feed Global em Tempo Real</span></div>
+    <div class="feed" id="feed" style="max-height:500px"></div>
+  </div>
+</div>
+<script src="config.js"></script>
+<script src="store.js"></script>
+<script src="event-bus.js"></script>
+<script src="utils.js"></script>
+<script src="ws-source.js"></script>
+<script src="robot.js"></script>
+<script src="robot-engine.js"></script>
+<script src="telegram.js"></script>
+<script src="app.js"></script>
+<script>
+App.init();
+const feedEl = document.getElementById('feed');
+const statsEl = document.getElementById('stats');
+const gridEl = document.getElementById('robotGrid');
+const connDot = document.getElementById('connDot');
+const connText = document.getElementById('connText');
+let feedEntries = [];
+
+EventBus.on('ws-status', (d) => {
+  if (d.label === 'wheel') {
+    connDot.className = 'dot' + (d.connected ? '' : ' off');
+    connText.textContent = d.connected ? 'Online' : 'Offline';
+  }
+});
+
+function renderConnectionStatus() {
+  const status = App.getSourceStatus('wheel');
+  connDot.className = 'dot' + (status.connected ? '' : ' off');
+  connText.textContent = status.connected ? 'Online' : 'Offline';
+}
+
+EventBus.on('robot:log', (d) => {
+  feedEntries.unshift(d);
+  if (feedEntries.length > 200) feedEntries.pop();
+  renderFeed();
+});
+
+EventBus.on('signal:created', (d) => { feedEntries.unshift({ time: Date.now(), id: d.robotId, message: 'Sinal: ' + d.target }); renderFeed(); });
+EventBus.on('signal:win', (d) => { feedEntries.unshift({ time: Date.now(), id: d.robotId, message: 'WIN! ' + d.target }); renderFeed(); });
+EventBus.on('signal:loss', (d) => { feedEntries.unshift({ time: Date.now(), id: d.robotId, message: 'LOSS! ' + d.target }); renderFeed(); });
+
+function renderFeed() {
+  feedEl.innerHTML = feedEntries.slice(0, 100).map(e =>
+    `<div class="feed-entry"><span class="feed-time">${formatTime(e.time)}</span><span class="feed-robot">${escapeHtml(e.id)}</span><span class="feed-msg">${escapeHtml(e.message)}</span></div>`
+  ).join('');
+}
+
+function renderAll() {
+  const robots = RobotEngine.getAllStates();
+  const online = robots.filter(r => r.status === 'online').length;
+  const offline = robots.filter(r => r.status === 'offline').length;
+  const paused = robots.filter(r => r.status === 'paused').length;
+  const wins = robots.reduce((s, r) => s + (r.stats?.wins || 0), 0);
+  const losses = robots.reduce((s, r) => s + (r.stats?.losses || 0), 0);
+  const total = robots.reduce((s, r) => s + (r.stats?.signals || 0), 0);
+  const assertividade = total > 0 ? Math.round((wins / total) * 100) : 0;
+
+  statsEl.innerHTML =
+    createStatCard('Online', online, 'green') +
+    createStatCard('Offline', offline, 'red') +
+    createStatCard('Pausados', paused, 'yellow') +
+    createStatCard('Wins', wins, 'green') +
+    createStatCard('Assertividade', assertividade + '%', 'blue');
+
+  gridEl.innerHTML = robots.map(r => {
+    const conf = r.diagnostic?.confidence || 0;
+    const confColor = conf >= 80 ? 'var(--green)' : conf >= 60 ? 'var(--yellow)' : 'var(--red)';
+    return `<div class="robot-card">
+      <div class="robot-card-header"><span class="robot-card-name">${escapeHtml(r.name)}</span>${createBadge(r.status)}</div>
+      <div class="robot-card-info">
+        <div><span class="label">Estrategia:</span> <span class="value">${r.strategy}</span></div>
+        <div><span class="label">Jogo:</span> <span class="value">${r.game}</span></div>
+        <div><span class="label">Ultimo:</span> <span class="value">${r.lastResult ? (r.lastResult.color || r.lastResult.number) : '--'}</span></div>
+        <div><span class="label">Modo:</span> <span class="value">${r.mode}</span></div>
+      </div>
+      <div class="conf-bar"><div class="conf-bar-fill" style="width:${conf}%;background:${confColor}"></div></div>
+      <div style="font-size:11px;margin-top:4px">Confianca: ${conf}%</div>
+      <div class="stat-mini"><span class="label">Wins</span><span class="value win">${r.stats?.wins || 0}</span></div>
+      <div class="stat-mini"><span class="label">Losses</span><span class="value loss">${r.stats?.losses || 0}</span></div>
+      <div class="robot-card-actions" style="margin-top:10px">
+        <a href="robo.html?id=${r.id}" class="btn btn-sm btn-green">Abrir</a>
+        <button class="btn btn-sm btn-ghost" onclick="toggleRobot('${r.id}','${r.status}')">${r.status === 'online' ? 'Pausar' : 'Retomar'}</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleRobot(id, status) {
+  if (status === 'online') RobotEngine.pauseRobot(id);
+  else RobotEngine.resumeRobot(id);
+  renderAll();
+}
+
+renderAll();
+renderConnectionStatus();
+setInterval(renderAll, 5000);
+setInterval(renderConnectionStatus, 2000);
+</script>
+</body>
+</html>

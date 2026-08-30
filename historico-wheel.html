@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Histórico Wheel - Sistema de Robos</title>
+<link rel="stylesheet" href="style.css">
+<style>
+#results{display:grid;grid-template-columns:repeat(20,1fr);gap:10px;width:100%}
+.result{aspect-ratio:1/1;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:clamp(14px,1.5vw,20px);font-weight:800;color:#fff;border:1px solid rgba(255,255,255,.09);box-shadow:0 8px 24px rgba(0,0,0,.28);user-select:none;min-height:40px}
+.red{background:linear-gradient(145deg,#ff4a55,#c7192d)}
+.black{background:linear-gradient(145deg,#262a33,#090a0e)}
+.grey,.gray{background:linear-gradient(145deg,#262a33,#090a0e)}
+.green{background:linear-gradient(145deg,#29d978,#07883f)}
+.blue{background:linear-gradient(145deg,#2368ff,#1748b3)}
+.white{background:linear-gradient(145deg,#f5f5f5,#b8bdc8);color:#111}
+@media(max-width:768px){#results{grid-template-columns:repeat(12,1fr);gap:4px}.result{font-size:clamp(9px,2.6vw,13px);min-height:24px;border-radius:7px;box-shadow:none}}
+@media(max-width:420px){#results{grid-template-columns:repeat(10,1fr);gap:3px}.result{font-size:clamp(8px,2.7vw,11px);min-height:20px;border-radius:5px}}
+</style>
+</head>
+<body>
+<nav class="nav">
+  <span class="nav-brand">ROBOS</span>
+  <div class="nav-links">
+    <a href="index.html">Dashboard</a>
+    <a href="monitoramento.html">Monitoramento</a>
+    <a href="robos.html">Robos</a>
+    <a href="configuracoes.html">Config</a>
+    <a href="estatisticas.html">Estatisticas</a>
+    <a href="logs.html">Logs</a>
+    <a href="historico-wheel.html" class="active">Wheel</a>
+    <a href="historico-double.html">Double</a>
+    <a href="mensagens.html">Mensagens</a>
+  </div>
+  <div class="nav-status">
+    <a href="ws-background.html" target="_blank" style="font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text3);margin-right:8px">BG</a>
+    <div class="dot" id="connDot"></div><span id="connText" style="font-size:12px;color:var(--text2)">Conectando...</span></div>
+</nav>
+<div class="container">
+  <div class="card">
+    <div class="card-header"><span class="card-title">Histórico Wheel</span><span id="resultCount" style="font-size:13px;color:var(--text2)">0 resultados</span></div>
+    <div id="results"></div>
+  </div>
+</div>
+<script src="config.js"></script>
+<script src="store.js"></script>
+<script src="event-bus.js"></script>
+<script src="utils.js"></script>
+<script src="ws-source.js"></script>
+<script src="robot.js"></script>
+<script src="robot-engine.js"></script>
+<script src="telegram.js"></script>
+<script src="app.js"></script>
+<script>
+App.init();
+const resultsEl = document.getElementById('results');
+const countEl = document.getElementById('resultCount');
+const connDot = document.getElementById('connDot');
+const connText = document.getElementById('connText');
+const STORAGE_KEY = 'historico-wheel-v1';
+const MAX_RESULTS = 100;
+
+function loadHistory() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+    if (Array.isArray(saved) && saved.length) return saved;
+  } catch {}
+  return [];
+}
+
+function render() {
+  const history = loadHistory().slice(0, MAX_RESULTS);
+  countEl.textContent = history.length + ' resultados';
+  resultsEl.innerHTML = history.map(r =>
+    `<div class="result ${getColor(r)}">${r.multiplier ? r.multiplier + 'X' : String(getNumber(r))}</div>`
+  ).join('');
+}
+
+function getColor(result) {
+  return String(result.cellColor ?? result.color ?? '').toLowerCase();
+}
+
+function getNumber(result) {
+  return result.cellIndex ?? result.number ?? '';
+}
+
+EventBus.on('ws-status', (d) => {
+  if (d.label === 'wheel') {
+    connDot.className = 'dot' + (d.connected ? '' : ' off');
+    connText.textContent = d.connected ? 'Online' : 'Offline';
+  }
+});
+
+function renderConnectionStatus() {
+  const status = App.getSourceStatus('wheel');
+  connDot.className = 'dot' + (status.connected ? '' : ' off');
+  connText.textContent = status.connected ? 'Online' : 'Offline';
+}
+
+EventBus.on('result:new', (d) => {
+  if (d.label !== 'wheel') return;
+  render();
+});
+
+EventBus.on('results:history', (d) => {
+  if (d.label !== 'wheel') return;
+  render();
+});
+
+window.addEventListener('storage', (e) => {
+  if (e.key === STORAGE_KEY) render();
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') render();
+});
+
+render();
+renderConnectionStatus();
+setInterval(render, 3000);
+setInterval(renderConnectionStatus, 2000);
+</script>
+</body>
+</html>

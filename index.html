@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Sistema de Robos</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="nav">
+  <span class="nav-brand">ROBOS</span>
+  <div class="nav-links">
+    <a href="index.html" class="active">Dashboard</a>
+    <a href="monitoramento.html">Monitoramento</a>
+    <a href="robos.html">Robos</a>
+    <a href="configuracoes.html">Config</a>
+    <a href="estatisticas.html">Estatisticas</a>
+    <a href="logs.html">Logs</a>
+    <a href="historico-wheel.html">Wheel</a>
+    <a href="historico-double.html">Double</a>
+    <a href="mensagens.html">Mensagens</a>
+  </div>
+  <div class="nav-status">
+    <a href="ws-background.html" target="_blank" style="font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text3);margin-right:8px">BG</a>
+    <div class="dot" id="connDot"></div>
+    <span id="connText" style="font-size:12px;color:var(--text2)">Conectando...</span>
+  </div>
+</nav>
+<div class="container">
+  <div class="grid-5" id="stats" style="margin-bottom:20px"></div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-header"><span class="card-title">Robos Ativos</span></div>
+      <div id="robotsList"></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Feed Global</span></div>
+      <div class="feed" id="feed"></div>
+    </div>
+  </div>
+  <div style="margin-top:16px" class="card">
+    <div class="card-header"><span class="card-title">Ultimos Sinais</span></div>
+    <div class="table-wrap"><table><thead><tr><th>Robo</th><th>Alvo</th><th>Confianca</th><th>Status</th><th>Horario</th></tr></thead><tbody id="signalsTable"></tbody></table></div>
+  </div>
+</div>
+<script src="config.js"></script>
+<script src="store.js"></script>
+<script src="event-bus.js"></script>
+<script src="utils.js"></script>
+<script src="ws-source.js"></script>
+<script src="robot.js"></script>
+<script src="robot-engine.js"></script>
+<script src="telegram.js"></script>
+<script src="app.js"></script>
+<script>
+App.init();
+const feedEl = document.getElementById('feed');
+const statsEl = document.getElementById('stats');
+const robotsEl = document.getElementById('robotsList');
+const signalsEl = document.getElementById('signalsTable');
+const connDot = document.getElementById('connDot');
+const connText = document.getElementById('connText');
+let feedEntries = [];
+let signals = [];
+
+EventBus.on('ws-status', (d) => {
+  if (d.label === 'wheel') {
+    connDot.className = 'dot' + (d.connected ? '' : ' off');
+    connText.textContent = d.connected ? 'Online' : 'Offline';
+  }
+});
+
+function renderConnectionStatus() {
+  const status = App.getSourceStatus('wheel');
+  connDot.className = 'dot' + (status.connected ? '' : ' off');
+  connText.textContent = status.connected ? 'Online' : 'Offline';
+}
+
+EventBus.on('robot:log', (d) => {
+  feedEntries.unshift(d);
+  if (feedEntries.length > 100) feedEntries.pop();
+  renderFeed();
+});
+
+EventBus.on('signal:created', (d) => {
+  signals.unshift(d);
+  if (signals.length > 50) signals.pop();
+  renderSignals();
+});
+
+EventBus.on('signal:win', (d) => {
+  feedEntries.unshift({ time: Date.now(), id: d.robotId, message: 'WIN! ' + d.target });
+  renderFeed();
+});
+
+EventBus.on('signal:loss', (d) => {
+  feedEntries.unshift({ time: Date.now(), id: d.robotId, message: 'LOSS! ' + d.target });
+  renderFeed();
+});
+
+function renderFeed() {
+  feedEl.innerHTML = feedEntries.slice(0, 30).map(e =>
+    `<div class="feed-entry"><span class="feed-time">${formatTime(e.time)}</span><span class="feed-robot">${escapeHtml(e.id)}</span><span class="feed-msg">${escapeHtml(e.message)}</span></div>`
+  ).join('');
+}
+
+function renderSignals() {
+  signalsEl.innerHTML = signals.slice(0, 15).map(s =>
+    `<tr><td>${escapeHtml(s.robotId)}</td><td>${escapeHtml(s.target)}</td><td>${s.confidence}%</td><td><span class="badge badge-signal">${s.status}</span></td><td>${formatTime(s.createdAt)}</td></tr>`
+  ).join('');
+}
+
+function renderDashboard() {
+  const robots = RobotEngine.getAllStates();
+  const online = robots.filter(r => r.status === 'online').length;
+  const offline = robots.filter(r => r.status === 'offline').length;
+  const paused = robots.filter(r => r.status === 'paused').length;
+  const totalSignals = robots.reduce((s, r) => s + (r.stats?.signals || 0), 0);
+  const totalWins = robots.reduce((s, r) => s + (r.stats?.wins || 0), 0);
+
+  statsEl.innerHTML =
+    createStatCard('Online', online, 'green') +
+    createStatCard('Offline', offline, 'red') +
+    createStatCard('Pausados', paused, 'yellow') +
+    createStatCard('Sinais', totalSignals, 'blue') +
+    createStatCard('Wins', totalWins, 'green');
+
+  robotsEl.innerHTML = robots.map(r =>
+    `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div><strong>${escapeHtml(r.name)}</strong><br><span style="font-size:12px;color:var(--text3)">${r.strategy} | ${r.game}</span></div>
+      <div style="display:flex;align-items:center;gap:8px">${createBadge(r.status)}<a href="robo.html?id=${r.id}" class="btn btn-sm btn-ghost">Abrir</a></div>
+    </div>`
+  ).join('');
+}
+
+renderDashboard();
+renderSignals();
+renderConnectionStatus();
+setInterval(renderDashboard, 5000);
+setInterval(renderConnectionStatus, 2000);
+</script>
+</body>
+</html>

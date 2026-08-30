@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Robo - Sistema</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="robo.css">
+<style>@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}</style>
+</head>
+<body>
+<nav class="nav">
+  <span class="nav-brand">ROBOS</span>
+  <div class="nav-links"><a href="index.html">Dashboard</a><a href="monitoramento.html">Monitoramento</a><a href="robos.html">Robos</a></div>
+  <div class="nav-status"><a href="ws-background.html" target="_blank" style="font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text3);margin-right:8px">BG</a><div class="dot" id="connDot"></div></div>
+</nav>
+<div class="container">
+  <div id="robotHeader" style="margin-bottom:16px"></div>
+  <div class="robo-page">
+    <div>
+      <div class="robo-section"><div class="robo-section-title">Status do Robo</div><div id="robotStatus"></div></div>
+      <div class="robo-section" style="margin-top:16px"><div class="robo-section-title">Diagnostico da IA</div><div id="diagnostico" style="max-height:350px;overflow-y:auto"></div></div>
+      <div class="robo-section" style="margin-top:16px"><div class="robo-section-title">Filtro de Sinal</div><div id="filtro"></div></div>
+      <div class="robo-section" style="margin-top:16px"><div class="robo-section-title">Placar e Estatisticas</div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px" id="placar"></div></div>
+    </div>
+    <div>
+      <div class="robo-section"><div class="robo-section-title">Historico</div><div id="historyGrid" style="max-height:500px;overflow-y:auto"></div></div>
+      <div class="robo-section" style="margin-top:16px">
+        <div class="robo-section-title" style="display:flex;align-items:center;justify-content:space-between">
+          <span>Console em Tempo Real</span>
+          <select id="consoleSource" onchange="switchConsole()" style="padding:4px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px">
+            <option value="logs">Logs do Robo</option>
+          </select>
+        </div>
+        <div id="consoleLogs" class="robo-console"></div>
+        <div id="consoleHistory" style="display:none"></div>
+      </div>
+      <div class="robo-section" style="margin-top:16px"><div class="robo-section-title">Configuracao</div><div class="config-form" id="configForm"></div></div>
+      <div class="robo-section" style="margin-top:16px">
+        <div class="robo-section-title">Telegram</div>
+        <div id="telegramConfig"></div>
+        <div id="telegramMessagePreview" style="margin-top:12px"></div>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px"><button class="btn btn-green" onclick="saveConfig()">Salvar</button><button class="btn btn-red" onclick="resetRobot()">Resetar</button><button class="btn btn-yellow" onclick="resetPatterns()">Resetar Padroes</button></div>
+    </div>
+  </div>
+</div>
+<script src="config.js"></script>
+<script src="store.js"></script>
+<script src="event-bus.js"></script>
+<script src="utils.js"></script>
+<script src="ws-source.js"></script>
+<script src="robot.js"></script>
+<script src="robot-engine.js"></script>
+<script src="telegram.js"></script>
+<script src="app.js"></script>
+<script>
+App.init();
+const robotId = new URLSearchParams(location.search).get('id');
+const connDot = document.getElementById('connDot');
+let robotData = null;
+let tgFormRendered = false;
+let configFormRendered = false;
+function getChannels() { try { return JSON.parse(localStorage.getItem('telegram-channels') || '[]'); } catch { return []; } }
+function getHistory(key) { try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch { return []; } }
+function getEntryMessages() { try { return JSON.parse(localStorage.getItem('telegram-entry-messages-v1') || '{}'); } catch { return {}; } }
+const TARGETS = {
+  wheel: [
+    { value: 'any', label: 'Qualquer cor' },
+    { value: 'grey', label: 'Preto 2X' },
+    { value: 'red', label: 'Vermelho 3X' },
+    { value: 'blue', label: 'Azul 5X' },
+    { value: 'green', label: 'Verde 50X' }
+  ],
+  double: [
+    { value: 'any', label: 'Qualquer cor' },
+    { value: 'red', label: 'Vermelho 2X' },
+    { value: 'black', label: 'Preto 2X' },
+    { value: 'green', label: 'Verde 14X' }
+  ]
+};
+
+EventBus.on('robot:state', (d) => { if (d && d.id === robotId) { robotData = d; renderAll(); } });
+EventBus.on('robot:log', (d) => { if (d && d.id === robotId) appendLog(d); });
+
+function appendLog(entry) {
+  if (consoleMode !== 'logs') return;
+  const el = document.getElementById('consoleLogs');
+  const cls = entry.message.includes('ERRO') ? 'log-err' : entry.message.includes('WIN') ? 'log-ok' : entry.message.includes('SINAL') ? 'log-info' : '';
+  el.innerHTML = `<div class="log-entry"><span class="log-time">${formatTime(entry.time)}</span> | <span class="${cls}">${escapeHtml(entry.message)}</span></div>` + el.innerHTML;
+}
+
+function switchConsole() {
+  consoleMode = document.getElementById('consoleSource').value;
+  document.getElementById('consoleLogs').style.display = consoleMode === 'logs' ? 'block' : 'none';
+  document.getElementById('consoleHistory').style.display = 'none';
+}
+
+function renderAll() {
+  if (!robotData) return;
+  const r = robotData;
+
+  const targetColorLabel = { any: 'QUALQUER', red: 'VERMELHO', black: 'PRETO', green: 'VERDE', blue: 'AZUL', grey: 'PRETO', gray: 'PRETO', white: 'BRANCO' };
+  const formatColorLabel = color => targetColorLabel[String(color || '').toLowerCase()] || String(color || '--').toUpperCase();
+  const targetLabel = formatColorLabel(r.target?.color || 'any');
+  document.getElementById('robotHeader').innerHTML = `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+    <div>
+      <h1 style="font-size:22px">${escapeHtml(r.name)} ${createBadge(r.status)}</h1>
+      <p style="color:var(--text3);font-size:13px">${r.game} | ${r.strategy} | ${r.mode} | Alvo: <strong style="color:var(--green)">${targetLabel}${r.target?.multiplier ? ' ' + r.target.multiplier + 'X' : ''}</strong></p>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+      ${r.status === 'offline'
+        ? '<button class="btn btn-sm btn-green" onclick="toggleRobotPower()">▶ Play</button>'
+        : '<button class="btn btn-sm btn-red" onclick="toggleRobotPower()">■ Stop</button>'}
+      <button class="btn btn-sm btn-ghost" onclick="renameRobot()">Renomear</button>
+    </div>
+  </div>`;
+  document.getElementById('robotStatus').innerHTML = `<div class="grid-2" style="font-size:13px">
+    <div><span style="color:var(--text3)">Status:</span> <strong>${r.status}</strong></div>
+    <div><span style="color:var(--text3)">Jogo:</span> <strong>${r.game}</strong></div>
+    <div><span style="color:var(--text3)">Estrategia:</span> <strong>${r.strategy}</strong></div>
+    <div><span style="color:var(--text3)">Modo:</span> <strong>${r.mode}</strong></div>
+    <div><span style="color:var(--text3)">Ultimo resultado:</span> <strong>${r.lastResult ? (r.lastResult.color || r.lastResult.number) : '--'}</strong></div>
+  </div>`;
+  const d = r.diagnostic || {};
+  const suggestedEntryLabel = d.suggestedEntry ? formatColorLabel(d.suggestedEntry) : '--';
+  const decisionTargetLabel = d.decision?.target ? formatColorLabel(d.decision.target) : '--';
+  const entrySendState = getEntrySendState(r);
+  const diagStatus = d.status || 'IDLE';
+  const diagColor = diagStatus === 'ACTIVE' ? 'var(--green)' : diagStatus === 'ANALYZING' ? 'var(--yellow)' : diagStatus === 'LOADING' ? 'var(--blue)' : 'var(--text3)';
+  const diagBg = diagStatus === 'ACTIVE' ? 'rgba(41,217,120,.08)' : diagStatus === 'ANALYZING' ? 'rgba(224,197,64,.08)' : diagStatus === 'LOADING' ? 'rgba(35,104,255,.08)' : 'transparent';
+  document.getElementById('diagnostico').innerHTML = `
+    <div style="padding:10px 14px;background:${diagBg};border:1px solid ${diagColor};border-radius:8px;margin-bottom:12px;display:flex;align-items:center;gap:10px">
+      <div style="width:10px;height:10px;border-radius:50%;background:${diagColor};animation:${diagStatus==='ACTIVE'?'pulse 1.5s infinite':diagStatus==='LOADING'?'pulse 1s infinite':'none'}"></div>
+      <div>
+        <div style="font-size:14px;font-weight:700;color:${diagColor}">${diagStatus}</div>
+        <div style="font-size:11px;color:var(--text3)">${d.analyzedResults || 0} resultados analisados</div>
+      </div>
+      <div style="margin-left:auto;text-align:right">
+        <div style="font-size:20px;font-weight:800;color:${(d.confidence||0)>=80?'var(--green)':(d.confidence||0)>=60?'var(--yellow)':'var(--red)'}">${d.confidence || 0}%</div>
+        <div style="font-size:10px;color:var(--text3)">CONFIANCA</div>
+        ${d.targetFiltered ? `<div style="font-size:10px;color:var(--blue);margin-top:2px">Filtrado: ${d.filteredCount || 0} cores</div>` : ''}
+      </div>
+    </div>
+    <div class="grid-3" style="font-size:13px;margin-bottom:12px">
+      <div><span style="color:var(--text3)">Padrao:</span><br><strong>${d.mainPattern || '--'}</strong></div>
+      <div><span style="color:var(--text3)">Entrada:</span><br><strong style="color:var(--blue);font-size:16px">${suggestedEntryLabel}</strong></div>
+      <div><span style="color:var(--text3)">Score:</span><br><strong>${d.totalScore || 0}/100</strong></div>
+    </div>
+    <div class="pattern-list">${Object.entries(d.patternScores || {}).map(([k,v]) => `<div class="pattern-item"><span>${k}</span><div class="pattern-bar"><div class="pattern-bar-fill" style="width:${v}%;background:${v>=80?'var(--green)':v>=60?'var(--yellow)':'var(--red)'}"></div></div><span>${v}%</span></div>`).join('')}</div>
+    ${d.decision ? `<div class="decision-box ${d.decision.approved?'decision-approved':'decision-rejected'}">${d.decision.approved?'SINAL APROVADO':'SINAL REJEITADO'}<br><span style="font-size:12px;font-weight:400">${d.decision.reason||''}</span></div>` : ''}
+    <div style="margin-top:12px;padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:8px">
+      <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px">Padroes Usados (nao repete)</div>
+      <div style="font-size:11px;color:var(--text3)">Indice do ciclo: <strong>${r.strategyIndex || 0}</strong> / 6</div>
+      ${Object.entries(r.usedPatterns || {}).filter(([k,v]) => v && v.length > 0).map(([color, patterns]) => `
+        <div style="margin-top:6px">
+          <span style="font-size:11px;color:var(--text2)">${color}:</span>
+          ${patterns.map(p => `<span style="display:inline-block;padding:2px 6px;margin:2px;background:rgba(41,130,255,.1);border:1px solid rgba(41,130,255,.2);border-radius:4px;font-size:10px;color:var(--blue)">${p.strategy}</span>`).join('')}
+        </div>
+      `).join('')}
+    </div>`;
+  const s = r.stats || {};
+  const histKey = r.game === 'double' ? 'historico-double-v1' : 'historico-wheel-v1';
+  const histData = getHistory(histKey);
+  const isDbl = r.game === 'double';
+  document.getElementById('filtro').innerHTML = `
+    <div class="signal-flow">
+      <div class="sf-step">
+        <div class="sf-step-header">
+          <div class="sf-step-num sf-step-1">${d.mainPattern ? '1' : '...'}</div>
+          <span class="sf-step-label">Identifica a Entrada</span>
+          ${d.mainPattern ? '<span class="sf-badge sf-badge-ok">OK</span>' : ''}
+        </div>
+        ${d.mainPattern ? `<div class="sf-step-body">
+          <div class="sf-row"><span class="sf-key">Padrao:</span><strong>${d.mainPattern || '--'}</strong></div>
+          <div class="sf-row"><span class="sf-key">Entrada:</span><strong class="sf-blue">${suggestedEntryLabel}</strong></div>
+          <div class="sf-row"><span class="sf-key">Resultados:</span><span>${r.history?.length || 0} analisados</span></div>
+        </div>` : ''}
+      </div>
+      <div class="sf-step">
+        <div class="sf-step-header">
+          <div class="sf-step-num sf-step-2">${d.mainPattern ? '2' : '...'}</div>
+          <span class="sf-step-label">Analise da IA</span>
+          ${d.confidence ? '<span class="sf-badge sf-badge-ok">OK</span>' : ''}
+        </div>
+        ${d.mainPattern ? `<div class="sf-step-body">
+          <div class="sf-row"><span class="sf-key">Confianca:</span><strong style="color:${(d.confidence||0)>=80?'var(--green)':(d.confidence||0)>=60?'var(--yellow)':'var(--red)'}; font-size:16px">${d.confidence || 0}%</strong></div>
+          <div class="sf-row"><span class="sf-key">Confluencias:</span><strong>${d.confluences || 0}</strong></div>
+          <div class="sf-row"><span class="sf-key">Risco:</span><strong style="color:${(d.risk||'BAIXO')==='ALTO'?'var(--red)':(d.risk||'BAIXO')==='MEDIO'?'var(--yellow)':'var(--green)'}">${d.risk || 'BAIXO'}</strong></div>
+          <div class="sf-row"><span class="sf-key">Score do sinal:</span><strong style="font-size:16px">${d.signalScore || 0}/100</strong></div>
+          ${Object.keys(d.patternScores||{}).length ? `<div class="sf-patterns">${Object.entries(d.patternScores).map(([k,v]) => `<div class="sf-pat"><span>${k}</span><div class="sf-pat-bar"><div style="width:${v}%;background:${v>=80?'var(--green)':v>=60?'var(--yellow)':'var(--red)'}"></div></div><span>${v}%</span></div>`).join('')}</div>` : ''}
+        </div>` : ''}
+      </div>
+      <div class="sf-step">
+        <div class="sf-step-header">
+          <div class="sf-step-num sf-step-3">${d.decision ? '3' : '...'}</div>
+          <span class="sf-step-label">Filtro de Sinal</span>
+          ${d.decision ? (d.decision.approved ? '<span class="sf-badge sf-badge-pass">APROVADO</span>' : '<span class="sf-badge sf-badge-fail">REJEITADO</span>') : ''}
+        </div>
+        ${d.decision ? `<div class="sf-step-body">
+          <div class="sf-filter-grid">${Object.entries(d.filterResults||{}).map(([k,v]) => `<div class="sf-filter-item ${v?'sf-fi-pass':'sf-fi-fail'}"><span class="sf-fi-icon">${v?'&#10003;':'&#10007;'}</span><span>${k}</span></div>`).join('')}</div>
+          ${d.blockReason ? `<div class="sf-row sf-warn"><span>Motivo:</span> <strong>${d.blockReason}</strong></div>` : ''}
+        </div>` : ''}
+      </div>
+      <div class="sf-step">
+        <div class="sf-step-header">
+          <div class="sf-step-num sf-step-4">${d.decision?.approved ? '4' : '...'}</div>
+          <span class="sf-step-label">Gera a Entrada</span>
+          ${d.decision?.approved ? `<span class="sf-badge ${entrySendState.badgeClass}">${entrySendState.badge}</span>` : ''}
+        </div>
+        ${d.decision?.approved ? `<div class="sf-step-body">
+          <div class="sf-row"><span class="sf-key">Alvo:</span><strong class="sf-blue" style="font-size:18px">${decisionTargetLabel}</strong></div>
+          <div class="sf-row"><span class="sf-key">Confianca:</span><strong>${d.decision.confidence || 0}%</strong></div>
+          <div class="sf-row"><span class="sf-key">Status:</span><strong style="color:${entrySendState.color}">${entrySendState.label}</strong></div>
+          <div class="sf-row"><span class="sf-key">Envio:</span><span>${entrySendState.detail}</span></div>
+          ${entrySendState.messageId ? `<div class="sf-row"><span class="sf-key">Msg ID:</span><span>${entrySendState.messageId}</span></div>` : ''}
+        </div>` : ''}
+      </div>
+      <div class="sf-step">
+        <div class="sf-step-header">
+          <div class="sf-step-num sf-step-5">5</div>
+          <span class="sf-step-label">Placar Atualizado</span>
+        </div>
+        <div class="sf-step-body">
+          <div class="sf-row"><span class="sf-key">Sinais enviados:</span><span>${s.signals||0}</span></div>
+          <div class="sf-row"><span class="sf-key">Wins:</span><strong class="sf-green">${s.wins||0}</strong></div>
+          <div class="sf-row"><span class="sf-key">Loss:</span><strong class="sf-red">${s.losses||0}</strong></div>
+          <div class="sf-row"><span class="sf-key">Assertividade:</span><strong>${(s.signals||0)>0?Math.round(((s.wins||0)/s.signals)*100)+'%':'--%'}</strong></div>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('placar').innerHTML = [['Sinais',s.signals||0,'blue'],['Wins',s.wins||0,'green'],['Loss',s.losses||0,'red'],['Assertividade',(s.signals||0)>0?Math.round(((s.wins||0)/s.signals)*100)+'%':'--%','blue']].map(([l,v,c])=>`<div class="stat-card ${c}"><div class="stat-label">${l}</div><div class="stat-value">${v}</div></div>`).join('');
+  if (!configFormRendered) {
+    const tgOpts = (TARGETS[r.game] || TARGETS.double).map(t => `<option value="${t.value}" ${r.target?.color === t.value ? 'selected' : ''}>${t.label}</option>`).join('');
+    document.getElementById('configForm').innerHTML = `
+      <div class="form-group"><label>Alvo (Cor)</label><select id="cfgTarget" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">${tgOpts}</select></div>
+      <div class="form-group"><label>Filtro de Sinal</label>
+        <select id="cfgFilterMode" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
+          <option value="desligado" ${r.filterMode==='desligado'?'selected':''}>Desligado</option>
+          <option value="conservador" ${r.filterMode==='conservador'?'selected':''}>Conservador (Conf >=80% | Conflu>=3 | Score>=75)</option>
+          <option value="moderado" ${r.filterMode==='moderado'||!r.filterMode?'selected':''}>Moderado (Conf >=65% | Conflu>=2 | Score>=55)</option>
+          <option value="agressivo" ${r.filterMode==='agressivo'?'selected':''}>Agressivo (Conf >=45% | Conflu>=1 | Score>=30)</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Confianca Minima</label><input id="cfgConf" type="number" value="${r.minimumConfidence||80}"></div>
+      <div class="form-group"><label>Intervalo Min (seg)</label><input id="cfgInterval" type="number" value="${r.intervalMin||60}"></div>
+      <div class="form-group"><label>Gale Max</label><input id="cfgGale" type="number" value="${r.gale?.max||0}"></div>`;
+    configFormRendered = true;
+  }
+
+  if (!tgFormRendered) {
+    const channels = getChannels();
+    const tg = r.telegram || { enabled: false, channelId: '' };
+    document.getElementById('telegramConfig').innerHTML = `
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:10px;cursor:pointer">
+        <input type="checkbox" id="tgEnabled" ${tg.enabled ? 'checked' : ''}> Enviar sinais para Telegram
+      </label>
+      <div class="form-group"><label>Canal de Envio</label>
+        <select id="tgChannel" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
+          <option value="">Selecionar canal...</option>
+          ${channels.map(c => `<option value="${c.id}" ${tg.channelId === c.id ? 'selected' : ''}>${escapeHtml(c.name)} (${c.id})</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group"><label>Tipo de Mensagem</label>
+        <select id="tgMsgType" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
+          <option value="live" ${tg.msgType === 'live' ? 'selected' : ''}>Live (atualiza a cada resultado)</option>
+          <option value="signal" ${tg.msgType === 'signal' ? 'selected' : ''}>Sinal (entrada, win, loss, gale)</option>
+          <option value="both" ${tg.msgType === 'both' || !tg.msgType ? 'selected' : ''}>Live + Sinal</option>
+        </select>
+      </div>
+      <div style="font-size:11px;color:var(--text3)">Adicione canais em Configuracoes > Canais / Grupos</div>`;
+    tgFormRendered = true;
+  }
+  renderTelegramMessagePreview(r);
+  document.getElementById('historyGrid').innerHTML = histData.length
+    ? `<div class="history-grid">${histData.map(h => {
+        const color = isDbl ? h.color : h.cellColor;
+        const num = isDbl ? h.number : h.cellIndex;
+        const mult = !isDbl && h.multiplier ? h.multiplier + 'X' : '';
+        return `<div class="history-cell ${(color||'').toLowerCase()}">${mult || num || ''}</div>`;
+      }).join('')}</div>`
+    : '<div style="color:var(--text3);font-size:12px;padding:8px">Nenhum resultado. Abra ws-background.html</div>';
+}
+
+function getEntrySendState(r) {
+  const tg = r.telegram || {};
+  const current = r.currentSignal || null;
+  const message = tg.channelId ? getEntryMessages()[[r.id, tg.channelId, 'entry'].join(':')] : null;
+  const messageStatus = String(message?.status || '').toLowerCase();
+  const currentStatus = String(current?.status || '').toLowerCase();
+  const sameSignal = !!(current && message?.signalId === current.id);
+
+  if (!tg.enabled || !tg.channelId) {
+    return { badge: 'LOCAL', badgeClass: 'sf-badge-ok', color: 'var(--yellow)', label: 'Entrada gerada no robo', detail: 'Telegram desligado ou sem canal', messageId: '' };
+  }
+
+  if (sameSignal && currentStatus === 'approved' && messageStatus === 'approved') {
+    return { badge: 'ENVIADA', badgeClass: 'sf-badge-pass', color: 'var(--green)', label: 'Entrada enviada', detail: 'Mensagem anterior excluida e nova entrada enviada', messageId: message.messageId || '' };
+  }
+
+  if (sameSignal && currentStatus === 'gale_pending' && messageStatus === 'gale_pending') {
+    return { badge: 'GALE', badgeClass: 'sf-badge-ok', color: 'var(--yellow)', label: 'Gale em andamento', detail: 'Mensagem anterior excluida e G' + (current.gale || 1) + ' enviado', messageId: message.messageId || '' };
+  }
+
+  if (!current && (messageStatus === 'win' || messageStatus === 'loss')) {
+    return { badge: messageStatus.toUpperCase(), badgeClass: messageStatus === 'win' ? 'sf-badge-pass' : 'sf-badge-fail', color: messageStatus === 'win' ? 'var(--green)' : 'var(--red)', label: 'Resultado final enviado', detail: 'Historico atualiza a cada nova cor ate surgir outra entrada', messageId: message.messageId || '' };
+  }
+
+  if (current && message && message.signalId !== current.id && (messageStatus === 'win' || messageStatus === 'loss')) {
+    return { badge: 'LIMPAR', badgeClass: 'sf-badge-ok', color: 'var(--yellow)', label: 'Preparando nova entrada', detail: 'Resultado anterior sera excluido antes do novo envio', messageId: message.messageId || '' };
+  }
+
+  if (current) {
+    return { badge: 'PENDENTE', badgeClass: 'sf-badge-ok', color: 'var(--yellow)', label: 'Entrada gerada', detail: 'Aguardando registro da mensagem no Telegram', messageId: message?.messageId || '' };
+  }
+
+  return { badge: 'PRONTO', badgeClass: 'sf-badge-ok', color: 'var(--text3)', label: 'Aguardando nova entrada', detail: 'Sem sinal ativo no momento', messageId: message?.messageId || '' };
+}
+
+function findEntryMessage(robotId) {
+  const all = getEntryMessages();
+  const exactKey = Object.keys(all).find(k => k.startsWith(robotId + ':') && k.endsWith(':entry'));
+  if (exactKey) return all[exactKey];
+  const looseKey = Object.keys(all).find(k => k.startsWith(robotId + ':'));
+  return looseKey ? all[looseKey] : null;
+}
+
+function renderTelegramMessagePreview(r) {
+  const el = document.getElementById('telegramMessagePreview');
+  if (!el) return;
+  const tg = r.telegram || {};
+  if (!tg.enabled || !tg.channelId) {
+    el.innerHTML = `<div style="padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:8px">
+      <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:4px">Telegram Desconfigurado</div>
+      <div style="font-size:11px;color:var(--text3)">Enabled: ${tg.enabled ? 'SIM' : 'NAO'} | ChannelId: ${tg.channelId || 'VAZIO'} | MsgType: ${tg.msgType || 'both'}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">Configure em: Editar > Telegram > Ativar + Selecionar canal</div>
+    </div>`;
+    return;
+  }
+
+  const key = [r.id, tg.channelId, 'entry'].join(':');
+  const allMessages = getEntryMessages();
+  const message = allMessages[key] || findEntryMessage(r.id);
+  const current = r.currentSignal;
+  const currentStatus = current ? (current.status === 'gale_pending' ? 'GALE ' + (current.gale || 1) : 'ENTRADA') : 'SEM ENTRADA';
+  const messageStatus = message?.status ? String(message.status).toUpperCase() : currentStatus;
+  const updatedAt = message?.updatedAt || message?.createdAt;
+
+  if (!message?.text) {
+    el.innerHTML = `
+      <div style="padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:8px">
+        <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:4px">Mensagem de Entrada</div>
+        <div style="font-size:11px;color:var(--text3)">Chave: <code>${key}</code></div>
+        <div style="font-size:11px;color:var(--text3)">Total msgs no store: ${Object.keys(allMessages).length}</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:4px">Nenhuma mensagem registrada para este robo/canal ainda.</div>
+        ${current ? `<div style="font-size:11px;color:var(--yellow);margin-top:6px">Sinal atual: ${currentStatus}</div>` : ''}
+      </div>`;
+    return;
+  }
+
+  el.innerHTML = `
+    <div style="padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
+        <div style="font-size:12px;font-weight:700;color:var(--text)">Mensagem de Entrada</div>
+        <span style="font-size:10px;color:var(--blue);border:1px solid rgba(41,130,255,.25);border-radius:4px;padding:2px 6px">${escapeHtml(messageStatus)}</span>
+      </div>
+      <pre style="margin:0;white-space:pre-wrap;font:12px/1.45 monospace;color:var(--text2);background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;max-height:220px;overflow:auto">${escapeHtml(message.text)}</pre>
+      <div style="font-size:10px;color:var(--text3);margin-top:6px">Message ID: ${message.messageId || '--'}${updatedAt ? ' | Enviada: ' + formatTime(updatedAt) : ''}</div>
+    </div>`;
+}
+
+function loadRobot() {
+  if (!robotId) { document.body.innerHTML = '<div class="container"><h1>Robo nao especificado - use robo.html?id=robo_id</h1></div>'; return; }
+  const robot = RobotEngine.getRobot(robotId);
+  if (robot && robot.history.length < robot.resultsToAnalyze) {
+    RobotEngine.loadHistoryFromStorage(robot);
+  }
+  robotData = robot?.getState();
+  if (robotData) {
+    renderAll();
+    const sel = document.getElementById('consoleSource');
+    if (sel && !sel.dataset.init) {
+      sel.value = 'logs';
+      switchConsole();
+      sel.dataset.init = '1';
+    }
+  }
+}
+function renderConnectionStatus() {
+  const game = robotData?.game || 'wheel';
+  const status = App.getSourceStatus(game);
+  connDot.className = 'dot' + (status.connected ? '' : ' off');
+}
+function saveConfig() {
+  const robot = RobotEngine.getRobot(robotId);
+  if (!robot) return;
+  robot.minimumConfidence = parseInt(document.getElementById('cfgConf').value) || 80;
+  robot.intervalMin = parseInt(document.getElementById('cfgInterval').value) || 60;
+  robot.gale.max = parseInt(document.getElementById('cfgGale').value) || 0;
+  robot.gale.enabled = robot.gale.max > 0;
+  const targetColor = document.getElementById('cfgTarget')?.value || 'any';
+  const tgOpts = TARGETS[robot.game] || TARGETS.double;
+  const targetMult = tgOpts.find(t => t.value === targetColor)?.label.match(/(\d+)X/)?.[1] || null;
+  robot.target = { color: targetColor, multiplier: targetMult ? parseInt(targetMult) : null };
+  if (typeof robot.normalizeSavedSignalTargets === 'function') robot.normalizeSavedSignalTargets();
+  robot.filterMode = document.getElementById('cfgFilterMode')?.value || 'moderado';
+  robot.telegram = {
+    enabled: document.getElementById('tgEnabled')?.checked || false,
+    channelId: document.getElementById('tgChannel')?.value || '',
+    msgType: document.getElementById('tgMsgType')?.value || 'both',
+    message: robot.telegram?.message || {}
+  };
+  RobotEngine.save();
+  configFormRendered = false;
+  tgFormRendered = false;
+  loadRobot();
+  alert('Configuracao salva');
+}
+function renameRobot() {
+  const robot = RobotEngine.getRobot(robotId);
+  if (!robot) return;
+  const currentName = robot.name || '';
+  const newName = prompt('Novo nome do robo:', currentName);
+  if (!newName || newName.trim() === '' || newName === currentName) return;
+  robot.name = newName.trim();
+  RobotEngine.save();
+  loadRobot();
+}
+function toggleRobotPower() {
+  const robot = RobotEngine.getRobot(robotId);
+  if (!robot) return;
+  if (robot.status === 'offline') {
+    RobotEngine.startRobot(robotId);
+  } else {
+    RobotEngine.stopRobot(robotId);
+  }
+  loadRobot();
+}
+
+function readStoredObject(key) {
+  try { return JSON.parse(localStorage.getItem(key) || '{}'); } catch { return {}; }
+}
+
+function writeStoredObject(key, value) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
+async function deleteStoredTelegramMessage(token, chatId, messageId) {
+  if (!token || !chatId || !messageId || typeof TelegramService === 'undefined') return;
+  const response = await TelegramService.api(token, 'deleteMessage', { chat_id: chatId, message_id: messageId });
+  if (!response.ok && !TelegramService.isAlreadyDeleted(response)) {
+    console.warn('[Telegram] deleteMessage/reset', response.description || 'Erro desconhecido');
+  }
+}
+
+async function resetRobotTelegramMessages(robot) {
+  const token = localStorage.getItem('telegram-bot-token') || '';
+  const stores = ['telegram-live-messages-v1', 'telegram-entry-messages-v1'];
+  for (const storeKey of stores) {
+    const messages = readStoredObject(storeKey);
+    const matchingKeys = Object.keys(messages).filter(key => key === robot.id || key.startsWith(robot.id + ':'));
+    for (const key of matchingKeys) {
+      const parts = key.split(':');
+      const chatId = parts[1] || robot.telegram?.channelId || '';
+      await deleteStoredTelegramMessage(token, chatId, messages[key]?.messageId);
+      delete messages[key];
+    }
+    writeStoredObject(storeKey, messages);
+  }
+
+  const events = readStoredObject('telegram-entry-events-v1');
+  Object.keys(events).forEach(key => {
+    if (key.startsWith(robot.id + '|') || key.startsWith('refresh|' + robot.id + ':')) delete events[key];
+  });
+  writeStoredObject('telegram-entry-events-v1', events);
+}
+
+async function resetRobot() {
+  if (!robotId) return;
+  const r = RobotEngine.getRobot(robotId);
+  if (!r) return;
+  await resetRobotTelegramMessages(r);
+  r.status = 'offline';
+  r.history = [];
+  r.stats = { signals:0, wins:0, losses:0, winSG:0, winG1:0, winG2:0, currentStreak:0, maxWinStreak:0, maxLossStreak:0, patternsFound:0, signalsApproved:0, signalsRejected:0 };
+  r.currentSignal = null;
+  r.galeCount = 0;
+  r.lastSignal = null;
+  r.lastResult = null;
+  r.lastSignalTime = 0;
+  r.signalFlow = { step1:'Aguardando padrao...', step2:'Nenhuma entrada pendente', step3:'Aguardando entrada...', step4:'Placar sera atualizado apos resultado' };
+  r.diagnostic = { status:'IDLE', analyzedResults:0, mainPattern:null, confidence:0, suggestedEntry:null, patternScores:{}, totalScore:0, filterResults:{}, decision:null, risk:'BAIXO', signalScore:0, confluences:0, signalBlocked:false, blockReason:'' };
+  RobotEngine.save();
+  loadRobot();
+}
+function resetPatterns() { if(robotId){ const r = RobotEngine.getRobot(robotId); if(!r) return; r.resetUsedPatterns(); RobotEngine.save(); loadRobot(); alert('Padroes resetados. Proximo ciclo comeca do zero.'); } }
+loadRobot();
+renderConnectionStatus();
+setInterval(loadRobot, 5000);
+setInterval(renderConnectionStatus, 2000);
+</script>
+</body>
+</html>

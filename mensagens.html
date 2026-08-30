@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Mensagens Telegram</title>
+<link rel="stylesheet" href="style.css">
+<style>
+.msg-type-card{padding:16px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;margin-bottom:12px}
+.msg-type-header{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.msg-type-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px}
+.msg-type-icon.live{background:rgba(0,200,83,.12);color:var(--green)}
+.msg-type-icon.entry{background:rgba(41,130,255,.12);color:var(--blue)}
+.msg-type-icon.win{background:rgba(41,217,120,.12);color:var(--green)}
+.msg-type-icon.loss{background:rgba(255,74,85,.12);color:var(--red)}
+.msg-type-icon.gale{background:rgba(255,189,46,.12);color:var(--yellow)}
+.msg-type-title{font-size:14px;font-weight:700;color:var(--text)}
+.msg-type-desc{font-size:12px;color:var(--text3);margin-top:2px}
+.msg-preview{background:#1a1a2e;border:1px solid #2a2a3e;border-radius:8px;padding:12px;font-family:'Courier New',monospace;font-size:12px;color:#e0e0e0;white-space:pre-wrap;line-height:1.5;margin:8px 0;max-height:300px;overflow-y:auto}
+.msg-trigger{display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:rgba(41,130,255,.1);border:1px solid rgba(41,130,255,.2);border-radius:6px;font-size:11px;color:var(--blue);margin:2px}
+.msg-log{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:6px}
+.msg-log-time{font-size:11px;color:var(--text3);white-space:nowrap;min-width:60px}
+.msg-log-type{font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;text-transform:uppercase;min-width:50px;text-align:center}
+.msg-log-type.live{background:rgba(0,200,83,.15);color:var(--green)}
+.msg-log-type.entry{background:rgba(41,130,255,.15);color:var(--blue)}
+.msg-log-text{font-size:12px;color:var(--text2);flex:1;word-break:break-word}
+.msg-log-text .highlight{color:var(--green);font-weight:600}
+.msg-log-text .error{color:var(--red);font-weight:600}
+.tab-bar{display:flex;gap:4px;margin-bottom:16px;flex-wrap:wrap}
+.tab-btn{padding:6px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text3);cursor:pointer;transition:all .15s}
+.tab-btn:hover{border-color:var(--text3)}
+.tab-btn.active{background:rgba(41,130,255,.12);border-color:rgba(41,130,255,.3);color:var(--blue)}
+.editor-area{width:100%;min-height:120px;padding:12px;background:#1a1a2e;border:1px solid #2a2a3e;border-radius:8px;color:#e0e0e0;font-family:'Courier New',monospace;font-size:12px;resize:vertical;line-height:1.5}
+.editor-area:focus{outline:none;border-color:rgba(41,130,255,.5)}
+.var-tag{display:inline-block;padding:2px 6px;background:rgba(41,130,255,.1);border:1px solid rgba(41,130,255,.2);border-radius:4px;font-size:10px;color:var(--blue);margin:2px;cursor:help}
+.sent-badge{font-size:10px;padding:2px 6px;border-radius:4px;font-weight:600}
+.sent-badge.ok{background:rgba(41,217,120,.12);color:var(--green)}
+.sent-badge.err{background:rgba(255,74,85,.12);color:var(--red)}
+.sent-badge.pending{background:rgba(255,189,46,.12);color:var(--yellow)}
+</style>
+</head>
+<body>
+<nav class="nav">
+  <span class="nav-brand">ROBOS</span>
+  <div class="nav-links">
+    <a href="index.html">Dashboard</a><a href="monitoramento.html">Monitoramento</a><a href="robos.html">Robos</a>
+    <a href="configuracoes.html">Config</a><a href="estatisticas.html">Estatisticas</a><a href="logs.html">Logs</a>
+    <a href="mensagens.html" class="active">Mensagens</a>
+  </div>
+  <div class="nav-status"><a href="ws-background.html" target="_blank" style="font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text3)">BG</a></div>
+</nav>
+<div class="container" style="max-width:900px">
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header">
+      <span class="card-title">Tipos de Mensagem</span>
+      <span style="font-size:11px;color:var(--text3)">Como funciona cada envio</span>
+    </div>
+    <div id="messageTypes"></div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header">
+      <span class="card-title">Templates de Mensagem</span>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm btn-ghost" onclick="resetTemplates()">Resetar</button>
+        <button class="btn btn-sm btn-green" onclick="saveTemplates()">Salvar</button>
+      </div>
+    </div>
+    <div class="tab-bar" id="templateTabs"></div>
+    <div id="templateEditor"></div>
+    <div style="margin-top:10px">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:6px">Variaveis disponiveis:</div>
+      <div id="availableVars" style="display:flex;flex-wrap:wrap;gap:2px"></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header">
+      <span class="card-title">Preview ao Vivo</span>
+      <div style="display:flex;gap:6px;align-items:center">
+        <select id="previewRobot" style="padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px">
+          <option value="">Selecionar robo...</option>
+        </select>
+        <button class="btn btn-sm btn-ghost" onclick="refreshPreview()">Atualizar</button>
+      </div>
+    </div>
+    <div id="livePreview" class="msg-preview">Selecione um robo para visualizar</div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header">
+      <span class="card-title">Enviar Teste</span>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <select id="testRobot" style="padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px">
+        <option value="">Selecionar robo...</option>
+      </select>
+      <select id="testChannel" style="padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px">
+        <option value="">Selecionar canal...</option>
+      </select>
+      <select id="testType" style="padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px">
+        <option value="live">Mensagem Live</option>
+        <option value="signal">Sinal Encontrado</option>
+        <option value="win">Resultado WIN</option>
+        <option value="loss">Resultado LOSS</option>
+        <option value="gale">Gale</option>
+      </select>
+      <button class="btn btn-sm btn-green" onclick="sendTestMessage()">Enviar</button>
+    </div>
+    <div id="testResult" style="margin-top:8px;font-size:12px"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Historico de Envios</span>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm btn-ghost" onclick="setLogFilter('all')">Todos</button>
+        <button class="btn btn-sm btn-ghost" onclick="setLogFilter('live')">Live</button>
+        <button class="btn btn-sm btn-ghost" onclick="setLogFilter('entry')">Entry</button>
+        <button class="btn btn-sm btn-ghost" onclick="setLogFilter('error')">Erros</button>
+        <button class="btn btn-sm btn-ghost" onclick="clearSendHistory()">Limpar</button>
+      </div>
+    </div>
+    <div id="sendHistory" style="max-height:400px;overflow-y:auto"></div>
+  </div>
+
+</div>
+<script src="config.js"></script>
+<script src="store.js"></script>
+<script src="event-bus.js"></script>
+<script src="utils.js"></script>
+<script src="ws-source.js"></script>
+<script src="robot.js"></script>
+<script src="robot-engine.js"></script>
+<script src="telegram.js"></script>
+<script src="app.js"></script>
+<script>
+App.init();
+
+const TEMPLATES_KEY = 'telegram-message-templates-v1';
+const SEND_LOG_KEY = 'telegram-send-log-v1';
+let currentTemplateTab = 'live';
+let logFilter = 'all';
+
+const DEFAULT_TEMPLATES = {
+  live: {
+    label: 'Mensagem Live',
+    desc: 'Enviada a cada novo resultado. Atualiza a mensagem no Telegram com status do robo, diagnostico da IA, historico e estatisticas.',
+    trigger: 'Evento: result:new',
+    icon: '📡',
+    template: [
+      '🚨 {GAME} AO VIVO 🚨',
+      '━━━━━━━━━━━━━━━━━━━━',
+      'NOME DO ROBO:',
+      '{ROBO_NAME}',
+      '',
+      '📊 STATUS DO ROBO',
+      '━━━━━━━━━━━━━━━━━━━━',
+      '🟢 Status: {STATUS}',
+      '🎮 Jogo: {GAME_LABEL}',
+      '♟️ Estrategia: {STRATEGY}',
+      '🔄 Modo: {MODE}',
+      '🎯 Ultimo Resultado: {LAST_RESULT}',
+      '',
+      '🧠 DIAGNOSTICO DA IA',
+      '━━━━━━━━━━━━━━━━━━━━',
+      '📡 Status: {AI_STATUS}',
+      '📊 {ANALYZED} Resultados Analisados',
+      '🔥 Confianca: {CONFIDENCE}%',
+      '🔍 Padrao: {PATTERN}',
+      '🎯 Entrada: {ENTRY}',
+      '⭐ Score: {SCORE}/100',
+      '━━━━━━━━━━━━━━━━━━━━',
+      '🎡 HISTORICO RECENTE',
+      '{HISTORY}',
+      '━━━━━━━━━━━━━━━━━━━━',
+      '🏆 RESULTADO DA SESSAO',
+      '✅ WIN: {WINS} | ❌ LOSS: {LOSSES}',
+      '━━━━━━━━━━━━━━━━━━━━',
+      '📈 APROVEITAMENTO',
+      '{RATE_BAR} {RATE}%',
+      '━━━━━━━━━━━━━━━━━━━━',
+      '⛇ Horario: {TIME}'
+    ].join('\n')
+  },
+  signal: {
+    label: 'Sinal Encontrado',
+    desc: 'Enviada quando a IA identifica um padrao e aprova um sinal. Mostra a cor alvo e aproveitamento.',
+    trigger: 'Evento: signal:created',
+    icon: '🤖',
+    template: [
+      '🤖 SINAL ENCONTRADO',
+      '🎯 ENTRAR NA COR',
+      '{TARGET_EMOJI} {TARGET_LABEL}',
+      '━━━━━━━━━━━━━━━━━━━━',
+      '📈 Aproveitamento: {RATE}%',
+      '{RATE_BAR}'
+    ].join('\n')
+  },
+  win: {
+    label: 'Resultado WIN',
+    desc: 'Enviada quando o sinal e confirmado como WIN. Atualiza a mensagem anterior.',
+    trigger: 'Evento: signal:win',
+    icon: '✅',
+    template: [
+      '✅WIN!✅',
+      '━━━━━━━━━━━━━━━━━━━',
+      'Resultado: {RESULT_EMOJI} {RESULT_LABEL}',
+      '━━━━━━━━━━━━━━━━━━━',
+      '📊 PLACAR: ✅{WINS}W / ❌{LOSSES}L ({RATE}%)'
+    ].join('\n')
+  },
+  loss: {
+    label: 'Resultado LOSS',
+    desc: 'Enviada quando o sinal e confirmado como LOSS.',
+    trigger: 'Evento: signal:loss',
+    icon: '❌',
+    template: [
+      '❌LOSS❌',
+      '━━━━━━━━━━━━━━━━━━━',
+      'Resultado: {RESULT_EMOJI} {RESULT_LABEL}',
+      '━━━━━━━━━━━━━━━━━━━',
+      '📊 PLACAR: ✅{WINS}W / ❌{LOSSES}L ({RATE}%)'
+    ].join('\n')
+  },
+  gale: {
+    label: 'Gale',
+    desc: 'Enviada quando o sinal perde e o robo entra em modo gale (tentar recuperar).',
+    trigger: 'Evento: signal:gale',
+    icon: '⚡️',
+    template: [
+      '⚡️ G{GALE_NUM} - TENTANDO NOVAMENTE',
+      '━━━━━━━━━━━━━━━━━━━',
+      'Resultado: {RESULT_EMOJI} {RESULT_LABEL}'
+    ].join('\n')
+  }
+};
+
+const TEMPLATE_VARS = {
+  live: [
+    ['{ROBO_NAME}', 'Nome do robo'],
+    ['{GAME}', 'WHEEL ou DOUBLE'],
+    ['{GAME_LABEL}', 'Wheel ou Double'],
+    ['{STATUS}', 'online/offline'],
+    ['{STRATEGY}', 'Estrategia atual'],
+    ['{MODE}', 'Modo do robo'],
+    ['{LAST_RESULT}', 'Ultimo resultado com emoji'],
+    ['{AI_STATUS}', 'Status da IA'],
+    ['{ANALYZED}', 'Qtd resultados analisados'],
+    ['{CONFIDENCE}', 'Confianca da IA (%)'],
+    ['{PATTERN}', 'Padrao identificado'],
+    ['{ENTRY}', 'Entrada sugerida'],
+    ['{SCORE}', 'Score da IA'],
+    ['{HISTORY}', 'Historico com emojis'],
+    ['{WINS}', 'Total de wins'],
+    ['{LOSSES}', 'Total de losses'],
+    ['{RATE}', 'Taxa de acerto'],
+    ['{RATE_BAR}', 'Barra visual de taxa'],
+    ['{TIME}', 'Horario atual']
+  ],
+  signal: [
+    ['{TARGET_EMOJI}', 'Emoji da cor alvo'],
+    ['{TARGET_LABEL}', 'Nome da cor'],
+    ['{RATE}', 'Taxa de acerto'],
+    ['{RATE_BAR}', 'Barra visual']
+  ],
+  win: [
+    ['{RESULT_EMOJI}', 'Emoji do resultado'],
+    ['{RESULT_LABEL}', 'Nome da cor'],
+    ['{WINS}', 'Total de wins'],
+    ['{LOSSES}', 'Total de losses'],
+    ['{RATE}', 'Taxa de acerto']
+  ],
+  loss: [
+    ['{RESULT_EMOJI}', 'Emoji do resultado'],
+    ['{RESULT_LABEL}', 'Nome da cor'],
+    ['{WINS}', 'Total de wins'],
+    ['{LOSSES}', 'Total de losses'],
+    ['{RATE}', 'Taxa de acerto']
+  ],
+  gale: [
+    ['{GALE_NUM}', 'Numero do gale (1, 2...)'],
+    ['{RESULT_EMOJI}', 'Emoji do resultado'],
+    ['{RESULT_LABEL}', 'Nome da cor']
+  ]
+};
+
+function getTemplates() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(TEMPLATES_KEY) || '{}');
+    const merged = {};
+    for (const key of Object.keys(DEFAULT_TEMPLATES)) {
+      merged[key] = { ...DEFAULT_TEMPLATES[key], ...(saved[key] || {}) };
+    }
+    return merged;
+  } catch { return { ...DEFAULT_TEMPLATES }; }
+}
+
+function saveTemplates() {
+  const templates = {};
+  for (const key of Object.keys(DEFAULT_TEMPLATES)) {
+    const el = document.getElementById('tpl_' + key);
+    if (el) templates[key] = { template: el.value };
+  }
+  localStorage.setItem(TEMPLATES_KEY, JSON.stringify(templates));
+  alert('Templates salvos.');
+  refreshPreview();
+}
+
+function resetTemplates() {
+  if (!confirm('Resetar todos os templates para o padrao?')) return;
+  localStorage.removeItem(TEMPLATES_KEY);
+  renderTemplateTabs();
+  renderTemplateEditor();
+  renderAvailableVars();
+  refreshPreview();
+}
+
+function getSendLog() {
+  try { return JSON.parse(localStorage.getItem(SEND_LOG_KEY) || '[]'); }
+  catch { return []; }
+}
+
+function addSendLog(entry) {
+  const log = getSendLog();
+  log.unshift({ ...entry, time: Date.now() });
+  if (log.length > 200) log.length = 200;
+  localStorage.setItem(SEND_LOG_KEY, JSON.stringify(log));
+}
+
+function clearSendHistory() {
+  if (!confirm('Limpar historico de envios?')) return;
+  localStorage.setItem(SEND_LOG_KEY, '[]');
+  renderSendHistory();
+}
+
+function renderMessageTypes() {
+  const templates = getTemplates();
+  const types = [
+    { key: 'live', icon: '📡', color: 'live', trigger: 'result:new', desc: 'Enviada a cada novo resultado do jogo. Atualiza a mensagem existente no Telegram (editMessageText). Se a mensagem ainda nao existe, envia uma nova. Contem status completo do robo, diagnostico da IA, historico e estatisticas.' },
+    { key: 'signal', icon: '🤖', color: 'entry', trigger: 'signal:created', desc: 'Enviada quando a IA identifica um padrao e aprova a entrada. Mostra a cor alvo e aproveitamento atual.' },
+    { key: 'win', icon: '✅', color: 'win', trigger: 'signal:win', desc: 'Enviada quando o resultado confirma um WIN. Atualiza a mensagem de sinal anterior para mostrar o resultado.' },
+    { key: 'loss', icon: '❌', color: 'loss', trigger: 'signal:loss', desc: 'Enviada quando o resultado confirma um LOSS. Atualiza a mensagem de sinal anterior.' },
+    { key: 'gale', icon: '⚡️', color: 'gale', trigger: 'signal:gale', desc: 'Enviada quando o sinal perde e o robo entra em modo gale (tentativa de recuperacao). Mostra qual gale esta ativo.' }
+  ];
+
+  document.getElementById('messageTypes').innerHTML = types.map(t => `
+    <div class="msg-type-card">
+      <div class="msg-type-header">
+        <div class="msg-type-icon ${t.color}">${t.icon}</div>
+        <div>
+          <div class="msg-type-title">${templates[t.key]?.label || t.key}</div>
+          <div class="msg-type-desc">${t.desc}</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <span class="msg-trigger">⚡ ${t.trigger}</span>
+        <span style="font-size:11px;color:var(--text3)">→</span>
+        <span class="msg-trigger">📱 sendMessage / editMessageText</span>
+        <span style="font-size:11px;color:var(--text3)">→</span>
+        <span class="msg-trigger">💬 Canal: {channelId}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderTemplateTabs() {
+  const templates = getTemplates();
+  const keys = Object.keys(templates);
+  document.getElementById('templateTabs').innerHTML = keys.map(k =>
+    `<div class="tab-btn ${k === currentTemplateTab ? 'active' : ''}" onclick="setTemplateTab('${k}')">${templates[k].icon} ${templates[k].label}</div>`
+  ).join('');
+}
+
+function setTemplateTab(tab) {
+  currentTemplateTab = tab;
+  renderTemplateTabs();
+  renderTemplateEditor();
+  renderAvailableVars();
+}
+
+function renderTemplateEditor() {
+  const templates = getTemplates();
+  const t = templates[currentTemplateTab];
+  if (!t) return;
+  document.getElementById('templateEditor').innerHTML = `
+    <div style="margin-bottom:8px">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:2px">${t.desc}</div>
+      <div style="font-size:11px;color:var(--text3)">Trigger: <code>${t.trigger}</code></div>
+    </div>
+    <textarea class="editor-area" id="tpl_${currentTemplateTab}" spellcheck="false">${escapeHtml(t.template)}</textarea>
+  `;
+}
+
+function renderAvailableVars() {
+  const vars = TEMPLATE_VARS[currentTemplateTab] || [];
+  document.getElementById('availableVars').innerHTML = vars.map(([v, desc]) =>
+    `<span class="var-tag" title="${desc}" onclick="insertVar('${v}')">${v}</span>`
+  ).join('');
+}
+
+function insertVar(varName) {
+  const ta = document.querySelector('.editor-area');
+  if (!ta) return;
+  const start = ta.selectionStart;
+  const end = ta.selectionEnd;
+  ta.value = ta.value.substring(0, start) + varName + ta.value.substring(end);
+  ta.selectionStart = ta.selectionEnd = start + varName.length;
+  ta.focus();
+}
+
+function renderTestSelects() {
+  const robots = RobotEngine.getAllStates();
+  const channels = getChannels();
+  const prevRobot = document.getElementById('testRobot').value;
+  const prevChannel = document.getElementById('testChannel').value;
+  const prevPreview = document.getElementById('previewRobot').value;
+  const robotOptions = '<option value="">Selecionar robo...</option>' +
+    robots.map(r => `<option value="${r.id}">${escapeHtml(r.name)} (${r.game})</option>`).join('');
+  document.getElementById('testRobot').innerHTML = robotOptions;
+  document.getElementById('previewRobot').innerHTML = robotOptions;
+  document.getElementById('testChannel').innerHTML =
+    '<option value="">Selecionar canal...</option>' +
+    channels.map(c => `<option value="${c.id}">${escapeHtml(c.name)} (${c.id})</option>`).join('');
+  if (prevRobot && document.querySelector(`#testRobot option[value="${prevRobot}"]`)) {
+    document.getElementById('testRobot').value = prevRobot;
+  }
+  if (prevChannel && document.querySelector(`#testChannel option[value="${prevChannel}"]`)) {
+    document.getElementById('testChannel').value = prevChannel;
+  }
+  if (prevPreview && document.querySelector(`#previewRobot option[value="${prevPreview}"]`)) {
+    document.getElementById('previewRobot').value = prevPreview;
+  }
+}
+
+function getChannels() {
+  try { return JSON.parse(localStorage.getItem('telegram-channels') || '[]'); }
+  catch { return []; }
+}
+
+function refreshPreview() {
+  const robots = RobotEngine.getAllStates();
+  const robotId = document.getElementById('previewRobot').value || document.getElementById('testRobot').value;
+  const robot = robots.find(r => r.id === robotId) || robots[0];
+  if (!robot) { document.getElementById('livePreview').textContent = 'Nenhum robo disponivel'; return; }
+
+  const type = document.getElementById('testType').value;
+  const templates = getTemplates();
+  let text = '';
+
+  if (type === 'live') {
+    text = TelegramService.buildLiveMessage(robot);
+  } else {
+    const fakeSignal = {
+      id: 'preview-' + Date.now(),
+      robotId: robot.id,
+      target: robot.target?.color || 'RED',
+      status: type === 'signal' ? 'approved' : type,
+      gale: type === 'gale' ? 1 : 0,
+      result: { color: type === 'win' ? (robot.target?.color || 'RED') : (robot.target?.color === 'RED' ? 'BLACK' : 'RED') }
+    };
+    text = TelegramService.buildEntryMessage(robot, fakeSignal);
+  }
+
+  document.getElementById('livePreview').textContent = text;
+}
+
+async function sendTestMessage() {
+  const robotId = document.getElementById('testRobot').value;
+  const channelId = document.getElementById('testChannel').value;
+  const type = document.getElementById('testType').value;
+  const token = localStorage.getItem('telegram-bot-token') || '';
+  const el = document.getElementById('testResult');
+
+  if (!token) { el.innerHTML = '<span style="color:var(--red)">Configure o token do bot primeiro.</span>'; return; }
+  if (!channelId) { el.innerHTML = '<span style="color:var(--red)">Selecione um canal.</span>'; return; }
+
+  const robots = RobotEngine.getAllStates();
+  const robot = robots.find(r => r.id === robotId) || robots[0];
+  if (!robot) { el.innerHTML = '<span style="color:var(--red)">Nenhum robo disponivel.</span>'; return; }
+
+  let text = '';
+  if (type === 'live') {
+    text = TelegramService.buildLiveMessage(robot);
+  } else {
+    const fakeSignal = {
+      id: 'test-' + Date.now(),
+      robotId: robot.id,
+      target: robot.target?.color || 'RED',
+      status: type === 'signal' ? 'approved' : type,
+      gale: type === 'gale' ? 1 : 0,
+      result: { color: type === 'win' ? (robot.target?.color || 'RED') : (robot.target?.color === 'RED' ? 'BLACK' : 'RED') }
+    };
+    text = TelegramService.buildEntryMessage(robot, fakeSignal);
+  }
+
+  el.innerHTML = '<span style="color:var(--yellow)">Enviando...</span>';
+  try {
+    const r = await TelegramService.api(token, 'sendMessage', {
+      chat_id: channelId,
+      text,
+      disable_web_page_preview: true
+    });
+    if (r.ok) {
+      el.innerHTML = '<span class="sent-badge ok">Enviado! message_id: ' + r.result.message_id + '</span>';
+      addSendLog({ type, channelId, robotId: robot.id, robotName: robot.name, status: 'ok', messageId: r.result.message_id, preview: text.substring(0, 100) });
+      const entryKey = [robot.id, channelId, 'entry'].join(':');
+      try {
+        const entries = JSON.parse(localStorage.getItem('telegram-entry-messages-v1') || '{}');
+        entries[entryKey] = {
+          messageId: r.result.message_id,
+          text,
+          signalId: 'test-' + Date.now(),
+          status: type === 'signal' ? 'approved' : type,
+          gale: type === 'gale' ? 1 : 0,
+          result: null,
+          eventKey: '',
+          historyResultKey: '',
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        };
+        localStorage.setItem('telegram-entry-messages-v1', JSON.stringify(entries));
+      } catch {}
+      if (robot.telegram?.channelId && robot.telegram.channelId !== channelId) {
+        const robotKey = [robot.id, robot.telegram.channelId, 'entry'].join(':');
+        try {
+          const entries = JSON.parse(localStorage.getItem('telegram-entry-messages-v1') || '{}');
+          entries[robotKey] = { ...entries[entryKey] };
+          localStorage.setItem('telegram-entry-messages-v1', JSON.stringify(entries));
+        } catch {}
+      }
+      renderSendHistory();
+    } else {
+      el.innerHTML = '<span class="sent-badge err">Erro: ' + (r.description || 'desconhecido') + '</span>';
+      addSendLog({ type, channelId, robotId: robot.id, robotName: robot.name, status: 'error', error: r.description, preview: text.substring(0, 100) });
+      renderSendHistory();
+    }
+  } catch (e) {
+    el.innerHTML = '<span class="sent-badge err">Falha: ' + e.message + '</span>';
+    addSendLog({ type, channelId, robotId: robot.id, robotName: robot.name, status: 'error', error: e.message, preview: text.substring(0, 100) });
+    renderSendHistory();
+  }
+}
+
+function setLogFilter(f) {
+  logFilter = f;
+  renderSendHistory();
+}
+
+function renderSendHistory() {
+  const log = getSendLog();
+  const filtered = logFilter === 'all' ? log :
+    logFilter === 'error' ? log.filter(e => e.status === 'error') :
+    log.filter(e => e.type === logFilter);
+
+  const el = document.getElementById('sendHistory');
+  if (!filtered.length) {
+    el.innerHTML = '<div style="font-size:13px;color:var(--text3);padding:12px 0;text-align:center">Nenhum envio registrado.</div>';
+    return;
+  }
+
+  el.innerHTML = filtered.slice(0, 100).map(e => `
+    <div class="msg-log">
+      <div class="msg-log-time">${formatTime(e.time)}</div>
+      <div class="msg-log-type ${e.type === 'live' ? 'live' : 'entry'}">${e.type}</div>
+      <div class="msg-log-text">
+        <span class="${e.status === 'ok' ? 'highlight' : 'error'}">${e.robotName || e.robotId}</span>
+        → ${e.channelId}
+        <span class="sent-badge ${e.status === 'ok' ? 'ok' : 'err'}">${e.status === 'ok' ? 'OK' : 'ERRO'}</span>
+        ${e.messageId ? '<span style="font-size:10px;color:var(--text3);margin-left:4px">id:' + e.messageId + '</span>' : ''}
+        ${e.error ? '<div style="font-size:11px;color:var(--red);margin-top:2px">' + escapeHtml(e.error) + '</div>' : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+document.getElementById('testRobot').addEventListener('change', refreshPreview);
+document.getElementById('testType').addEventListener('change', refreshPreview);
+document.getElementById('previewRobot').addEventListener('change', refreshPreview);
+
+renderMessageTypes();
+renderTemplateTabs();
+renderTemplateEditor();
+renderAvailableVars();
+renderTestSelects();
+renderSendHistory();
+refreshPreview();
+
+EventBus.on('robots:synced', () => { renderTestSelects(); refreshPreview(); });
+EventBus.on('result:new', () => refreshPreview());
+window.addEventListener('storage', (e) => {
+  if (e.key === 'robots') {
+    RobotEngine.syncFromStorage();
+    renderTestSelects();
+    refreshPreview();
+  }
+});
+setInterval(() => {
+  renderTestSelects();
+}, 2000);
+</script>
+</body>
+</html>

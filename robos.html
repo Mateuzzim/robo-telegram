@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Robos</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="nav">
+  <span class="nav-brand">ROBOS</span>
+  <div class="nav-links">
+    <a href="index.html">Dashboard</a>
+    <a href="monitoramento.html">Monitoramento</a>
+    <a href="robos.html" class="active">Robos</a>
+    <a href="configuracoes.html">Config</a>
+    <a href="estatisticas.html">Estatisticas</a>
+    <a href="logs.html">Logs</a>
+    <a href="mensagens.html">Mensagens</a>
+  </div>
+  <div class="nav-status"><a href="ws-background.html" target="_blank" style="font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text3)">BG</a></div>
+</nav>
+<div class="container">
+  <div class="card-header"><span class="card-title">Todos os Robos</span><button class="btn btn-green" onclick="showCreate()">+ Novo Robo</button></div>
+  <div class="card"><div class="table-wrap"><table>
+    <thead><tr><th>ID</th><th>Nome</th><th>Jogo</th><th>Estrategia</th><th>Status</th><th>Modo</th><th>Acoes</th></tr></thead>
+    <tbody id="robotsTable"></tbody>
+  </table></div></div>
+</div>
+<div class="modal-overlay" id="modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-title">Novo Robo</div>
+    <div class="form-group"><label>Nome</label><input id="fName" placeholder="Ex: Wheel Alpha"></div>
+    <div class="form-group"><label>Jogo</label><select id="fGame" onchange="updateTargets()"><option value="wheel">Wheel</option><option value="double">Double</option></select></div>
+    <div class="form-group"><label>Alvo (Cor / Multiplier)</label><select id="fTarget"></select></div>
+    <div class="form-group"><label>Estrategia</label><select id="fStrategy"><option value="alternancia">Alternancia</option><option value="repeticao">Repeticao</option><option value="frequencia">Frequencia</option><option value="tendencia">Tendencia</option><option value="espelhamento">Espelhamento</option><option value="diagonal">Diagonal</option></select></div>
+    <div class="form-group"><label>Resultados para Analisar</label><input id="fResults" type="number" value="40"></div>
+    <div class="form-group"><label>Confianca Minima (%)</label><input id="fConf" type="number" value="80"></div>
+    <div class="form-group"><label>Intervalo entre Sinais (seg)</label><input id="fInterval" type="number" value="60"></div>
+    <div class="form-group"><label>Gale Maximo</label><input id="fGale" type="number" value="2"></div>
+    <div class="form-group"><label>Modo</label><select id="fMode"><option value="monitoramento">Monitoramento</option><option value="telegram">Telegram</option></select></div>
+    <div class="form-group"><label>Filtro de Sinal</label><select id="fFilterMode"><option value="desligado">Desligado</option><option value="conservador">Conservador (Conf>=80 | Conflu>=3 | Score>=75)</option><option value="moderado" selected>Moderado (Conf>=65 | Conflu>=2 | Score>=55)</option><option value="agressivo">Agressivo (Conf>=45 | Conflu>=1 | Score>=30)</option></select></div>
+    <div style="border-top:1px solid var(--border);margin:12px 0;padding-top:12px">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:10px;cursor:pointer">
+        <input type="checkbox" id="fTgEnabled"> Enviar sinais para Telegram
+      </label>
+      <div class="form-group"><label>Canal Telegram</label><select id="fTgChannel"><option value="">Selecionar canal...</option></select></div>
+      <div class="form-group"><label>Tipo de Mensagem</label>
+        <select id="fTgMsgType">
+          <option value="live">Live (atualiza a cada resultado)</option>
+          <option value="signal">Sinal (entrada, win, loss, gale)</option>
+          <option value="both">Live + Sinal</option>
+        </select>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px"><button class="btn btn-green" onclick="createRobot()">Criar</button><button class="btn btn-ghost" onclick="document.getElementById('modal').style.display='none'">Cancelar</button></div>
+  </div>
+</div>
+<script src="config.js"></script>
+<script src="store.js"></script>
+<script src="event-bus.js"></script>
+<script src="utils.js"></script>
+<script src="ws-source.js"></script>
+<script src="robot.js"></script>
+<script src="robot-engine.js"></script>
+<script src="telegram.js"></script>
+<script src="app.js"></script>
+<script>
+App.init();
+function getChannels() { try { return JSON.parse(localStorage.getItem('telegram-channels') || '[]'); } catch { return []; } }
+const TARGETS = {
+  wheel: [
+    { value: 'any', label: 'Qualquer cor' },
+    { value: 'grey', label: 'Preto 2X' },
+    { value: 'red', label: 'Vermelho 3X' },
+    { value: 'blue', label: 'Azul 5X' },
+    { value: 'green', label: 'Verde 50X' }
+  ],
+  double: [
+    { value: 'any', label: 'Qualquer cor' },
+    { value: 'red', label: 'Vermelho 2X' },
+    { value: 'black', label: 'Preto 2X' },
+    { value: 'green', label: 'Verde 14X' }
+  ]
+};
+function updateTargets(){
+  const game = document.getElementById('fGame').value;
+  const sel = document.getElementById('fTarget');
+  sel.innerHTML = TARGETS[game].map(t => `<option value="${t.value}">${t.label}</option>`).join('');
+}
+function showCreate(){
+  updateTargets();
+  const channels = getChannels();
+  const sel = document.getElementById('fTgChannel');
+  sel.innerHTML = '<option value="">Selecionar canal...</option>' + channels.map(c => `<option value="${c.id}">${escapeHtml(c.name)} (${c.id})</option>`).join('');
+  document.getElementById('modal').style.display='flex';
+}
+function createRobot(){
+  const name = document.getElementById('fName').value || 'Novo Robo';
+  const game = document.getElementById('fGame').value;
+  const strategy = document.getElementById('fStrategy').value;
+  const results = parseInt(document.getElementById('fResults').value) || 40;
+  const minConf = parseInt(document.getElementById('fConf').value) || 80;
+  const interval = parseInt(document.getElementById('fInterval').value) || 60;
+  const galeMax = parseInt(document.getElementById('fGale').value) || 2;
+  const mode = document.getElementById('fMode').value;
+  const targetColor = document.getElementById('fTarget').value;
+  const targetMult = TARGETS[game].find(t => t.value === targetColor)?.label.match(/(\d+)X/)?.[1] || null;
+  const filterMode = document.getElementById('fFilterMode').value;
+  const tgEnabled = document.getElementById('fTgEnabled').checked;
+  const tgChannel = document.getElementById('fTgChannel').value;
+  const tgMsgType = document.getElementById('fTgMsgType').value;
+  const id = game + '-' + name.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'');
+  RobotEngine.createRobot({
+    id, name, game, strategy, filterMode,
+    target: { color: targetColor, multiplier: targetMult ? parseInt(targetMult) : null },
+    resultsToAnalyze: results,
+    minimumConfidence: minConf,
+    intervalMin: interval,
+    galeMax, mode,
+    telegram: { enabled: tgEnabled, channelId: tgChannel, msgType: tgMsgType }
+  });
+  RobotEngine.save();
+  document.getElementById('modal').style.display='none';
+  loadRobots();
+}
+function loadRobots(){
+  const robots = RobotEngine.getAllStates();
+  document.getElementById('robotsTable').innerHTML = robots.map(r => `<tr>
+    <td style="font-size:12px;color:var(--text3)">${r.id}</td>
+    <td><strong>${escapeHtml(r.name)}</strong></td>
+    <td>${r.game}</td><td>${r.strategy}</td>
+    <td>${createBadge(r.status)}</td><td>${r.mode}</td>
+    <td style="display:flex;gap:6px;align-items:center">
+      <a href="robo.html?id=${r.id}" class="btn btn-sm btn-blue">Abrir</a>
+      <button class="btn btn-sm btn-yellow" onclick="editName('${r.id}')">Editar</button>
+      ${r.status==='offline'
+        ? `<button class="btn btn-sm btn-green" onclick="start('${r.id}')">Play</button>`
+        : `<button class="btn btn-sm btn-red" onclick="stop('${r.id}')">Stop</button>`}
+      <button class="btn btn-sm btn-red" onclick="deleteRobot('${r.id}')">Del</button>
+    </td>
+  </tr>`).join('');
+}
+function start(id){ RobotEngine.startRobot(id); loadRobots(); }
+function stop(id){ RobotEngine.stopRobot(id); loadRobots(); }
+function deleteRobot(id){ if(!confirm('Excluir este robo?')) return; RobotEngine.deleteRobot(id); loadRobots(); }
+function editName(id){
+  const robot = RobotEngine.getRobot(id);
+  if (!robot) return;
+  const currentName = robot.name || '';
+  const newName = prompt('Novo nome do robo:', currentName);
+  if (!newName || newName.trim() === '' || newName === currentName) return;
+  robot.name = newName.trim();
+  RobotEngine.save();
+  loadRobots();
+}
+loadRobots();
+EventBus.on('robots:synced', loadRobots);
+</script>
+</body>
+</html>
