@@ -12,6 +12,7 @@ class WSSource {
 
   connect() {
     if (!this.url || this.url.includes('your-')) return;
+    const tokenStatus = this.getAuthorizationStatus();
     try {
       this.ws = new WebSocket(this.url);
       this.ws.onopen = () => {
@@ -21,7 +22,12 @@ class WSSource {
         this._lastGameId = null;
         this.ws.send('40');
         EventBus.emit('source:connected', { label: this.label });
-        EventBus.emit('ws-status', { label: this.label, connected: true });
+        EventBus.emit('ws-status', {
+          label: this.label,
+          connected: true,
+          warning: tokenStatus.expired ? 'TOKEN_DATE_CHECK' : '',
+          expiresAt: tokenStatus.expiresAt
+        });
       };
       this.ws.onmessage = (e) => {
         const raw = typeof e.data === 'string' ? e.data : String(e.data);
@@ -55,46 +61,25 @@ class WSSource {
     }
   }
 
+  getAuthorizationStatus() {
+    try {
+      const url = new URL(this.url);
+      const token = url.searchParams.get('Authorization') || '';
+      const payload = token.split('.')[1];
+      if (!payload) return { expired: false, expiresAt: null };
+      const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+      const padded = normalized + '='.repeat((4 - normalized.length % 4) % 4);
+      const data = JSON.parse(atob(padded));
+      const expiresAt = data.exp ? data.exp * 1000 : null;
+      return { expired: !!(expiresAt && Date.now() >= expiresAt), expiresAt };
+    } catch {
+      return { expired: false, expiresAt: null };
+    }
+  }
+
   handleEvent(eventName, payload) {
-    if (eventName === 'gameService-game-status-changed' || eventName === 'gameService-game-state') {
-      let emitted = false;
-
-      if (payload.prevRoundResults && Array.isArray(payload.prevRoundResults)) {
-        const results = payload.prevRoundResults.map(r => this.normalizeResult(r)).filter(r => r.color);
-        if (!this._initialLoaded) {
-          this._initialLoaded = true;
-          this._lastGameId = payload.gameId;
-          this.emitHistory(results);
-          emitted = true;
-        } else if (results.length > 0 && (payload.gameId === undefined || payload.gameId !== this._lastGameId)) {
-          if (payload.gameId !== undefined) this._lastGameId = payload.gameId;
-          this.emitResult(results[0]);
-          emitted = true;
-        }
-      }
-
-      const cellResult = this.normalizeResult(payload.cellResult);
-      if (!emitted && cellResult.color) {
-        this.emitResult(cellResult);
-        emitted = true;
-      }
-
-      const directResult = this.normalizeResult(payload);
-      if (!emitted && directResult.color) {
-        this.emitResult(directResult);
-      }
-      return;
-    }
-
-    const directResult = this.normalizeResult(payload);
-    if (directResult.color) {
-      this.emitResult(directResult);
-      return;
-    }
-
-    if (payload && payload.number !== undefined) {
-      EventBus.emit('result:new', { label: this.label, ...payload });
-    }
+    if (!payload) return;
+    this.scanPayload(payload, eventName, 0);
   }
 
   emitHistory(results) {
@@ -110,11 +95,163 @@ class WSSource {
   normalizeResult(raw) {
     if (!raw || typeof raw !== 'object') return { number: undefined, color: '', multiplier: null };
     const source = raw.cell || raw.result || raw;
-    return {
-      number: source.cellIndex ?? source.number ?? source.index,
-      color: String(source.cellColor ?? source.color ?? source.colour ?? '').toLowerCase(),
-      multiplier: source.multiplier || null
+    const number = Number(
+      source.cellIndex ??
+      source.number ??
+      source.index ??
+      source.roll ??
+      source.value ??
+      source.winningNumber ??
+      source.resultNumber ??
+      source.drawNumber
+    );
+    let color = String(
+      source.cellColor ??
+      source.color ??
+      source.colour ??
+      source.winningColor ??
+      source.resultColor ??
+      source.winnerColor ??
+      source.selectedColor ??
+      source.winner ??
+      ''
+    ).toLowerCase();
+    color = this.normalizeColorAlias(color, number);
+    const result = {
+      number: Number.isFinite(number) ? number : undefined,
+      color,
+      multiplier: source.multiplier ?? source.cellMultiplier ?? source.resultMultiplier ?? source.winningMultiplier ?? null
     };
+    const roundId = source.roundId ?? source.roundID ?? source.roundUuid ?? source.roundUUID ?? source.gameId ?? source.gameID ?? source.id ?? source.uuid;
+    if (roundId !== undefined && roundId !== null) result.roundId = String(roundId);
+    return result;
+  }
+
+  normalizeColorAlias(color, number) {
+    let c = String(color || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    if (this.label === 'double') {
+      const aliases = {
+        vermelho: 'red',
+        red: 'red',
+        r: 'red',
+        preto: 'black',
+        black: 'black',
+        b: 'black',
+        branco: 'green',
+        white: 'green',
+        green: 'green',
+        g: 'green'
+      };
+      c = aliases[c] || c;
+      if (!['red', 'black', 'green'].includes(c)) {
+        if (number === 0) return 'green';
+        if (number >= 1 && number <= 7) return 'red';
+        if (number >= 8 && number <= 14) return 'black';
+      }
+      return ['red', 'black', 'green'].includes(c) ? c : '';
+    }
+
+    const aliases = {
+      black: 'grey',
+      gray: 'grey',
+      grey: 'grey',
+      preto: 'grey',
+      red: 'red',
+      vermelho: 'red',
+      blue: 'blue',
+      azul: 'blue',
+      green: 'green',
+      verde: 'green'
+    };
+    return aliases[c] || c;
+  }
+
+  looksLikeResult(value) {
+    if (!value || typeof value !== 'object') return false;
+    const hasNumber =
+      value.number !== undefined ||
+      value.cellIndex !== undefined ||
+      value.index !== undefined ||
+      value.roll !== undefined ||
+      value.value !== undefined ||
+      value.winningNumber !== undefined ||
+      value.resultNumber !== undefined ||
+      value.drawNumber !== undefined;
+    const hasColor =
+      value.color !== undefined ||
+      value.cellColor !== undefined ||
+      value.colour !== undefined ||
+      value.winningColor !== undefined ||
+      value.resultColor !== undefined ||
+      value.winnerColor !== undefined ||
+      value.selectedColor !== undefined ||
+      value.winner !== undefined;
+    const hasMultiplier =
+      value.multiplier !== undefined ||
+      value.cellMultiplier !== undefined ||
+      value.resultMultiplier !== undefined ||
+      value.winningMultiplier !== undefined;
+    return hasNumber && (hasColor || hasMultiplier || Number(value.number ?? value.cellIndex ?? value.roll ?? value.value) === 0);
+  }
+
+  isFinalLike(eventName, payload) {
+    const eventText = String(eventName || '').toUpperCase();
+    const statusText = String(payload?.status || '').toUpperCase();
+    return !statusText || /RESULT|FINISH|ENDED|END|COMPLETE|COMPLETED|IN_GAME/.test(statusText) ||
+      /RESULT|FINISH|ENDED|END|COMPLETE|COMPLETED/.test(eventText);
+  }
+
+  scanPayload(value, eventName, depth) {
+    if (!value || depth > 6) return false;
+    let emitted = false;
+
+    if (Array.isArray(value)) {
+      for (const item of value) emitted = this.scanPayload(item, eventName, depth + 1) || emitted;
+      return emitted;
+    }
+
+    if (typeof value !== 'object') return false;
+
+    if (Array.isArray(value.prevRoundResults)) {
+      const results = value.prevRoundResults.map(r => this.normalizeResult(r)).filter(r => r.color);
+      if (results.length) {
+        if (!this._initialLoaded) {
+          this._initialLoaded = true;
+          this._lastGameId = value.gameId;
+          this.emitHistory(results);
+        } else if (value.gameId === undefined || value.gameId !== this._lastGameId) {
+          if (value.gameId !== undefined) this._lastGameId = value.gameId;
+          this.emitResult(results[0]);
+        }
+        emitted = true;
+      }
+    }
+
+    const resultKeys = ['cellResult', 'result', 'roundResult', 'gameResult', 'lastResult', 'currentResult', 'winnerCell', 'winningCell', 'winner'];
+    if (this.isFinalLike(eventName, value)) {
+      for (const key of resultKeys) {
+        if (!value[key] || typeof value[key] !== 'object') continue;
+        const result = this.normalizeResult(value[key]);
+        if (result.color) {
+          this.emitResult(result);
+          emitted = true;
+        }
+      }
+
+      if (this.looksLikeResult(value)) {
+        const result = this.normalizeResult(value);
+        if (result.color) {
+          this.emitResult(result);
+          emitted = true;
+        }
+      }
+    }
+
+    for (const key of Object.keys(value)) {
+      if (key === 'prevRoundResults' || resultKeys.includes(key)) continue;
+      emitted = this.scanPayload(value[key], eventName, depth + 1) || emitted;
+    }
+    return emitted;
   }
 
   scheduleReconnect() {
@@ -184,9 +321,13 @@ const ResultHistoryStore = {
       time: Date.now()
     };
     if (label === 'wheel') {
-      return { cellIndex: result.number, cellColor: base.color, multiplier: base.multiplier, time: base.time };
+      const item = { cellIndex: result.number, cellColor: base.color, multiplier: base.multiplier, time: base.time };
+      if (result.roundId) item.roundId = result.roundId;
+      return item;
     }
-    return { number: result.number, color: base.color, time: base.time };
+    const item = { number: result.number, color: base.color, time: base.time };
+    if (result.roundId) item.roundId = result.roundId;
+    return item;
   },
 
   normalizeColor(color) {
@@ -194,6 +335,7 @@ const ResultHistoryStore = {
   },
 
   itemKey(item) {
+    if (item.roundId) return 'round:' + item.roundId;
     const number = item.cellIndex ?? item.number ?? '';
     const color = this.normalizeColor(item.cellColor ?? item.color);
     return number + ':' + color + ':' + (item.multiplier || '');

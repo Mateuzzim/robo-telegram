@@ -121,7 +121,7 @@ function renderAll() {
     <div><span style="color:var(--text3)">Estrategia:</span> <strong>${r.strategy}</strong></div>
     <div><span style="color:var(--text3)">Modo:</span> <strong>${r.mode}</strong></div>
     <div><span style="color:var(--text3)">Ultimo resultado:</span> <strong>${r.lastResult ? (r.lastResult.color || r.lastResult.number) : '--'}</strong></div>
-  </div>`;
+  </div>${renderSourceWarning(r)}`;
   const d = r.diagnostic || {};
   const suggestedEntryLabel = d.suggestedEntry ? formatColorLabel(d.suggestedEntry) : '--';
   const decisionTargetLabel = d.decision?.target ? formatColorLabel(d.decision.target) : '--';
@@ -268,7 +268,11 @@ function renderAll() {
           <option value="both" ${tg.msgType === 'both' || !tg.msgType ? 'selected' : ''}>Live + Sinal</option>
         </select>
       </div>
-      <div style="font-size:11px;color:var(--text3)">Adicione canais em Configuracoes > Canais / Grupos</div>`;
+      <div style="margin-top:10px;display:flex;gap:8px">
+        <button class="btn btn-sm btn-blue" onclick="testTelegramChannel()" id="btnTestTg">Testar Canal</button>
+        <span id="testTgResult" style="font-size:11px;align-self:center"></span>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:6px">Adicione canais em Configuracoes > Canais / Grupos</div>`;
     tgFormRendered = true;
   }
   renderTelegramMessagePreview(r);
@@ -338,35 +342,52 @@ function renderTelegramMessagePreview(r) {
     return;
   }
 
-  const key = [r.id, tg.channelId, 'entry'].join(':');
-  const allMessages = getEntryMessages();
-  const message = allMessages[key] || findEntryMessage(r.id);
+  const liveKey = [r.id, tg.channelId].join(':');
+  const entryKey = [r.id, tg.channelId, 'entry'].join(':');
+  const allLiveMessages = (function() { try { return JSON.parse(localStorage.getItem('telegram-live-messages-v1') || '{}'); } catch { return {}; } })();
+  const allEntryMessages = getEntryMessages();
+  const liveMsg = allLiveMessages[liveKey];
+  const entryMsg = allEntryMessages[entryKey] || findEntryMessage(r.id);
   const current = r.currentSignal;
-  const currentStatus = current ? (current.status === 'gale_pending' ? 'GALE ' + (current.gale || 1) : 'ENTRADA') : 'SEM ENTRADA';
-  const messageStatus = message?.status ? String(message.status).toUpperCase() : currentStatus;
-  const updatedAt = message?.updatedAt || message?.createdAt;
+  const msgType = tg.msgType || 'both';
+  const showLive = msgType === 'live' || msgType === 'both';
+  const showEntry = msgType === 'signal' || msgType === 'both';
+  let html = '';
 
-  if (!message?.text) {
-    el.innerHTML = `
-      <div style="padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:8px">
-        <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:4px">Mensagem de Entrada</div>
-        <div style="font-size:11px;color:var(--text3)">Chave: <code>${key}</code></div>
-        <div style="font-size:11px;color:var(--text3)">Total msgs no store: ${Object.keys(allMessages).length}</div>
-        <div style="font-size:12px;color:var(--text3);margin-top:4px">Nenhuma mensagem registrada para este robo/canal ainda.</div>
-        ${current ? `<div style="font-size:11px;color:var(--yellow);margin-top:6px">Sinal atual: ${currentStatus}</div>` : ''}
+  if (showLive) {
+    html += `<div style="padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
+        <div style="font-size:12px;font-weight:700;color:var(--text)">Live (Status do Robo)</div>
+        ${liveMsg ? '<span style="font-size:10px;color:var(--green);border:1px solid rgba(41,217,120,.25);border-radius:4px;padding:2px 6px">ENVIADA</span>' : '<span style="font-size:10px;color:var(--text3)">NAO ENVIADA</span>'}
       </div>`;
-    return;
+    if (liveMsg?.text) {
+      html += `<pre style="margin:0;white-space:pre-wrap;font:11px/1.4 monospace;color:var(--text2);background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;max-height:180px;overflow:auto">${escapeHtml(liveMsg.text)}</pre>`;
+      html += `<div style="font-size:10px;color:var(--text3);margin-top:4px">Message ID: ${liveMsg.messageId || '--'}${liveMsg.updatedAt ? ' | Atualizada: ' + formatTime(liveMsg.updatedAt) : ''}</div>`;
+    } else {
+      html += `<div style="font-size:11px;color:var(--text3)">Aguardando primeiro resultado para enviar...</div>`;
+    }
+    html += `</div>`;
   }
 
-  el.innerHTML = `
-    <div style="padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:8px">
+  if (showEntry) {
+    const entryStatus = current ? (current.status === 'gale_pending' ? 'GALE ' + (current.gale || 1) : 'ENTRADA') : 'SEM ENTRADA';
+    const messageStatus = entryMsg?.status ? String(entryMsg.status).toUpperCase() : entryStatus;
+    const updatedAt = entryMsg?.updatedAt || entryMsg?.createdAt;
+    html += `<div style="padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:8px">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
         <div style="font-size:12px;font-weight:700;color:var(--text)">Mensagem de Entrada</div>
         <span style="font-size:10px;color:var(--blue);border:1px solid rgba(41,130,255,.25);border-radius:4px;padding:2px 6px">${escapeHtml(messageStatus)}</span>
-      </div>
-      <pre style="margin:0;white-space:pre-wrap;font:12px/1.45 monospace;color:var(--text2);background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;max-height:220px;overflow:auto">${escapeHtml(message.text)}</pre>
-      <div style="font-size:10px;color:var(--text3);margin-top:6px">Message ID: ${message.messageId || '--'}${updatedAt ? ' | Enviada: ' + formatTime(updatedAt) : ''}</div>
-    </div>`;
+      </div>`;
+    if (entryMsg?.text) {
+      html += `<pre style="margin:0;white-space:pre-wrap;font:11px/1.4 monospace;color:var(--text2);background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;max-height:180px;overflow:auto">${escapeHtml(entryMsg.text)}</pre>`;
+      html += `<div style="font-size:10px;color:var(--text3);margin-top:4px">Message ID: ${entryMsg.messageId || '--'}${updatedAt ? ' | Enviada: ' + formatTime(updatedAt) : ''}</div>`;
+    } else {
+      html += `<div style="font-size:11px;color:var(--yellow)">Nenhuma entrada registrada ainda.</div>`;
+    }
+    html += `</div>`;
+  }
+
+  el.innerHTML = html;
 }
 
 function loadRobot() {
@@ -390,7 +411,63 @@ function renderConnectionStatus() {
   const game = robotData?.game || 'wheel';
   const status = App.getSourceStatus(game);
   connDot.className = 'dot' + (status.connected ? '' : ' off');
+  connDot.title = status.reason || (status.connected ? 'Fonte online' : 'Fonte offline');
 }
+function renderSourceWarning(r) {
+  const status = App.getSourceStatus(r.game);
+  if (!status || status.connected) return '';
+  const expiresAt = status.expiresAt ? ' Expirou em: ' + formatDateTime(status.expiresAt) + '.' : '';
+  const reason = status.reason || 'Fonte offline';
+  return `<div style="margin-top:12px;padding:10px 12px;background:rgba(255,86,86,.08);border:1px solid rgba(255,86,86,.35);border-radius:8px;color:var(--red);font-size:12px"><strong>${escapeHtml(reason)}.</strong>${escapeHtml(expiresAt)} Atualize a URL/token em Configuracoes para o Double voltar a receber resultados.</div>`;
+}
+async function testTelegramChannel() {
+  const resultEl = document.getElementById('testTgResult');
+  const btn = document.getElementById('btnTestTg');
+  const token = localStorage.getItem('telegram-bot-token') || '';
+  const chatId = document.getElementById('tgChannel')?.value || '';
+  if (!token) { resultEl.innerHTML = '<span style="color:var(--red)">Token nao configurado</span>'; return; }
+  if (!chatId) { resultEl.innerHTML = '<span style="color:var(--red)">Selecione um canal</span>'; return; }
+  btn.disabled = true;
+  btn.textContent = 'Testando...';
+  resultEl.innerHTML = '';
+  try {
+    const text = '🤖 Teste de conexao - ' + (robotData?.name || robotId) + '\nHorario: ' + formatTime(Date.now());
+    const response = await TelegramService.api(token, 'sendMessage', {
+      chat_id: chatId,
+      text,
+      disable_web_page_preview: true
+    });
+    if (response.ok) {
+      resultEl.innerHTML = '<span style="color:var(--green)">Conectado! Chat ID: ' + chatId + '</span>';
+      const key = [robotId, chatId, 'entry'].join(':');
+      try {
+        const entries = JSON.parse(localStorage.getItem('telegram-entry-messages-v1') || '{}');
+        entries[key] = {
+          messageId: response.result.message_id,
+          text,
+          signalId: 'test-' + Date.now(),
+          status: 'test',
+          gale: 0,
+          result: null,
+          eventKey: '',
+          historyResultKey: '',
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        };
+        localStorage.setItem('telegram-entry-messages-v1', JSON.stringify(entries));
+      } catch {}
+      tgFormRendered = false;
+      loadRobot();
+    } else {
+      resultEl.innerHTML = '<span style="color:var(--red)">Erro: ' + (response.description || 'desconhecido') + '</span>';
+    }
+  } catch (e) {
+    resultEl.innerHTML = '<span style="color:var(--red)">Falha: ' + e.message + '</span>';
+  }
+  btn.disabled = false;
+  btn.textContent = 'Testar Canal';
+}
+
 function saveConfig() {
   const robot = RobotEngine.getRobot(robotId);
   if (!robot) return;

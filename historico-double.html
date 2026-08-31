@@ -70,13 +70,23 @@ function loadHistory() {
 function render() {
   const history = loadHistory().slice(0, MAX_RESULTS);
   countEl.textContent = history.length + ' resultados';
-  resultsEl.innerHTML = history.map(r =>
-    `<div class="result ${getColor(r)}">${String(getNumber(r))}</div>`
-  ).join('');
+  resultsEl.innerHTML = history.map(r => {
+    const num = getNumber(r);
+    const color = getColor(r);
+    return `<div class="result ${color}">${num !== '' ? num : '?'}</div>`;
+  }).join('');
 }
 
 function getColor(result) {
-  return String(result.color ?? result.cellColor ?? '').toLowerCase();
+  const num = result.number ?? result.cellIndex;
+  if (num === 0) return 'green';
+  if (num >= 1 && num <= 7) return 'red';
+  if (num >= 8 && num <= 14) return 'black';
+  const c = String(result.color ?? result.cellColor ?? '').toLowerCase();
+  if (c === 'red') return 'red';
+  if (c === 'green') return 'green';
+  if (c === 'white') return 'white';
+  return 'black';
 }
 
 function getNumber(result) {

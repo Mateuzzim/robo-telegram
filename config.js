@@ -15,3 +15,9 @@ const CONFIG = {
     galeMax: 2
   }
 };
+
+try {
+  const savedWsConfig = JSON.parse(localStorage.getItem('ws-config-v1') || '{}');
+  if (savedWsConfig.wheelWsUrl) CONFIG.wheel.wsUrl = savedWsConfig.wheelWsUrl;
+  if (savedWsConfig.doubleWsUrl) CONFIG.double.wsUrl = savedWsConfig.doubleWsUrl;
+} catch {}

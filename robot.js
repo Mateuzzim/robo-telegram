@@ -18,7 +18,7 @@ class Robot {
     this.telegram.message.live = this.telegram.message.live || '';
     this.target = config.target || { color: 'any', multiplier: null };
     this.filterMode = config.filterMode || 'moderado';
-    this.history = [];
+    this.history = Array.isArray(config.history) ? config.history : [];
     this.stats = {
       signals: 0, wins: 0, losses: 0, winSG: 0, winG1: 0, winG2: 0,
       currentStreak: 0, maxWinStreak: 0, maxLossStreak: 0,
@@ -51,15 +51,19 @@ class Robot {
   }
 
   normalizeResult(result) {
-    return {
+    const normalized = {
       color: this.normalizeColor(result?.color ?? result?.cellColor),
       number: result?.number ?? result?.cellIndex,
       multiplier: result?.multiplier ?? null
     };
+    const roundId = result?.roundId ?? result?.roundID ?? result?.roundUuid ?? result?.roundUUID ?? result?.gameId ?? result?.gameID ?? result?.id ?? result?.uuid;
+    if (roundId !== undefined && roundId !== null) normalized.roundId = String(roundId);
+    return normalized;
   }
 
   getResultKey(result) {
     const normalized = result?.color !== undefined && result?.number !== undefined ? result : this.normalizeResult(result);
+    if (normalized.roundId) return 'round:' + normalized.roundId;
     return (normalized.color || '') + ':' + (normalized.number ?? '');
   }
 
@@ -88,7 +92,7 @@ class Robot {
     if (duplicate) return false;
     this.lastResult = { ...result, ...normalized, resultKey: key };
     this.lastHeartbeat = Date.now();
-    this.history.unshift({ color, number: normalized.number, multiplier: normalized.multiplier, resultKey: key, timestamp: Date.now() });
+    this.history.unshift({ color, number: normalized.number, multiplier: normalized.multiplier, roundId: normalized.roundId, resultKey: key, timestamp: Date.now() });
     if (this.history.length > 200) this.history.pop();
     this.addLog('Resultado: ' + (color || normalized.number));
     this.analyze();
@@ -331,6 +335,6 @@ class Robot {
   }
 
   toJSON() {
-    return { id: this.id, name: this.name, game: this.game, strategy: this.strategy, status: this.status, mode: this.mode, target: this.target, filterMode: this.filterMode, resultsToAnalyze: this.resultsToAnalyze, minimumConfidence: this.minimumConfidence, confirmations: this.confirmations, intervalMin: this.intervalMin, galeMax: this.gale.max, telegram: { ...this.telegram, message: { ...(this.telegram.message || {}) } }, stats: this.stats, lastHeartbeat: this.lastHeartbeat, lastResult: this.lastResult, lastSignal: this.lastSignal, currentSignal: this.currentSignal, galeCount: this.galeCount, lastSignalTime: this.lastSignalTime, diagnostic: this.diagnostic, signalFlow: this.signalFlow, logs: this.logs, strategyIndex: this.strategyIndex, usedPatterns: this.usedPatterns };
+    return { id: this.id, name: this.name, game: this.game, strategy: this.strategy, status: this.status, mode: this.mode, target: this.target, filterMode: this.filterMode, history: this.history.slice(0, 200), resultsToAnalyze: this.resultsToAnalyze, minimumConfidence: this.minimumConfidence, confirmations: this.confirmations, intervalMin: this.intervalMin, galeMax: this.gale.max, telegram: { ...this.telegram, message: { ...(this.telegram.message || {}) } }, stats: this.stats, lastHeartbeat: this.lastHeartbeat, lastResult: this.lastResult, lastSignal: this.lastSignal, currentSignal: this.currentSignal, galeCount: this.galeCount, lastSignalTime: this.lastSignalTime, diagnostic: this.diagnostic, signalFlow: this.signalFlow, logs: this.logs, strategyIndex: this.strategyIndex, usedPatterns: this.usedPatterns };
   }
 }

@@ -123,6 +123,10 @@ document.getElementById('tgOwner').value = getOwner();
 function saveWsConfig() {
   CONFIG.wheel.wsUrl = document.getElementById('cfgWheel').value;
   CONFIG.double.wsUrl = document.getElementById('cfgDouble').value;
+  localStorage.setItem('ws-config-v1', JSON.stringify({
+    wheelWsUrl: CONFIG.wheel.wsUrl,
+    doubleWsUrl: CONFIG.double.wsUrl
+  }));
   alert('Configuracao salva. Recarregue a pagina para reconectar.');
 }
 

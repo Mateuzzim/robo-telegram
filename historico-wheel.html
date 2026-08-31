@@ -77,7 +77,12 @@ function render() {
 }
 
 function getColor(result) {
-  return String(result.cellColor ?? result.color ?? '').toLowerCase();
+  const c = String(result.cellColor ?? result.color ?? '').toLowerCase();
+  if (c === 'red') return 'red';
+  if (c === 'green') return 'green';
+  if (c === 'white') return 'white';
+  if (c === 'blue') return 'blue';
+  return 'black';
 }
 
 function getNumber(result) {

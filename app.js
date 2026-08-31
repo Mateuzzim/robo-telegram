@@ -6,6 +6,7 @@ const App = {
   _leaderWaitTimer: null,
   _leaderKey: 'ws-background-leader',
   _backgroundStarted: false,
+  _historySyncTimer: null,
 
   init() {
     const isBackground = document.title === 'WS Background';
@@ -71,10 +72,24 @@ const App = {
     this._backgroundStarted = true;
     if (typeof TelegramService !== 'undefined') TelegramService.init();
     EventBus.on('ws-status', (d) => {
-      Store.set('source-status-' + d.label, { connected: !!d.connected, updatedAt: Date.now() });
+      Store.set('source-status-' + d.label, {
+        connected: !!d.connected,
+        updatedAt: Date.now(),
+        error: d.error || '',
+        reason: d.reason || '',
+        expiresAt: d.expiresAt || null
+      });
     });
     Sources.init();
     this.watchRobotConfigChanges();
+    this.startHistorySync();
+  },
+
+  startHistorySync() {
+    if (this._historySyncTimer) return;
+    this._historySyncTimer = setInterval(() => {
+      RobotEngine.syncHistoriesFromStorage();
+    }, 1000);
   },
 
   claimBackgroundLeadership() {

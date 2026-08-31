@@ -242,20 +242,21 @@ const RobotEngine = {
     const key = robot.game === 'double' ? 'historico-double-v1' : 'historico-wheel-v1';
     try {
       const raw = JSON.parse(localStorage.getItem(key) || '[]');
-      if (!Array.isArray(raw) || !raw.length) return;
-      const existing = new Set(robot.history.map(h => h.color + ':' + h.number));
+      if (!Array.isArray(raw) || !raw.length) return false;
+      const existing = new Set(robot.history.map(h => h.roundId ? 'round:' + h.roundId : h.color + ':' + h.number));
       let added = 0;
-      for (let i = raw.length - 1; i >= 0 && robot.history.length < robot.resultsToAnalyze; i--) {
+      for (let i = raw.length - 1; i >= 0; i--) {
         const r = raw[i];
         const rawColor = robot.game === 'double' ? r.color : (r.cellColor ?? r.color);
         const color = typeof robot.normalizeColor === 'function' ? robot.normalizeColor(rawColor) : String(rawColor || '').toUpperCase();
         const number = robot.game === 'double' ? r.number : (r.cellIndex ?? r.number);
-        const id = color + ':' + number;
+        const roundId = r.roundId ?? r.roundID ?? r.roundUuid ?? r.roundUUID ?? r.gameId ?? r.gameID ?? r.id ?? r.uuid;
+        const id = roundId !== undefined && roundId !== null ? 'round:' + String(roundId) : color + ':' + number;
         if (existing.has(id)) continue;
         existing.add(id);
         const item = robot.game === 'double'
-          ? { color, number, timestamp: Date.now() }
-          : { color, number, multiplier: r.multiplier, timestamp: Date.now() };
+          ? { color, number, roundId: roundId !== undefined && roundId !== null ? String(roundId) : undefined, timestamp: Date.now() }
+          : { color, number, multiplier: r.multiplier, roundId: roundId !== undefined && roundId !== null ? String(roundId) : undefined, timestamp: Date.now() };
         robot.history.unshift(item);
         added++;
       }
@@ -264,7 +265,19 @@ const RobotEngine = {
         robot.diagnostic.analyzedResults = robot.history.length;
         robot.analyze();
       }
+      return added > 0;
     } catch {}
+    return false;
+  },
+
+  syncHistoriesFromStorage() {
+    let changed = false;
+    this.getAllRobots().forEach(robot => {
+      if (robot.status !== 'online') return;
+      changed = this.loadHistoryFromStorage(robot) || changed;
+    });
+    if (changed) this.save();
+    return changed;
   },
 
   distributeResult(result) {
@@ -289,14 +302,15 @@ EventBus.on('results:history', (d) => {
   if (!d || !d.results || !d.results.length) return;
   RobotEngine.getAllRobots().forEach(robot => {
     if (robot.status === 'online' && robot.game === d.label) {
-      const existing = new Set(robot.history.map(h => h.color + ':' + h.number));
+      const existing = new Set(robot.history.map(h => h.roundId ? 'round:' + h.roundId : h.color + ':' + h.number));
       d.results.forEach(r => {
         const rawColor = r.color ?? r.cellColor;
         const color = typeof robot.normalizeColor === 'function' ? robot.normalizeColor(rawColor) : String(rawColor || '').toUpperCase();
         const number = r.number ?? r.cellIndex;
-        const key = color + ':' + number;
+        const roundId = r.roundId ?? r.roundID ?? r.roundUuid ?? r.roundUUID ?? r.gameId ?? r.gameID ?? r.id ?? r.uuid;
+        const key = roundId !== undefined && roundId !== null ? 'round:' + String(roundId) : color + ':' + number;
         if (!existing.has(key)) {
-          robot.history.unshift({ color, number, multiplier: r.multiplier, timestamp: Date.now() });
+          robot.history.unshift({ color, number, multiplier: r.multiplier, roundId: roundId !== undefined && roundId !== null ? String(roundId) : undefined, timestamp: Date.now() });
           existing.add(key);
         }
       });
