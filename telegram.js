@@ -22,16 +22,33 @@ const TelegramService = {
   },
 
   init() {
-    if (this.initialized) return;
+    if (this.initialized) {
+      console.log('[Telegram] init() chamado novamente, ignorando');
+      return;
+    }
     this.initialized = true;
+    console.log('[Telegram] Inicializando TelegramService');
     EventBus.on('result:new', (result) => this.handleResultChange(result));
-    EventBus.on('signal:created', (signal) => this.handleSignalCreated(signal));
+    EventBus.on('signal:created', (signal) => {
+      console.log('[Telegram] signal:created recebido', signal?.id, signal?.status);
+      this.handleSignalCreated(signal);
+    });
     EventBus.on('signal:gale', (signal) => this.handleSignalChange(signal));
     EventBus.on('signal:win', (signal) => this.handleSignalChange(signal));
     EventBus.on('signal:loss', (signal) => this.handleSignalChange(signal));
     EventBus.on('robot:started', (d) => this.handleRobotStarted(d));
     this.startRecalibration();
     setTimeout(() => this.sendAllPendingEntryMessages(), 0);
+    setTimeout(() => this.sendAllInitialLiveMessages(), 0);
+  },
+
+  async sendAllInitialLiveMessages() {
+    const robots = RobotEngine.getAllRobots().filter(robot => (
+      robot.status === 'online' && this.shouldSendLive(robot)
+    ));
+    for (const robot of robots) {
+      await this.enqueueLiveMessage(robot);
+    }
   },
 
   startRecalibration() {
@@ -142,9 +159,16 @@ const TelegramService = {
   },
 
   shouldSendLive(robot) {
-    if (!this.isTelegramEnabled(robot)) return false;
+    if (!this.isTelegramEnabled(robot)) {
+      console.warn('[Telegram] Live bloqueado: telegram nao habilitado', robot?.id);
+      return false;
+    }
     const msgType = robot.telegram?.msgType || 'both';
-    return msgType === 'live' || msgType === 'both';
+    if (msgType !== 'live' && msgType !== 'both') {
+      console.warn('[Telegram] Live bloqueado: msgType=', msgType, robot?.id);
+      return false;
+    }
+    return true;
   },
 
   shouldSendSignal(robot) {
@@ -181,6 +205,7 @@ const TelegramService = {
   async handleRobotStarted(d) {
     const robot = RobotEngine.getRobot(d?.id);
     if (!robot || !this.shouldSendLive(robot)) return;
+    if (robot.status !== 'online') return;
     await this.enqueueLiveMessage(robot);
   },
 
@@ -355,6 +380,7 @@ const TelegramService = {
 
   async enqueueEntryMessage(robot, signal) {
     const key = 'entry:' + this.entryMessageKey(robot);
+    console.log('[Telegram] enqueueEntryMessage', key, signal?.id, signal?.status);
     return this.enqueue(key, () => this.withLock(key, () => this.sendEntryMessage(robot, signal)));
   },
 
@@ -400,13 +426,20 @@ const TelegramService = {
   async sendOrEditLiveMessage(robot) {
     const token = this.getToken();
     const chatId = robot.telegram?.channelId || '';
-    if (!token || !chatId) return false;
+    if (!token || !chatId) {
+      console.warn('[Telegram] Live bloqueado: token ou chatId vazio', { token: !!token, chatId });
+      return false;
+    }
 
     const text = this.prepareTelegramText(this.buildLiveMessage(robot));
+    console.log('[Telegram] sendOrEditLiveMessage', robot?.id, text.slice(0, 50));
     const messages = this.getLiveMessages();
     const key = this.messageKey(robot);
     const current = messages[key];
-    if (current?.text === text) return true;
+    if (current?.text === text) {
+      console.log('[Telegram] Live texto igual, pulando');
+      return true;
+    }
 
     if (current?.messageId) {
       const edited = await this.api(token, 'editMessageText', {
@@ -453,6 +486,7 @@ const TelegramService = {
 
     const key = this.entryMessageKey(robot);
     const text = this.prepareTelegramText(this.buildEntryMessage(robot, signal));
+    console.log('[Telegram] sendEntryMessage', key, signal?.id, signal?.status, text.slice(0, 50));
     const messages = this.getEntryMessages();
     const current = messages[key];
     const messageId = current?.messageId;

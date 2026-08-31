@@ -465,6 +465,9 @@ function loadRobot() {
       sel.dataset.init = '1';
     }
   }
+  if (typeof TelegramService !== 'undefined' && TelegramService.sendAllInitialLiveMessages) {
+    TelegramService.sendAllInitialLiveMessages();
+  }
 }
 function renderConnectionStatus() {
   const game = robotData?.game || 'wheel';
