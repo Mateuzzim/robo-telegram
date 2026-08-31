@@ -31,6 +31,7 @@ class Robot {
     this.currentSignal = config.currentSignal ? { ...config.currentSignal } : null;
     this.galeCount = config.galeCount || 0;
     this.lastSignalTime = config.lastSignalTime || 0;
+    this.startedAt = config.startedAt || null;
     this.normalizeSavedSignalTargets();
     this.logs = Array.isArray(config.logs) ? config.logs : [];
     this.diagnostic = config.diagnostic || { status: 'IDLE', analyzedResults: 0, mainPattern: null, confidence: 0, suggestedEntry: null, patternScores: {}, totalScore: 0, filterResults: {}, decision: null, risk: 'BAIXO', signalScore: 0, confluences: 0, signalBlocked: false, blockReason: '' };
@@ -88,8 +89,6 @@ class Robot {
     const normalized = this.normalizeResult(result);
     const color = normalized.color;
     const key = this.getResultKey(normalized);
-    const duplicate = this.history.slice(0, 5).some(h => this.getResultKey(h) === key);
-    if (duplicate) return false;
     this.lastResult = { ...result, ...normalized, resultKey: key };
     this.lastHeartbeat = Date.now();
     this.history.unshift({ color, number: normalized.number, multiplier: normalized.multiplier, roundId: normalized.roundId, resultKey: key, timestamp: Date.now() });
@@ -331,10 +330,10 @@ class Robot {
   }
 
   getState() {
-    return { id: this.id, name: this.name, game: this.game, strategy: this.strategy, status: this.status, mode: this.mode, target: this.target, filterMode: this.filterMode, telegram: { ...this.telegram, message: { ...(this.telegram.message || {}) } }, lastHeartbeat: this.lastHeartbeat, stats: { ...this.stats }, lastResult: this.lastResult, lastSignal: this.lastSignal, currentSignal: this.currentSignal, diagnostic: { ...this.diagnostic }, signalFlow: { ...this.signalFlow }, logs: [...this.logs], minimumConfidence: this.minimumConfidence, intervalMin: this.intervalMin, gale: { ...this.gale }, resultsToAnalyze: this.resultsToAnalyze, confirmations: this.confirmations, strategyIndex: this.strategyIndex, usedPatterns: JSON.parse(JSON.stringify(this.usedPatterns)) };
+    return { id: this.id, name: this.name, game: this.game, strategy: this.strategy, status: this.status, mode: this.mode, target: this.target, filterMode: this.filterMode, telegram: { ...this.telegram, message: { ...(this.telegram.message || {}) } }, lastHeartbeat: this.lastHeartbeat, stats: { ...this.stats }, lastResult: this.lastResult, lastSignal: this.lastSignal, currentSignal: this.currentSignal, diagnostic: { ...this.diagnostic }, signalFlow: { ...this.signalFlow }, logs: [...this.logs], minimumConfidence: this.minimumConfidence, intervalMin: this.intervalMin, gale: { ...this.gale }, resultsToAnalyze: this.resultsToAnalyze, confirmations: this.confirmations, strategyIndex: this.strategyIndex, usedPatterns: JSON.parse(JSON.stringify(this.usedPatterns)), startedAt: this.startedAt };
   }
 
   toJSON() {
-    return { id: this.id, name: this.name, game: this.game, strategy: this.strategy, status: this.status, mode: this.mode, target: this.target, filterMode: this.filterMode, history: this.history.slice(0, 200), resultsToAnalyze: this.resultsToAnalyze, minimumConfidence: this.minimumConfidence, confirmations: this.confirmations, intervalMin: this.intervalMin, galeMax: this.gale.max, telegram: { ...this.telegram, message: { ...(this.telegram.message || {}) } }, stats: this.stats, lastHeartbeat: this.lastHeartbeat, lastResult: this.lastResult, lastSignal: this.lastSignal, currentSignal: this.currentSignal, galeCount: this.galeCount, lastSignalTime: this.lastSignalTime, diagnostic: this.diagnostic, signalFlow: this.signalFlow, logs: this.logs, strategyIndex: this.strategyIndex, usedPatterns: this.usedPatterns };
+    return { id: this.id, name: this.name, game: this.game, strategy: this.strategy, status: this.status, mode: this.mode, target: this.target, filterMode: this.filterMode, history: this.history.slice(0, 200), resultsToAnalyze: this.resultsToAnalyze, minimumConfidence: this.minimumConfidence, confirmations: this.confirmations, intervalMin: this.intervalMin, galeMax: this.gale.max, telegram: { ...this.telegram, message: { ...(this.telegram.message || {}) } }, stats: this.stats, lastHeartbeat: this.lastHeartbeat, lastResult: this.lastResult, lastSignal: this.lastSignal, currentSignal: this.currentSignal, galeCount: this.galeCount, lastSignalTime: this.lastSignalTime, diagnostic: this.diagnostic, signalFlow: this.signalFlow, logs: this.logs, strategyIndex: this.strategyIndex, usedPatterns: this.usedPatterns, startedAt: this.startedAt };
   }
 }

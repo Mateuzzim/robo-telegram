@@ -297,7 +297,6 @@ const ResultHistoryStore = {
     const item = this.toStorageItem(label, result);
     if (!item) return;
     const history = this.load(label);
-    if (this.hasRecentDuplicate(history, item)) return;
     history.unshift(item);
     this.save(label, history);
   },
@@ -339,11 +338,6 @@ const ResultHistoryStore = {
     const number = item.cellIndex ?? item.number ?? '';
     const color = this.normalizeColor(item.cellColor ?? item.color);
     return number + ':' + color + ':' + (item.multiplier || '');
-  },
-
-  hasRecentDuplicate(history, item) {
-    const key = this.itemKey(item);
-    return history.slice(0, 5).some(current => this.itemKey(current) === key);
   }
 };
 

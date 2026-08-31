@@ -195,8 +195,8 @@ const RobotEngine = {
   getAllRobots() { return [...this.robots.values()]; },
   getAllStates() { return this.getAllRobots().map(r => r.getState()); },
 
-  startRobot(id) { const r = this.robots.get(id); if (r) { r.status = 'online'; EventBus.emit('robot:started', { id }); this.save(); } },
-  stopRobot(id) { const r = this.robots.get(id); if (r) { r.status = 'offline'; EventBus.emit('robot:stopped', { id }); this.save(); } },
+  startRobot(id) { const r = this.robots.get(id); if (r) { r.status = 'online'; r.startedAt = Date.now(); EventBus.emit('robot:started', { id }); this.save(); } },
+  stopRobot(id) { const r = this.robots.get(id); if (r) { r.status = 'offline'; r.startedAt = null; EventBus.emit('robot:stopped', { id }); this.save(); } },
   pauseRobot(id) { const r = this.robots.get(id); if (r) { r.status = 'paused'; EventBus.emit('robot:paused', { id }); this.save(); } },
   resumeRobot(id) { const r = this.robots.get(id); if (r) { r.status = 'online'; EventBus.emit('robot:resumed', { id }); this.save(); } },
   deleteRobot(id) {
@@ -243,7 +243,7 @@ const RobotEngine = {
     try {
       const raw = JSON.parse(localStorage.getItem(key) || '[]');
       if (!Array.isArray(raw) || !raw.length) return false;
-      const existing = new Set(robot.history.map(h => h.roundId ? 'round:' + h.roundId : h.color + ':' + h.number));
+      const existing = new Set(robot.history.map(h => h.roundId ? 'round:' + h.roundId : h.color + ':' + h.number + ':' + (h.multiplier || '')));
       let added = 0;
       for (let i = raw.length - 1; i >= 0; i--) {
         const r = raw[i];
@@ -251,7 +251,7 @@ const RobotEngine = {
         const color = typeof robot.normalizeColor === 'function' ? robot.normalizeColor(rawColor) : String(rawColor || '').toUpperCase();
         const number = robot.game === 'double' ? r.number : (r.cellIndex ?? r.number);
         const roundId = r.roundId ?? r.roundID ?? r.roundUuid ?? r.roundUUID ?? r.gameId ?? r.gameID ?? r.id ?? r.uuid;
-        const id = roundId !== undefined && roundId !== null ? 'round:' + String(roundId) : color + ':' + number;
+        const id = roundId !== undefined && roundId !== null ? 'round:' + String(roundId) : color + ':' + number + ':' + (r.multiplier || '');
         if (existing.has(id)) continue;
         existing.add(id);
         const item = robot.game === 'double'
@@ -302,17 +302,12 @@ EventBus.on('results:history', (d) => {
   if (!d || !d.results || !d.results.length) return;
   RobotEngine.getAllRobots().forEach(robot => {
     if (robot.status === 'online' && robot.game === d.label) {
-      const existing = new Set(robot.history.map(h => h.roundId ? 'round:' + h.roundId : h.color + ':' + h.number));
       d.results.forEach(r => {
         const rawColor = r.color ?? r.cellColor;
         const color = typeof robot.normalizeColor === 'function' ? robot.normalizeColor(rawColor) : String(rawColor || '').toUpperCase();
         const number = r.number ?? r.cellIndex;
         const roundId = r.roundId ?? r.roundID ?? r.roundUuid ?? r.roundUUID ?? r.gameId ?? r.gameID ?? r.id ?? r.uuid;
-        const key = roundId !== undefined && roundId !== null ? 'round:' + String(roundId) : color + ':' + number;
-        if (!existing.has(key)) {
-          robot.history.unshift({ color, number, multiplier: r.multiplier, roundId: roundId !== undefined && roundId !== null ? String(roundId) : undefined, timestamp: Date.now() });
-          existing.add(key);
-        }
+        robot.history.unshift({ color, number, multiplier: r.multiplier, roundId: roundId !== undefined && roundId !== null ? String(roundId) : undefined, timestamp: Date.now() });
       });
       if (robot.history.length > 200) robot.history.length = 200;
       robot.diagnostic.analyzedResults = robot.history.length;

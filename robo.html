@@ -252,6 +252,7 @@ function renderAll() {
   if (!tgFormRendered) {
     const channels = getChannels();
     const tg = r.telegram || { enabled: false, channelId: '' };
+    const tgMessage = tg.message || {};
     document.getElementById('telegramConfig').innerHTML = `
       <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:10px;cursor:pointer">
         <input type="checkbox" id="tgEnabled" ${tg.enabled ? 'checked' : ''}> Enviar sinais para Telegram
@@ -269,8 +270,29 @@ function renderAll() {
           <option value="both" ${tg.msgType === 'both' || !tg.msgType ? 'selected' : ''}>Live + Sinal</option>
         </select>
       </div>
+      <div class="form-group" style="margin-top:12px">
+        <label style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <span>Mensagem Custom - Live</span>
+          <button type="button" class="btn btn-sm btn-ghost" onclick="insertLiveVars()">Inserir variavel</button>
+        </label>
+        <textarea id="tgMessageLive" rows="6" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-family:monospace;resize:vertical" placeholder="Deixe vazio para usar a mensagem padrao. Use {variaveis} listadas abaixo.">${escapeHtml(tgMessage.live || '')}</textarea>
+        <div style="font-size:10px;color:var(--text3);margin-top:4px;line-height:1.5">
+          Variaveis: {robotName} {game} {gameName} {strategy} {mode} {status} {lastResult} {lastResultEmoji} {lastResultLabel} {diagnosticStatus} {analyzedResults} {confidenceDiag} {pattern} {entry} {entryEmoji} {entryLabel} {score} {wins} {losses} {rate} {signals} {winSG} {winG1} {winG2} {history} {historyEmojis} {time}
+        </div>
+      </div>
+      <div class="form-group" style="margin-top:10px">
+        <label style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <span>Mensagem Custom - Sinal (entrada/win/loss/gale)</span>
+          <button type="button" class="btn btn-sm btn-ghost" onclick="insertEntryVars()">Inserir variavel</button>
+        </label>
+        <textarea id="tgMessageEntry" rows="6" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-family:monospace;resize:vertical" placeholder="Deixe vazio para usar a mensagem padrao. Use {variaveis} listadas abaixo.">${escapeHtml(tgMessage.entry || '')}</textarea>
+        <div style="font-size:10px;color:var(--text3);margin-top:4px;line-height:1.5">
+          Variaveis: {robotName} {game} {strategy} {status} {target} {targetEmoji} {targetColor} {confidence} {gale} {galeMax} {wins} {losses} {rate} {signals} {history} {historyEmojis} {lastResult} {diagnosticStatus} {confidenceDiag} {pattern} {time}
+        </div>
+      </div>
       <div style="margin-top:10px;display:flex;gap:8px">
         <button class="btn btn-sm btn-blue" onclick="testTelegramChannel()" id="btnTestTg">Testar Canal</button>
+        <button class="btn btn-sm btn-ghost" onclick="clearTelegramMessages()">Limpar templates</button>
         <span id="testTgResult" style="font-size:11px;align-self:center"></span>
       </div>
       <div style="font-size:11px;color:var(--text3);margin-top:6px">Adicione canais em Configuracoes > Canais / Grupos</div>`;
@@ -300,11 +322,11 @@ function getEntrySendState(r) {
   }
 
   if (sameSignal && currentStatus === 'approved' && messageStatus === 'approved') {
-    return { badge: 'ENVIADA', badgeClass: 'sf-badge-pass', color: 'var(--green)', label: 'Entrada enviada', detail: 'Mensagem anterior excluida e nova entrada enviada', messageId: message.messageId || '' };
+    return { badge: 'ENVIADA', badgeClass: 'sf-badge-pass', color: 'var(--green)', label: 'Entrada enviada', detail: 'Mensagem atualizada no Telegram', messageId: message.messageId || '' };
   }
 
   if (sameSignal && currentStatus === 'gale_pending' && messageStatus === 'gale_pending') {
-    return { badge: 'GALE', badgeClass: 'sf-badge-ok', color: 'var(--yellow)', label: 'Gale em andamento', detail: 'Mensagem anterior excluida e G' + (current.gale || 1) + ' enviado', messageId: message.messageId || '' };
+    return { badge: 'GALE', badgeClass: 'sf-badge-ok', color: 'var(--yellow)', label: 'Gale em andamento', detail: 'Mensagem editada para G' + (current.gale || 1), messageId: message.messageId || '' };
   }
 
   if (!current && (messageStatus === 'win' || messageStatus === 'loss')) {
@@ -398,6 +420,33 @@ function renderTelegramMessagePreview(r) {
   }
 
   el.innerHTML = html;
+}
+
+function insertAtCursor(textareaId, value) {
+  const el = document.getElementById(textareaId);
+  if (!el) return;
+  const start = el.selectionStart || 0;
+  const end = el.selectionEnd || 0;
+  el.value = el.value.slice(0, start) + value + el.value.slice(end);
+  el.focus();
+  const pos = start + value.length;
+  el.setSelectionRange(pos, pos);
+}
+function insertLiveVars() {
+  const list = ['{robotName}', '{gameName}', '{status}', '{lastResult}', '{diagnosticStatus}', '{pattern}', '{entry}', '{wins}', '{losses}', '{rate}', '{history}', '{time}'];
+  const choice = prompt('Variavel para Live (cole no campo):\n' + list.join(' '));
+  if (choice) insertAtCursor('tgMessageLive', choice);
+}
+function insertEntryVars() {
+  const list = ['{robotName}', '{status}', '{target}', '{targetEmoji}', '{confidence}', '{gale}', '{galeMax}', '{wins}', '{losses}', '{rate}', '{history}', '{lastResult}', '{time}'];
+  const choice = prompt('Variavel para Sinal (cole no campo):\n' + list.join(' '));
+  if (choice) insertAtCursor('tgMessageEntry', choice);
+}
+function clearTelegramMessages() {
+  const live = document.getElementById('tgMessageLive');
+  const entry = document.getElementById('tgMessageEntry');
+  if (live) live.value = '';
+  if (entry) entry.value = '';
 }
 
 function loadRobot() {
@@ -495,7 +544,10 @@ function saveConfig() {
     enabled: document.getElementById('tgEnabled')?.checked || false,
     channelId: document.getElementById('tgChannel')?.value || '',
     msgType: document.getElementById('tgMsgType')?.value || 'both',
-    message: robot.telegram?.message || {}
+    message: {
+      live: document.getElementById('tgMessageLive')?.value || '',
+      entry: document.getElementById('tgMessageEntry')?.value || ''
+    }
   };
   RobotEngine.save();
   configFormRendered = false;
@@ -536,7 +588,10 @@ async function deleteStoredTelegramMessage(token, chatId, messageId) {
   if (!token || !chatId || !messageId || typeof TelegramService === 'undefined') return;
   const response = await TelegramService.api(token, 'deleteMessage', { chat_id: chatId, message_id: messageId });
   if (!response.ok && !TelegramService.isAlreadyDeleted(response)) {
-    console.warn('[Telegram] deleteMessage/reset', response.description || 'Erro desconhecido');
+    const description = String(response?.description || '').toLowerCase();
+    if (!description.includes('message identifier is not specified') && !description.includes('message_id_invalid') && !description.includes('chat not found') && !description.includes('bot was blocked') && !description.includes('user is deactivated') && !description.includes('bad request')) {
+      console.warn('[Telegram] deleteMessage/reset', response.description || 'Erro desconhecido');
+    }
   }
 }
 
@@ -547,9 +602,12 @@ async function resetRobotTelegramMessages(robot) {
     const messages = readStoredObject(storeKey);
     const matchingKeys = Object.keys(messages).filter(key => key === robot.id || key.startsWith(robot.id + ':'));
     for (const key of matchingKeys) {
-      const parts = key.split(':');
-      const chatId = parts[1] || robot.telegram?.channelId || '';
-      await deleteStoredTelegramMessage(token, chatId, messages[key]?.messageId);
+      const msg = messages[key];
+      const messageId = msg?.messageId || msg?.message_id;
+      const chatId = msg?.chatId || (() => { try { const parts = key.split(':'); return parts[1] || robot.telegram?.channelId || ''; } catch { return robot.telegram?.channelId || ''; } })();
+      if (messageId && chatId) {
+        await deleteStoredTelegramMessage(token, chatId, messageId);
+      }
       delete messages[key];
     }
     writeStoredObject(storeKey, messages);
@@ -575,6 +633,7 @@ async function resetRobot() {
   r.lastSignal = null;
   r.lastResult = null;
   r.lastSignalTime = 0;
+  r.startedAt = null;
   r.signalFlow = { step1:'Aguardando padrao...', step2:'Nenhuma entrada pendente', step3:'Aguardando entrada...', step4:'Placar sera atualizado apos resultado' };
   r.diagnostic = { status:'IDLE', analyzedResults:0, mainPattern:null, confidence:0, suggestedEntry:null, patternScores:{}, totalScore:0, filterResults:{}, decision:null, risk:'BAIXO', signalScore:0, confluences:0, signalBlocked:false, blockReason:'' };
   RobotEngine.save();
