@@ -34,7 +34,7 @@
     <div class="form-group"><label>Nome</label><input id="fName" placeholder="Ex: Wheel Alpha"></div>
     <div class="form-group"><label>Jogo</label><select id="fGame" onchange="updateTargets()"><option value="wheel">Wheel</option><option value="double">Double</option></select></div>
     <div class="form-group"><label>Alvo (Cor / Multiplier)</label><select id="fTarget"></select></div>
-    <div class="form-group"><label>Estrategia</label><select id="fStrategy"><option value="alternancia">Alternancia</option><option value="repeticao">Repeticao</option><option value="frequencia">Frequencia</option><option value="tendencia">Tendencia</option><option value="espelhamento">Espelhamento</option><option value="diagonal">Diagonal</option></select></div>
+    <div class="form-group"><label>Estrategia</label><select id="fStrategy"><option value="todas">Todas (Analise Completa)</option><option value="alternancia">Alternancia</option><option value="repeticao">Repeticao</option><option value="frequencia">Frequencia</option><option value="tendencia">Tendencia</option><option value="espelhamento">Espelhamento</option><option value="diagonal">Diagonal</option></select></div>
     <div class="form-group"><label>Resultados para Analisar</label><input id="fResults" type="number" value="40"></div>
     <div class="form-group"><label>Confianca Minima (%)</label><input id="fConf" type="number" value="80"></div>
     <div class="form-group"><label>Intervalo entre Sinais (seg)</label><input id="fInterval" type="number" value="60"></div>
@@ -82,13 +82,15 @@ const TARGETS = {
     { value: 'grey', label: 'Preto 2X' },
     { value: 'red', label: 'Vermelho 3X' },
     { value: 'blue', label: 'Azul 5X' },
-    { value: 'green', label: 'Verde 50X' }
+    { value: 'green', label: 'Verde 50X' },
+    { value: 'red+grey', label: 'Vermelho / Preto' }
   ],
   double: [
     { value: 'any', label: 'Qualquer cor' },
     { value: 'red', label: 'Vermelho 2X' },
     { value: 'black', label: 'Preto 2X' },
-    { value: 'green', label: 'Verde 14X' }
+    { value: 'green', label: 'Verde 14X' },
+    { value: 'red+black', label: 'Vermelho / Preto' }
   ]
 };
 function updateTargets(){

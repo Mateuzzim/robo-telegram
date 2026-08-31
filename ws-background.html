@@ -28,13 +28,28 @@ const MAX_RESULTS = 100;
 function loadHistory(key) {
   try {
     const saved = JSON.parse(localStorage.getItem(key) || 'null');
-    if (Array.isArray(saved)) return saved;
+    if (!Array.isArray(saved)) return [];
+    const seen = new Set();
+    return saved.filter(r => {
+      const k = resultKey(r);
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
   } catch {}
   return [];
 }
 
 function saveHistory(key, data) {
-  localStorage.setItem(key, JSON.stringify(data.slice(0, MAX_RESULTS)));
+  const seen = new Set();
+  const deduped = [];
+  for (const item of data) {
+    const k = resultKey(item);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    deduped.push(item);
+  }
+  localStorage.setItem(key, JSON.stringify(deduped.slice(0, MAX_RESULTS)));
 }
 
 function normalizeColor(color) {

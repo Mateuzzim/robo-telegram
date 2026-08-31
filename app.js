@@ -12,12 +12,6 @@ const App = {
     const isBackground = document.title === 'WS Background';
     this.applySavedProjectData();
     RobotEngine.load({ loadHistory: isBackground, emitStarted: isBackground });
-    if (RobotEngine.getAllRobots().length === 0) {
-      RobotEngine.createRobot({ id: 'wheel-alt', name: 'Wheel Alternancia', game: 'wheel', strategy: 'alternancia', resultsToAnalyze: 40, minimumConfidence: 80, confirmations: 2, intervalMin: 60, galeMax: 2, mode: 'monitoramento' });
-      RobotEngine.createRobot({ id: 'wheel-freq', name: 'Wheel Frequencia', game: 'wheel', strategy: 'frequencia', resultsToAnalyze: 40, minimumConfidence: 75, confirmations: 2, intervalMin: 60, galeMax: 1, mode: 'monitoramento' });
-      RobotEngine.createRobot({ id: 'double-tend', name: 'Double Tendencia', game: 'double', strategy: 'tendencia', resultsToAnalyze: 30, minimumConfidence: 75, confirmations: 2, intervalMin: 60, galeMax: 2, mode: 'monitoramento' });
-      RobotEngine.save();
-    }
     if (isBackground) {
       if (!this.claimBackgroundLeadership()) {
         this.waitForBackgroundLeadership();

@@ -22,17 +22,10 @@ const TelegramService = {
   },
 
   init() {
-    if (this.initialized) {
-      console.log('[Telegram] init() chamado novamente, ignorando');
-      return;
-    }
+    if (this.initialized) return;
     this.initialized = true;
-    console.log('[Telegram] Inicializando TelegramService');
     EventBus.on('result:new', (result) => this.handleResultChange(result));
-    EventBus.on('signal:created', (signal) => {
-      console.log('[Telegram] signal:created recebido', signal?.id, signal?.status);
-      this.handleSignalCreated(signal);
-    });
+    EventBus.on('signal:created', (signal) => this.handleSignalCreated(signal));
     EventBus.on('signal:gale', (signal) => this.handleSignalChange(signal));
     EventBus.on('signal:win', (signal) => this.handleSignalChange(signal));
     EventBus.on('signal:loss', (signal) => this.handleSignalChange(signal));
@@ -159,10 +152,7 @@ const TelegramService = {
   },
 
   shouldSendLive(robot) {
-    if (!this.isTelegramEnabled(robot)) {
-      console.warn('[Telegram] Live bloqueado: telegram nao habilitado', robot?.id);
-      return false;
-    }
+    if (!this.isTelegramEnabled(robot)) return false;
     const msgType = robot.telegram?.msgType || 'both';
     if (msgType !== 'live' && msgType !== 'both') {
       console.warn('[Telegram] Live bloqueado: msgType=', msgType, robot?.id);
@@ -180,7 +170,7 @@ const TelegramService = {
 
   isSignalCooldownActive(robot) {
     if (!robot || !robot.startedAt) return false;
-    return (Date.now() - robot.startedAt) < 40000;
+    return (Date.now() - robot.startedAt) < 20000;
   },
 
   async updateLiveMessages(result) {
@@ -380,7 +370,6 @@ const TelegramService = {
 
   async enqueueEntryMessage(robot, signal) {
     const key = 'entry:' + this.entryMessageKey(robot);
-    console.log('[Telegram] enqueueEntryMessage', key, signal?.id, signal?.status);
     return this.enqueue(key, () => this.withLock(key, () => this.sendEntryMessage(robot, signal)));
   },
 
@@ -432,14 +421,10 @@ const TelegramService = {
     }
 
     const text = this.prepareTelegramText(this.buildLiveMessage(robot));
-    console.log('[Telegram] sendOrEditLiveMessage', robot?.id, text.slice(0, 50));
     const messages = this.getLiveMessages();
     const key = this.messageKey(robot);
     const current = messages[key];
-    if (current?.text === text) {
-      console.log('[Telegram] Live texto igual, pulando');
-      return true;
-    }
+    if (current?.text === text) return true;
 
     if (current?.messageId) {
       const edited = await this.api(token, 'editMessageText', {
@@ -486,7 +471,6 @@ const TelegramService = {
 
     const key = this.entryMessageKey(robot);
     const text = this.prepareTelegramText(this.buildEntryMessage(robot, signal));
-    console.log('[Telegram] sendEntryMessage', key, signal?.id, signal?.status, text.slice(0, 50));
     const messages = this.getEntryMessages();
     const current = messages[key];
     const messageId = current?.messageId;

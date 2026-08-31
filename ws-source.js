@@ -290,13 +290,23 @@ const ResultHistoryStore = {
   save(label, history) {
     const key = this.getKey(label);
     if (!key) return;
-    localStorage.setItem(key, JSON.stringify(history.slice(0, this.maxResults)));
+    const seen = new Set();
+    const deduped = [];
+    for (const item of history) {
+      const k = this.itemKey(item);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      deduped.push(item);
+    }
+    localStorage.setItem(key, JSON.stringify(deduped.slice(0, this.maxResults)));
   },
 
   add(label, result) {
     const item = this.toStorageItem(label, result);
     if (!item) return;
     const history = this.load(label);
+    const key = this.itemKey(item);
+    if (history.some(h => this.itemKey(h) === key)) return;
     history.unshift(item);
     this.save(label, history);
   },
@@ -305,10 +315,15 @@ const ResultHistoryStore = {
     if (!Array.isArray(results) || !results.length) return;
     const history = this.load(label);
     const existing = new Set(history.map(item => this.itemKey(item)));
-    const incoming = results
-      .map(result => this.toStorageItem(label, result))
-      .filter(Boolean)
-      .filter(item => !existing.has(this.itemKey(item)));
+    const incoming = [];
+    for (const result of results) {
+      const item = this.toStorageItem(label, result);
+      if (!item) continue;
+      const key = this.itemKey(item);
+      if (existing.has(key)) continue;
+      existing.add(key);
+      incoming.push(item);
+    }
     this.save(label, incoming.concat(history));
   },
 

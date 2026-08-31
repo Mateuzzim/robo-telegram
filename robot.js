@@ -70,14 +70,30 @@ class Robot {
 
   getFixedTargetColor() {
     const targetColor = this.normalizeColor(this.target?.color || 'any');
-    return targetColor !== 'ANY' && targetColor !== 'ALL' ? targetColor : null;
+    if (targetColor === 'ANY' || targetColor === 'ALL' || targetColor.includes('+')) return null;
+    return targetColor;
+  }
+
+  getAllowedTargets() {
+    const raw = String(this.target?.color || 'any').toLowerCase();
+    if (raw.includes('+')) {
+      return raw.split('+').map(c => this.normalizeColor(c));
+    }
+    return null;
   }
 
   normalizeSignalTarget(signal) {
     if (!signal) return;
     const fixedTarget = this.getFixedTargetColor();
-    if (fixedTarget) signal.target = fixedTarget;
-    else if (signal.target) signal.target = this.normalizeColor(signal.target);
+    if (fixedTarget) {
+      signal.target = fixedTarget;
+    } else {
+      signal.target = this.normalizeColor(signal.target);
+      const allowed = this.getAllowedTargets();
+      if (allowed && !allowed.includes(signal.target)) {
+        signal.target = allowed[0];
+      }
+    }
   }
 
   normalizeSavedSignalTargets() {
@@ -105,7 +121,7 @@ class Robot {
       this.diagnostic.status = 'LOADING';
       this.diagnostic.mainPattern = `Aguardando dados (${this.history.length}/${this.resultsToAnalyze})`;
       this.diagnostic.confidence = 0;
-      this.diagnostic.suggestedEntry = this.getFixedTargetColor() || null;
+      this.diagnostic.suggestedEntry = this.getFixedTargetColor() || (this.getAllowedTargets() || [])[0] || null;
       this.diagnostic.patternScores = {};
       this.diagnostic.totalScore = 0;
       this.diagnostic.filterResults = {};
@@ -119,6 +135,9 @@ class Robot {
     const fixedTarget = this.getFixedTargetColor();
     if (fixedTarget) {
       this.diagnostic.suggestedEntry = fixedTarget;
+    } else {
+      const allowed = this.getAllowedTargets();
+      if (allowed) this.diagnostic.suggestedEntry = allowed.join(' / ');
     }
 
     const strategies = RobotEngine.strategies;
@@ -151,11 +170,11 @@ class Robot {
     }
 
     let signal = null;
-    const startIndex = this.strategyIndex % strategyNames.length;
+    const isAll = this.strategy === 'todas';
+    const namesToTry = isAll ? strategyNames : [this.strategy || strategyNames[0]];
 
-    for (let i = 0; i < strategyNames.length; i++) {
-      const idx = (startIndex + i) % strategyNames.length;
-      const name = strategyNames[idx];
+    for (const name of namesToTry) {
+      if (!strategies[name]) continue;
       const fn = strategies[name];
       const result = fn(this.history, this.target);
 
@@ -164,9 +183,9 @@ class Robot {
 
       if (!result.matched || result.confidence < minConf) {
         this.signalFlow = {
-          step1: 'Ciclo: ' + name,
+          step1: (isAll ? 'Analisando: ' : 'Ciclo: ') + name,
           step2: 'Confianca: ' + (result.confidence || 0) + '% (min: ' + minConf + '%)',
-          step3: result.matched ? 'Confianca baixa - proxima estrategia' : (result.reason || 'Nao detectado'),
+          step3: result.matched ? 'Confianca baixa - ' + (isAll ? 'proxima estrategia' : 'aguardando') : (result.reason || 'Nao detectado'),
           step4: 'Aguardando proximo resultado...'
         };
         EventBus.emit('robot:state', this.getState());
@@ -176,7 +195,7 @@ class Robot {
       const targetColor = this.normalizeColor(result.target);
       if (this.isPatternUsed(name, targetColor)) {
         this.signalFlow = {
-          step1: 'Ciclo: ' + name,
+          step1: 'Analisando: ' + name,
           step2: 'Padrao JA USADO para ' + this.colorLabel(targetColor),
           step3: 'Ignorando - proxima estrategia',
           step4: 'Aguardando proximo resultado...'
@@ -186,13 +205,19 @@ class Robot {
       }
 
       const fixedTarget = this.getFixedTargetColor();
-      if (fixedTarget) result.target = fixedTarget;
+      if (fixedTarget) {
+        result.target = fixedTarget;
+      } else {
+        const allowed = this.getAllowedTargets();
+        if (allowed && result.target && !allowed.includes(this.normalizeColor(result.target))) {
+          result.target = allowed[0];
+        }
+      }
       this.diagnostic.suggestedEntry = result.target || null;
 
       signal = RobotEngine.evaluate(this, result);
       if (signal) {
         this.markPatternUsed(name, signal.target);
-        this.strategyIndex = (idx + 1) % strategyNames.length;
         this.addLog('SINAL APROVADO: ' + signal.target + ' (' + signal.confidence + '%) via ' + name);
         EventBus.emit('signal:created', signal);
         break;
@@ -204,7 +229,7 @@ class Robot {
       this.diagnostic.signalBlocked = true;
       this.diagnostic.blockReason = 'Nenhuma estrategia aprovada neste ciclo';
       this.signalFlow = {
-        step1: 'Ciclo completo: ' + strategyNames.length + ' estrategias',
+        step1: 'Ciclo completo: ' + namesToTry.length + ' estrategia' + (namesToTry.length > 1 ? 's' : ''),
         step2: 'Nenhuma aprovada',
         step3: 'Aguardando proximo resultado...',
         step4: 'Proximo: ' + strategyNames[this.strategyIndex % strategyNames.length]

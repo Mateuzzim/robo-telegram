@@ -236,7 +236,16 @@ function loadHistory(key){
 
 function saveHistory(key, data){
   try{
-    localStorage.setItem(key, JSON.stringify(data.slice(0, MAX_RESULTS)));
+    const seen = new Set();
+    const deduped = [];
+    const keyFn = key === KEYS.wheel ? resultKeyWheel : resultKeyDouble;
+    for(const item of data){
+      const k = keyFn(item);
+      if(seen.has(k)) continue;
+      seen.add(k);
+      deduped.push(item);
+    }
+    localStorage.setItem(key, JSON.stringify(deduped.slice(0, MAX_RESULTS)));
   }catch{}
 }
 

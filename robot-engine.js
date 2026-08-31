@@ -84,7 +84,7 @@ const RobotEngine = {
   evaluate(robot, strategyResult) {
     const normalizeColor = color => typeof robot.normalizeColor === 'function' ? robot.normalizeColor(color) : String(color || '').toUpperCase();
     const targetColor = normalizeColor(robot.target?.color || 'any');
-    if (targetColor !== 'ANY' && targetColor !== 'ALL') {
+    if (targetColor !== 'ANY' && targetColor !== 'ALL' && !targetColor.includes('+')) {
       strategyResult.target = targetColor;
     } else if (strategyResult.target) {
       strategyResult.target = normalizeColor(strategyResult.target);

@@ -64,7 +64,14 @@ const MAX_RESULTS = 100;
 function loadHistory() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-    if (Array.isArray(saved) && saved.length) return saved;
+    if (!Array.isArray(saved) || !saved.length) return [];
+    const seen = new Set();
+    return saved.filter(r => {
+      const k = String(r.cellIndex ?? r.number ?? '') + ':' + String(r.cellColor ?? r.color ?? '').toLowerCase() + ':' + (r.multiplier || '');
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
   } catch {}
   return [];
 }
