@@ -127,6 +127,7 @@
 
 </div>
 <script src="config.js"></script>
+<script src="saved-data.js"></script>
 <script src="store.js"></script>
 <script src="event-bus.js"></script>
 <script src="utils.js"></script>
@@ -480,11 +481,21 @@ async function sendTestMessage() {
   const robot = robots.find(r => r.id === robotId) || robots[0];
   if (!robot) { el.innerHTML = '<span style="color:var(--red)">Nenhum robo disponivel.</span>'; return; }
 
+  const robotForSend = {
+    ...robot,
+    telegram: {
+      ...(robot.telegram || {}),
+      enabled: true,
+      channelId,
+      msgType: robot.telegram?.msgType || 'both'
+    }
+  };
   let text = '';
+  let fakeSignal = null;
   if (type === 'live') {
-    text = TelegramService.buildLiveMessage(robot);
+    text = TelegramService.buildLiveMessage(robotForSend);
   } else {
-    const fakeSignal = {
+    fakeSignal = {
       id: 'test-' + Date.now(),
       robotId: robot.id,
       target: robot.target?.color || 'RED',
@@ -492,48 +503,28 @@ async function sendTestMessage() {
       gale: type === 'gale' ? 1 : 0,
       result: { color: type === 'win' ? (robot.target?.color || 'RED') : (robot.target?.color === 'RED' ? 'BLACK' : 'RED') }
     };
-    text = TelegramService.buildEntryMessage(robot, fakeSignal);
+    text = TelegramService.buildEntryMessage(robotForSend, fakeSignal);
   }
 
   el.innerHTML = '<span style="color:var(--yellow)">Enviando...</span>';
   try {
-    const r = await TelegramService.api(token, 'sendMessage', {
-      chat_id: channelId,
-      text,
-      disable_web_page_preview: true
-    });
-    if (r.ok) {
-      el.innerHTML = '<span class="sent-badge ok">Enviado! message_id: ' + r.result.message_id + '</span>';
-      addSendLog({ type, channelId, robotId: robot.id, robotName: robot.name, status: 'ok', messageId: r.result.message_id, preview: text.substring(0, 100) });
-      const entryKey = [robot.id, channelId, 'entry'].join(':');
-      try {
-        const entries = JSON.parse(localStorage.getItem('telegram-entry-messages-v1') || '{}');
-        entries[entryKey] = {
-          messageId: r.result.message_id,
-          text,
-          signalId: 'test-' + Date.now(),
-          status: type === 'signal' ? 'approved' : type,
-          gale: type === 'gale' ? 1 : 0,
-          result: null,
-          eventKey: '',
-          historyResultKey: '',
-          createdAt: Date.now(),
-          updatedAt: Date.now()
-        };
-        localStorage.setItem('telegram-entry-messages-v1', JSON.stringify(entries));
-      } catch {}
-      if (robot.telegram?.channelId && robot.telegram.channelId !== channelId) {
-        const robotKey = [robot.id, robot.telegram.channelId, 'entry'].join(':');
-        try {
-          const entries = JSON.parse(localStorage.getItem('telegram-entry-messages-v1') || '{}');
-          entries[robotKey] = { ...entries[entryKey] };
-          localStorage.setItem('telegram-entry-messages-v1', JSON.stringify(entries));
-        } catch {}
-      }
+    const ok = type === 'live'
+      ? await TelegramService.enqueueLiveMessage(robotForSend)
+      : await TelegramService.enqueueEntryMessage(robotForSend, fakeSignal);
+    const storeKey = type === 'live' ? [robot.id, channelId].join(':') : [robot.id, channelId, 'entry'].join(':');
+    const storeName = type === 'live' ? 'telegram-live-messages-v1' : 'telegram-entry-messages-v1';
+    const savedMessages = JSON.parse(localStorage.getItem(storeName) || '{}');
+    const saved = savedMessages[storeKey] || {};
+
+    if (ok) {
+      el.innerHTML = '<span class="sent-badge ok">Enviado! message_id: ' + (saved.messageId || '--') + '</span>';
+      addSendLog({ type, channelId, robotId: robot.id, robotName: robot.name, status: 'ok', messageId: saved.messageId || '', preview: text.substring(0, 100) });
       renderSendHistory();
     } else {
-      el.innerHTML = '<span class="sent-badge err">Erro: ' + (r.description || 'desconhecido') + '</span>';
-      addSendLog({ type, channelId, robotId: robot.id, robotName: robot.name, status: 'error', error: r.description, preview: text.substring(0, 100) });
+      const lastError = JSON.parse(localStorage.getItem('telegram-last-error-v1') || '{}');
+      const error = lastError.description || 'Falha ao enviar';
+      el.innerHTML = '<span class="sent-badge err">Erro: ' + escapeHtml(error) + '</span>';
+      addSendLog({ type, channelId, robotId: robot.id, robotName: robot.name, status: 'error', error, preview: text.substring(0, 100) });
       renderSendHistory();
     }
   } catch (e) {

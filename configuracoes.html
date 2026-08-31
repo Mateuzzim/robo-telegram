@@ -67,6 +67,13 @@
     <div id="channelsList" class="ch-list"></div>
   </div>
 
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header"><span class="card-title">Dados para GitHub</span></div>
+    <div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:12px">Gera o conteudo de <code>saved-data.js</code> com robos, canais, vinculos, URLs e modelos de mensagem. O token do bot nao entra nesse arquivo.</div>
+    <button class="btn btn-blue btn-sm" onclick="exportProjectData()">Exportar saved-data.js</button>
+    <div id="exportResult" class="test-result"></div>
+  </div>
+
   <div class="card">
     <div class="card-header"><span class="card-title">Vincular Robos aos Canais</span></div>
     <div id="robotLinks"></div>
@@ -80,6 +87,7 @@
 
 </div>
 <script src="config.js"></script>
+<script src="saved-data.js"></script>
 <script src="store.js"></script>
 <script src="event-bus.js"></script>
 <script src="utils.js"></script>
@@ -240,6 +248,52 @@ function saveRobotLinks() {
   renderRobotLinks();
   renderStatus();
   alert('Vinculos salvos.');
+}
+
+function downloadTextFile(filename, content) {
+  const blob = new Blob([content], { type: 'text/javascript;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function exportProjectData() {
+  const el = document.getElementById('exportResult');
+  const data = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    wsConfig: {
+      wheelWsUrl: CONFIG.wheel.wsUrl,
+      doubleWsUrl: CONFIG.double.wsUrl
+    },
+    telegram: {
+      owner: getOwner(),
+      channels: getChannels()
+    },
+    robots: RobotEngine.getAllRobots().map(r => r.toJSON()),
+    messageTemplates: Store.get('telegram-message-templates-v1', {})
+  };
+  data.robots.forEach(robot => {
+    delete robot.history;
+    delete robot.logs;
+    delete robot.lastResult;
+    delete robot.lastSignal;
+    delete robot.currentSignal;
+    delete robot.diagnostic;
+    delete robot.signalFlow;
+    delete robot.stats;
+    robot.galeCount = 0;
+    robot.lastSignalTime = 0;
+  });
+  const content = 'window.SAVED_PROJECT_DATA = ' + JSON.stringify(data, null, 2) + ';\n';
+  downloadTextFile('saved-data.js', content);
+  el.className = 'test-result test-ok';
+  el.textContent = 'Arquivo gerado. Substitua o saved-data.js do projeto por este arquivo antes de subir para o GitHub.';
 }
 
 function renderStatus() {

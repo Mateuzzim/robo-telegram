@@ -10,6 +10,7 @@ const App = {
 
   init() {
     const isBackground = document.title === 'WS Background';
+    this.applySavedProjectData();
     RobotEngine.load({ loadHistory: isBackground, emitStarted: isBackground });
     if (RobotEngine.getAllRobots().length === 0) {
       RobotEngine.createRobot({ id: 'wheel-alt', name: 'Wheel Alternancia', game: 'wheel', strategy: 'alternancia', resultsToAnalyze: 40, minimumConfidence: 80, confirmations: 2, intervalMin: 60, galeMax: 2, mode: 'monitoramento' });
@@ -65,6 +66,51 @@ const App = {
 
   getSourceStatus(label) {
     return Store.get('source-status-' + label, {});
+  },
+
+  applySavedProjectData() {
+    const data = window.SAVED_PROJECT_DATA;
+    if (!data || typeof data !== 'object') return;
+
+    this.mergeStoredList('telegram-channels', data.telegram?.channels, 'id');
+    this.mergeStoredList('robots', data.robots, 'id');
+    this.mergeStoredObject('telegram-message-templates-v1', data.messageTemplates);
+
+    if (data.telegram?.owner && !localStorage.getItem('telegram-owner-name')) {
+      localStorage.setItem('telegram-owner-name', data.telegram.owner);
+    }
+
+    const wsConfig = data.wsConfig || {};
+    if (wsConfig.wheelWsUrl || wsConfig.doubleWsUrl) {
+      const current = Store.get('ws-config-v1', {});
+      const merged = { ...wsConfig, ...current };
+      Store.set('ws-config-v1', merged);
+      if (merged.wheelWsUrl) CONFIG.wheel.wsUrl = merged.wheelWsUrl;
+      if (merged.doubleWsUrl) CONFIG.double.wsUrl = merged.doubleWsUrl;
+    }
+  },
+
+  mergeStoredList(key, savedItems, idKey) {
+    if (!Array.isArray(savedItems) || !savedItems.length) return;
+    const current = Store.get(key, []);
+    const list = Array.isArray(current) ? current : [];
+    const existing = new Set(list.map(item => String(item?.[idKey] || '')));
+    let changed = false;
+    savedItems.forEach(item => {
+      const id = String(item?.[idKey] || '');
+      if (!id || existing.has(id)) return;
+      list.push(item);
+      existing.add(id);
+      changed = true;
+    });
+    if (changed) Store.set(key, list);
+  },
+
+  mergeStoredObject(key, savedObject) {
+    if (!savedObject || typeof savedObject !== 'object' || Array.isArray(savedObject)) return;
+    const current = Store.get(key, {});
+    const merged = { ...savedObject, ...(current && typeof current === 'object' ? current : {}) };
+    Store.set(key, merged);
   },
 
   startBackgroundExecutor() {

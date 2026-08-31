@@ -3,6 +3,7 @@ const TelegramService = {
   liveStoreKey: 'telegram-live-messages-v1',
   entryStoreKey: 'telegram-entry-messages-v1',
   entryEventStoreKey: 'telegram-entry-events-v1',
+  errorStoreKey: 'telegram-last-error-v1',
   lockPrefix: 'telegram-live-lock:',
   ownerKey: 'telegram-owner-name',
   clientId: uid(),
@@ -386,7 +387,7 @@ const TelegramService = {
     const chatId = robot.telegram?.channelId || '';
     if (!token || !chatId) return false;
 
-    const text = this.buildLiveMessage(robot);
+    const text = this.prepareTelegramText(this.buildLiveMessage(robot));
     const messages = this.getLiveMessages();
     const key = this.messageKey(robot);
     const current = messages[key];
@@ -439,25 +440,10 @@ const TelegramService = {
     const chatId = robot.telegram?.channelId || '';
     if (!token || !chatId) return false;
 
-    const messages = this.getEntryMessages();
     const key = this.entryMessageKey(robot);
-    const text = this.buildEntryMessage(robot, signal);
-    const current = messages[key];
-
-    if (current?.messageId) {
-      const deleted = await this.api(token, 'deleteMessage', {
-        chat_id: chatId,
-        message_id: current.messageId
-      });
-      if (deleted.ok || this.isAlreadyDeleted(deleted)) {
-        const latest = this.getEntryMessages();
-        delete latest[key];
-        this.saveEntryMessages(latest);
-      } else {
-        this.logApiError('deleteMessage/entry', deleted);
-        return false;
-      }
-    }
+    const text = this.prepareTelegramText(this.buildEntryMessage(robot, signal));
+    const deletedPrevious = await this.deleteExistingEntryMessages(robot, key);
+    if (!deletedPrevious) return false;
 
     const sent = await this.api(token, 'sendMessage', {
       chat_id: chatId,
@@ -469,6 +455,8 @@ const TelegramService = {
       latest[key] = {
         messageId: sent.result.message_id,
         text,
+        robotId: robot.id,
+        chatId,
         signalId: signal.id,
         status: signal.status || 'approved',
         gale: signal.gale || 0,
@@ -484,6 +472,55 @@ const TelegramService = {
       this.logApiError('sendMessage/entry', sent);
       return false;
     }
+  },
+
+  async deleteExistingEntryMessages(robot, exactKey) {
+    const token = this.getToken();
+    if (!token || !robot) return false;
+    const messages = this.getEntryMessages();
+    const matching = Object.entries(messages).filter(([key, msg]) => (
+      key === exactKey ||
+      this.isEntryMessageKeyForRobot(key, robot) ||
+      msg?.robotId === robot.id
+    ));
+    if (!matching.length) return true;
+
+    let ok = true;
+    let changed = false;
+    for (const [key, msg] of matching) {
+      const messageId = msg?.messageId || msg?.message_id;
+      const chatId = msg?.chatId || this.chatIdFromEntryKey(key, robot) || robot.telegram?.channelId || '';
+      if (messageId && chatId) {
+        const deleted = await this.api(token, 'deleteMessage', {
+          chat_id: chatId,
+          message_id: messageId
+        });
+        if (!deleted.ok && !this.isAlreadyDeleted(deleted)) {
+          if (String(chatId) === String(robot.telegram?.channelId || '')) ok = false;
+          this.logApiError('deleteMessage/entry', {
+            ...deleted,
+            description: (deleted.description || 'Erro desconhecido') + ' | chat_id=' + chatId + ' message_id=' + messageId
+          });
+          continue;
+        }
+      }
+      delete messages[key];
+      changed = true;
+    }
+    if (changed) this.saveEntryMessages(messages);
+    return ok;
+  },
+
+  isEntryMessageKeyForRobot(key, robot) {
+    return String(key || '').startsWith(robot.id + ':') && String(key || '').endsWith(':entry');
+  },
+
+  chatIdFromEntryKey(key, robot) {
+    const value = String(key || '');
+    const prefix = robot.id + ':';
+    const suffix = ':entry';
+    if (!value.startsWith(prefix) || !value.endsWith(suffix)) return '';
+    return value.slice(prefix.length, -suffix.length);
   },
 
   isNotModified(response) {
@@ -512,7 +549,14 @@ const TelegramService = {
 
   logApiError(context, response) {
     if (!response || response.ok) return;
-    console.warn('[Telegram]', context, response.description || 'Erro desconhecido');
+    const error = {
+      context,
+      errorCode: response.error_code || response.status || '',
+      description: response.description || 'Erro desconhecido',
+      at: Date.now()
+    };
+    try { localStorage.setItem(this.errorStoreKey, JSON.stringify(error)); } catch {}
+    console.warn('[Telegram]', context, error.description, error);
   },
 
   async api(token, method, payload) {
@@ -522,10 +566,21 @@ const TelegramService = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      return await response.json();
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok && !data.description) {
+        data.description = 'HTTP ' + response.status + ' ao chamar ' + method;
+      }
+      if (!data.status) data.status = response.status;
+      return data;
     } catch (error) {
       return { ok: false, description: error.message };
     }
+  },
+
+  prepareTelegramText(text) {
+    const value = String(text || '').trim();
+    if (value.length <= 4096) return value || ' ';
+    return value.slice(0, 4050) + '\n\n[Mensagem reduzida para limite do Telegram]';
   },
 
   buildEntryMessage(robot, signal) {
@@ -646,12 +701,15 @@ const TelegramService = {
     const modeLabel = robot.mode === 'monitoramento' ? 'Monitoramento' : robot.mode === 'telegram' ? 'Telegram' : robot.mode;
     const entryEmoji = d.suggestedEntry ? this.colorEmoji(d.suggestedEntry) : '';
     const entryLabel = this.colorLabel(d.suggestedEntry);
+    const galeMax = robot.gale?.max || 0;
+    const galeInstruction = this.formatGaleInstruction(robot);
 
     return [
       '🚨 ' + gameName + ' AO VIVO 🚨',
       '━━━━━━━━━━━━━━━━━━━━',
       'NOME DO ROBÔ:',
       robot.name,
+      'Protecao/Gales: ' + this.formatGaleInstruction(robot),
       '',
       '📊 STATUS DO ROBÔ',
       '━━━━━━━━━━━━━━━━━━━━',
@@ -705,6 +763,8 @@ const TelegramService = {
     const modeLabel = robot.mode === 'monitoramento' ? 'Monitoramento' : robot.mode === 'telegram' ? 'Telegram' : robot.mode;
     const entryEmoji = d.suggestedEntry ? this.colorEmoji(d.suggestedEntry) : '';
     const entryLabel = this.colorLabel(d.suggestedEntry);
+    const galeMax = robot.gale?.max || 0;
+    const galeInstruction = this.formatGaleInstruction(robot);
     const map = {
       '{wins}': wins,
       '{losses}': losses,
@@ -713,6 +773,12 @@ const TelegramService = {
       '{winSG}': stats.winSG || 0,
       '{winG1}': stats.winG1 || 0,
       '{winG2}': stats.winG2 || 0,
+      '{galeMax}': galeMax,
+      '{GALE_MAX}': galeMax,
+      '{galeInstruction}': galeInstruction,
+      '{GALE_INSTRUCTION}': galeInstruction,
+      '{protection}': this.formatProtection(robot),
+      '{PROTECTION}': this.formatProtection(robot),
       '{robotName}': robot.name || '',
       '{game}': gameLabel,
       '{gameName}': robot.game === 'wheel' ? 'WHEEL' : 'DOUBLE',
@@ -782,6 +848,12 @@ const TelegramService = {
     const max = robot.gale?.max || 0;
     if (max <= 0) return '🎯 ENTRADA SECA';
     return '🛡 PROTEÇÃO ATÉ G' + max;
+  },
+
+  formatGaleInstruction(robot) {
+    const max = robot.gale?.max || 0;
+    if (max <= 0) return 'Entrada seca';
+    return 'Gale até G' + max;
   },
 
   formatHistoryTitle(robot) {
