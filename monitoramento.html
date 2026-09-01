@@ -6,6 +6,44 @@
 <title>Monitoramento - Sistema de Robos</title>
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="monitoramento.css">
+<style>
+  html{zoom:0.75}
+  .hero{background:linear-gradient(135deg,rgba(35,104,255,.15),rgba(41,217,120,.1));border:1px solid var(--border);border-radius:16px;padding:24px 30px;margin-bottom:24px;position:relative;overflow:hidden}
+  .hero::before{content:'';position:absolute;top:-50%;right:-10%;width:300px;height:300px;background:radial-gradient(circle,rgba(35,104,255,.08),transparent 70%);border-radius:50%}
+  .hero::after{content:'';position:absolute;bottom:-40%;left:10%;width:200px;height:200px;background:radial-gradient(circle,rgba(41,217,120,.06),transparent 70%);border-radius:50%}
+  .hero h1{font-size:26px;font-weight:800;margin-bottom:4px;position:relative;z-index:1;display:flex;align-items:center;gap:10px}
+  .hero h1 .logo{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--blue),var(--green));display:flex;align-items:center;justify-content:center}
+  .hero p{color:var(--text3);font-size:13px;position:relative;z-index:1}
+  .stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px 18px;position:relative;overflow:hidden;transition:all .2s}
+  .stat-card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.3)}
+  .stat-card::before{content:'';position:absolute;top:0;left:0;width:4px;height:100%;border-radius:4px 0 0 4px}
+  .stat-card.green::before{background:var(--green)}
+  .stat-card.red::before{background:var(--red)}
+  .stat-card.yellow::before{background:var(--yellow)}
+  .stat-card.blue::before{background:var(--blue)}
+  .stat-card .stat-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;margin-bottom:8px}
+  .stat-card .stat-value{font-size:28px;font-weight:800;line-height:1}
+  .stat-card .stat-label{font-size:11px;color:var(--text3);margin-top:4px;text-transform:uppercase;letter-spacing:.5px}
+  .robot-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:all .2s}
+  .robot-card:hover{border-color:var(--blue);box-shadow:0 4px 16px rgba(35,104,255,.1)}
+  .robot-card .rc-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .robot-card .rc-name{font-weight:700;font-size:14px}
+  .robot-card .rc-row{display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:6px}
+  .robot-card .rc-label{color:var(--text3);min-width:60px}
+  .robot-card .rc-val{font-weight:600}
+  .conf-bar{height:4px;background:var(--bg);border-radius:4px;overflow:hidden;margin:6px 0}
+  .conf-bar-fill{height:100%;border-radius:4px;transition:width .3s}
+  .live-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+  .live-dot.on{background:var(--green);box-shadow:0 0 8px var(--green)}
+  .live-dot.off{background:var(--red)}
+  .section-title{font-size:14px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+  .section-title .dot-accent{width:8px;height:8px;border-radius:50%;background:var(--blue);animation:pulse 2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  .feed-item{padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;display:flex;gap:8px;align-items:flex-start}
+  .feed-item:last-child{border-bottom:none}
+  .feed-time{color:var(--text3);font-size:10px;min-width:44px;font-family:monospace}
+  .feed-msg{flex:1}
+</style>
 </head>
 <body>
 <nav class="nav">
@@ -24,14 +62,19 @@
     <div class="dot" id="connDot"></div><span id="connText" style="font-size:12px;color:var(--text2)">Conectando...</span></div>
 </nav>
 <div class="container">
-  <div class="grid-6" id="stats" style="margin-bottom:20px"></div>
-  <div class="monitor-section">
-    <div class="card-header"><span class="card-title">Robos</span></div>
-    <div class="robot-grid" id="robotGrid"></div>
+  <div class="hero">
+    <h1><div class="logo"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div> Monitoramento</h1>
+    <p>Acompanhe seus robos em tempo real</p>
   </div>
-  <div class="card" style="margin-top:16px">
-    <div class="card-header"><span class="card-title">Feed Global em Tempo Real</span></div>
-    <div class="feed" id="feed" style="max-height:500px"></div>
+
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px" id="stats"></div>
+
+  <div class="section-title"><span class="dot-accent"></span> Robos</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:20px" id="robotGrid"></div>
+
+  <div class="card">
+    <div class="section-title"><span class="dot-accent"></span> Feed Global em Tempo Real</div>
+    <div id="feed" style="max-height:500px;overflow-y:auto"></div>
   </div>
 </div>
 <script src="config.js"></script>
@@ -66,11 +109,7 @@ function renderConnectionStatus() {
   connText.textContent = status.connected ? 'Online' : 'Offline';
 }
 
-EventBus.on('robot:log', (d) => {
-  upsertFeedEvent(d);
-  renderFeed();
-});
-
+EventBus.on('robot:log', (d) => { upsertFeedEvent(d); renderFeed(); });
 EventBus.on('signal:created', (d) => { upsertFeedEvent({ time: d.createdAt || Date.now(), id: d.robotId, message: 'Sinal: ' + d.target }); renderAll(); renderFeed(); });
 EventBus.on('signal:gale', (d) => { upsertFeedEvent({ time: Date.now(), id: d.robotId, message: 'Gale ' + (d.gale || 1) + ': ' + d.target }); renderAll(); renderFeed(); });
 EventBus.on('signal:win', (d) => { upsertFeedEvent({ time: Date.now(), id: d.robotId, message: 'WIN! ' + d.target }); renderAll(); renderFeed(); });
@@ -80,13 +119,12 @@ EventBus.on('robots:synced', () => { renderAll(); renderFeed(); });
 
 function renderFeed() {
   const entries = getGlobalFeedEntries();
-  if (!entries.length) {
-    feedEl.innerHTML = '<div class="feed-entry" style="color:var(--text3);text-align:center">Nenhum evento registrado</div>';
-    return;
-  }
-  feedEl.innerHTML = entries.slice(0, 100).map(e =>
-    `<div class="feed-entry"><span class="feed-time">${formatTime(e.time)}</span><span class="feed-robot">${escapeHtml(e.robotName || e.id || '--')}</span><span class="feed-msg">${escapeHtml(e.message || '')}</span></div>`
-  ).join('');
+  if (!entries.length) { feedEl.innerHTML = '<div style="color:var(--text3);text-align:center;padding:20px;font-size:12px">Nenhum evento registrado</div>'; return; }
+  feedEl.innerHTML = entries.slice(0, 100).map(e => {
+    const msg = e.message || '';
+    const cls = msg.includes('WIN') ? 'color:var(--green)' : msg.includes('LOSS') ? 'color:var(--red)' : msg.includes('SINAL') || msg.includes('Sinal') ? 'color:var(--blue)' : '';
+    return `<div class="feed-item"><span class="feed-time">${formatTime(e.time)}</span><span class="feed-msg" style="${cls}">${escapeHtml(msg)}</span></div>`;
+  }).join('');
 }
 
 function upsertFeedEvent(entry) {
@@ -102,33 +140,21 @@ function getGlobalFeedEntries() {
   const byKey = new Map();
   getStoredFeedEntries().forEach(entry => addFeedToMap(byKey, entry));
   feedEvents.forEach(entry => addFeedToMap(byKey, entry));
-  return [...byKey.values()]
-    .sort((a, b) => (b.time || 0) - (a.time || 0))
-    .slice(0, 300);
+  return [...byKey.values()].sort((a, b) => (b.time || 0) - (a.time || 0)).slice(0, 300);
 }
 
 function getStoredFeedEntries() {
-  return RobotEngine.getAllStates()
-    .flatMap(robot => (robot.logs || []).map(log => ({
-      ...log,
-      id: log.id || robot.id,
-      robotName: robot.name,
-      time: log.time || robot.lastHeartbeat || 0
-    })));
+  return RobotEngine.getAllStates().flatMap(robot => (robot.logs || []).map(log => ({ ...log, id: log.id || robot.id, robotName: robot.name, time: log.time || robot.lastHeartbeat || 0 })));
 }
 
 function addFeedToMap(map, entry) {
   if (!entry || !entry.message) return;
   const key = getFeedKey(entry);
   const current = map.get(key);
-  if (!current || (entry.time || 0) >= (current.time || 0)) {
-    map.set(key, entry);
-  }
+  if (!current || (entry.time || 0) >= (current.time || 0)) map.set(key, entry);
 }
 
-function getFeedKey(entry) {
-  return [entry.id || '', entry.time || '', entry.message || ''].join('|');
-}
+function getFeedKey(entry) { return [entry.id || '', entry.time || '', entry.message || ''].join('|'); }
 
 function renderAll() {
   const robots = RobotEngine.getAllStates();
@@ -138,38 +164,41 @@ function renderAll() {
   const wins = robots.reduce((s, r) => s + (r.stats?.wins || 0), 0);
   const losses = robots.reduce((s, r) => s + (r.stats?.losses || 0), 0);
   const total = robots.reduce((s, r) => s + (r.stats?.signals || 0), 0);
-  const assertividade = total > 0 ? Math.round((wins / total) * 100) : 0;
+  const rate = total > 0 ? Math.round((wins / total) * 100) : 0;
 
-  statsEl.innerHTML =
-    createStatCard('Online', online, 'green') +
-    createStatCard('Offline', offline, 'red') +
-    createStatCard('Pausados', paused, 'yellow') +
-    createStatCard('Sinais', total, 'blue') +
-    createStatCard('Wins', wins, 'green') +
-    createStatCard('Loss', losses, 'red') +
-    createStatCard('Assertividade', assertividade + '%', 'blue');
+  statsEl.innerHTML = `
+    <div class="stat-card green"><div class="stat-icon" style="background:rgba(41,217,120,.15)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div class="stat-value" style="color:var(--green)">${online}</div><div class="stat-label">Online</div></div>
+    <div class="stat-card red"><div class="stat-icon" style="background:rgba(255,68,68,.15)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></div><div class="stat-value" style="color:var(--red)">${offline}</div><div class="stat-label">Offline</div></div>
+    <div class="stat-card yellow"><div class="stat-icon" style="background:rgba(224,197,64,.15)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--yellow)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></div><div class="stat-value" style="color:var(--yellow)">${paused}</div><div class="stat-label">Pausados</div></div>
+    <div class="stat-card blue"><div class="stat-icon" style="background:rgba(35,104,255,.15)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div><div class="stat-value" style="color:var(--blue)">${total}</div><div class="stat-label">Sinais</div></div>`;
 
   gridEl.innerHTML = robots.map(r => {
     const conf = r.diagnostic?.confidence || 0;
     const confColor = conf >= 80 ? 'var(--green)' : conf >= 60 ? 'var(--yellow)' : 'var(--red)';
+    const statusColor = r.status === 'online' ? 'var(--green)' : r.status === 'paused' ? 'var(--yellow)' : 'var(--red)';
+    const wins = r.stats?.wins || 0;
+    const losses = r.stats?.losses || 0;
+    const total = wins + losses;
+    const robotRate = total > 0 ? Math.round((wins / total) * 100) : 0;
     return `<div class="robot-card">
-      <div class="robot-card-header"><span class="robot-card-name">${escapeHtml(r.name)}</span>${createBadge(r.status)}</div>
-      <div class="robot-card-info">
-        <div><span class="label">Estrategia:</span> <span class="value">${r.strategy}</span></div>
-        <div><span class="label">Jogo:</span> <span class="value">${r.game}</span></div>
-        <div><span class="label">Ultimo:</span> <span class="value">${r.lastResult ? (r.lastResult.color || r.lastResult.number) : '--'}</span></div>
-        <div><span class="label">Modo:</span> <span class="value">${r.mode}</span></div>
+      <div class="rc-header">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="live-dot ${r.status==='online'?'on':'off'}"></span>
+          <span class="rc-name">${escapeHtml(r.name)}</span>
+        </div>
+        <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;background:${statusColor}22;color:${statusColor};border:1px solid ${statusColor}44">${r.status.toUpperCase()}</span>
       </div>
+      <div class="rc-row"><span class="rc-label">Estrategia:</span><span class="rc-val">${r.strategy}</span></div>
+      <div class="rc-row"><span class="rc-label">Jogo:</span><span class="rc-val">${r.game}</span></div>
+      <div class="rc-row"><span class="rc-label">Ultimo:</span><span class="rc-val">${r.lastResult ? (r.lastResult.color || r.lastResult.number) : '--'}</span></div>
       <div class="conf-bar"><div class="conf-bar-fill" style="width:${conf}%;background:${confColor}"></div></div>
-      <div style="font-size:11px;margin-top:4px">Confianca: ${conf}%</div>
-      <div class="stat-mini"><span class="label">Wins</span><span class="value win">${r.stats?.wins || 0}</span></div>
-      <div class="stat-mini"><span class="label">Losses</span><span class="value loss">${r.stats?.losses || 0}</span></div>
-      <div class="robot-card-actions" style="margin-top:10px">
-        <a href="robo.html?id=${r.id}" class="btn btn-sm btn-green">Abrir</a>
-        <button class="btn btn-sm btn-ghost" onclick="toggleRobot('${r.id}','${r.status}')">${r.status === 'online' ? 'Pausar' : 'Retomar'}</button>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Confianca: <strong style="color:${confColor}">${conf}%</strong> &bull; ${wins}W ${losses}L (${robotRate}%)</div>
+      <div style="display:flex;gap:6px">
+        <a href="robo.html?id=${r.id}" class="btn btn-sm btn-green" style="flex:1;text-align:center">Abrir</a>
+        <button class="btn btn-sm btn-ghost" onclick="toggleRobot('${r.id}','${r.status}')" style="flex:1">${r.status === 'online' ? 'Pausar' : 'Retomar'}</button>
       </div>
     </div>`;
-  }).join('');
+  }).join('') || '<div style="color:var(--text3);text-align:center;padding:20px;font-size:12px">Nenhum robo criado</div>';
 }
 
 function toggleRobot(id, status) {

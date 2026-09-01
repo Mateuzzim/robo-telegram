@@ -416,10 +416,7 @@ const TelegramService = {
   async sendOrEditLiveMessage(robot) {
     const token = this.getToken();
     const chatId = robot.telegram?.channelId || '';
-    if (!token || !chatId) {
-      console.warn('[Telegram] Live bloqueado: token ou chatId vazio', { token: !!token, chatId });
-      return false;
-    }
+    if (!token || !chatId) return false;
 
     const text = this.prepareTelegramText(this.buildLiveMessage(robot));
     const messages = this.getLiveMessages();
@@ -427,6 +424,7 @@ const TelegramService = {
     const current = messages[key];
     if (current?.sending && Date.now() - (current.updatedAt || 0) < this.liveSendingTimeoutMs) return false;
     if (current?.messageId && current?.text === text) return true;
+    if (current?.updatedAt && Date.now() - current.updatedAt < 5000 && !current?.messageId) return false;
 
     if (current?.messageId) {
       const edited = await this.api(token, 'editMessageText', {
@@ -511,6 +509,7 @@ const TelegramService = {
     const current = messages[key];
     const messageId = current?.messageId;
     if (messageId && current?.text === text) return true;
+    if (current?.updatedAt && Date.now() - current.updatedAt < 3000 && !messageId) return false;
 
     if (messageId) {
       const edited = await this.api(token, 'editMessageText', {

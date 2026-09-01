@@ -2,9 +2,11 @@ const RobotEngine = {
   robots: new Map(),
 
   strategies: {
-    alternancia(history) {
-      if (history.length < 10) return { matched: false, confidence: 0, reason: 'Historico insuficiente' };
-      const colors = history.slice(0, 20).map(r => r.color);
+    alternancia(history, _target, patternSize) {
+      const ps = patternSize || 5;
+      const window = ps * 5;
+      if (history.length < Math.min(10, window)) return { matched: false, confidence: 0, reason: 'Historico insuficiente' };
+      const colors = history.slice(0, window).map(r => r.color);
       let changes = 0;
       for (let i = 0; i < colors.length - 1; i++) { if (colors[i] !== colors[i + 1]) changes++; }
       const score = Math.round((changes / (colors.length - 1)) * 100);
@@ -12,11 +14,13 @@ const RobotEngine = {
       const allColors = [...new Set(colors)];
       const others = allColors.filter(c => c !== last);
       const target = others.length ? others[0] : (last === 'RED' ? 'BLACK' : 'RED');
-      return { matched: score >= 60, target, confidence: score, pattern: colors.slice(0, 5), reason: score >= 60 ? 'Alternancia identificada' : 'Alternancia fraca' };
+      return { matched: score >= 60, target, confidence: score, pattern: colors.slice(0, ps), reason: score >= 60 ? 'Alternancia identificada' : 'Alternancia fraca' };
     },
-    repeticao(history) {
-      if (history.length < 10) return { matched: false, confidence: 0, reason: 'Historico insuficiente' };
-      const colors = history.slice(0, 30).map(r => r.color);
+    repeticao(history, _target, patternSize) {
+      const ps = patternSize || 5;
+      const window = ps * 6;
+      if (history.length < Math.min(10, window)) return { matched: false, confidence: 0, reason: 'Historico insuficiente' };
+      const colors = history.slice(0, window).map(r => r.color);
       const last = colors[0];
       let count = 0;
       for (const c of colors) { if (c === last) count++; else break; }
@@ -24,25 +28,30 @@ const RobotEngine = {
       const colorLabels = { RED: 'VERMELHO', BLACK: 'PRETO', GREY: 'PRETO', BLUE: 'AZUL', GREEN: 'VERDE' };
       const others = Object.keys(colorLabels).filter(c => c !== last && c !== 'GREY' || (last !== 'BLACK' && last !== 'GREY'));
       const target = others.length ? others[0] : (last === 'RED' ? 'BLACK' : 'RED');
-      return { matched: score >= 60, target, confidence: score, pattern: colors.slice(0, 5), reason: count >= 3 ? `Repeticao ${count}x ${colorLabels[last] || last}` : 'Sem repeticao' };
+      return { matched: score >= 60, target, confidence: score, pattern: colors.slice(0, ps), reason: count >= 3 ? `Repeticao ${count}x ${colorLabels[last] || last}` : 'Sem repeticao' };
     },
-    frequencia(history) {
-      if (history.length < 20) return { matched: false, confidence: 0, reason: 'Historico insuficiente' };
-      const colors = history.slice(0, 40).map(r => r.color);
+    frequencia(history, _target, patternSize) {
+      const ps = patternSize || 1;
+      const window = ps * 10;
+      if (history.length < Math.min(5, window)) return { matched: false, confidence: 0, reason: 'Historico insuficiente' };
+      const colors = history.slice(0, window).map(r => r.color);
       const freq = {};
       colors.forEach(c => { freq[c] = (freq[c] || 0) + 1; });
       const total = colors.length;
       const sorted = Object.entries(freq).sort((a, b) => a[1] - b[1]);
       const rare = sorted[0];
       const most = sorted[sorted.length - 1];
-      const score = rare ? Math.round(((total - rare[1]) / total) * 100) : 0;
+      const expected = total / Object.keys(freq).length;
+      const deviation = most ? Math.round(((most[1] - rare[1]) / total) * 100) : 0;
+      const score = Math.min(95, Math.round(deviation * 2.5));
       const colorLabels = { RED: 'VERMELHO', BLACK: 'PRETO', GREY: 'PRETO', BLUE: 'AZUL', GREEN: 'VERDE' };
-      const freqStr = Object.entries(freq).map(([c, n]) => `${colorLabels[c] || c}:${n}`).join(' | ');
-      return { matched: score >= 65, target: rare ? rare[0] : 'RED', confidence: score, pattern: [freqStr], reason: score >= 65 ? `${colorLabels[rare[0]] || rare[0]} atrasado (${rare[1]}x de ${total})` : 'Frequencia equilibrada' };
+      return { matched: score >= 50, target: rare ? rare[0] : 'RED', confidence: score, pattern: colors.slice(0, ps), reason: score >= 50 ? `${colorLabels[rare[0]] || rare[0]} atrasado (${rare[1]}x/${total})` : 'Frequencia equilibrada' };
     },
-    tendencia(history) {
-      if (history.length < 15) return { matched: false, confidence: 0, reason: 'Historico insuficiente' };
-      const colors = history.slice(0, 20).map(r => r.color);
+    tendencia(history, _target, patternSize) {
+      const ps = patternSize || 5;
+      const window = ps * 5;
+      if (history.length < Math.min(15, window)) return { matched: false, confidence: 0, reason: 'Historico insuficiente' };
+      const colors = history.slice(0, window).map(r => r.color);
       let streak = 1;
       for (let i = 1; i < colors.length; i++) { if (colors[i] === colors[0]) streak++; else break; }
       const score = streak >= 3 ? Math.min(85, 40 + streak * 12) : 0;
@@ -50,11 +59,13 @@ const RobotEngine = {
       const allColors = [...new Set(colors)];
       const others = allColors.filter(c => c !== colors[0]);
       const target = others.length ? others[0] : (colors[0] === 'RED' ? 'BLACK' : 'RED');
-      return { matched: score >= 60, target, confidence: score, pattern: colors.slice(0, 5), reason: streak >= 3 ? `Tendencia ${colorLabels[colors[0]] || colors[0]} x${streak}` : 'Sem tendencia' };
+      return { matched: score >= 60, target, confidence: score, pattern: colors.slice(0, ps), reason: streak >= 3 ? `Tendencia ${colorLabels[colors[0]] || colors[0]} x${streak}` : 'Sem tendencia' };
     },
-    espelhamento(history) {
-      if (history.length < 20) return { matched: false, confidence: 0, reason: 'Historico insuficiente' };
-      const colors = history.slice(0, 40).map(r => r.color);
+    espelhamento(history, _target, patternSize) {
+      const ps = patternSize || 5;
+      const window = ps * 8;
+      if (history.length < Math.min(20, window)) return { matched: false, confidence: 0, reason: 'Historico insuficiente' };
+      const colors = history.slice(0, window).map(r => r.color);
       const half = Math.floor(colors.length / 2);
       const first = colors.slice(0, half), second = colors.slice(half, half * 2);
       let m = 0;
@@ -64,11 +75,13 @@ const RobotEngine = {
       const allColors = [...new Set(colors)];
       const others = allColors.filter(c => c !== colors[0]);
       const target = others.length ? others[0] : (colors[0] === 'RED' ? 'BLACK' : 'RED');
-      return { matched: score >= 55, target, confidence: score, pattern: first.slice(0, 5), reason: score >= 55 ? 'Espelhamento detectado' : 'Sem espelhamento' };
+      return { matched: score >= 55, target, confidence: score, pattern: first.slice(0, ps), reason: score >= 55 ? 'Espelhamento detectado' : 'Sem espelhamento' };
     },
-    diagonal(history) {
-      if (history.length < 15) return { matched: false, confidence: 0, reason: 'Historico insuficiente' };
-      const colors = history.slice(0, 30).map(r => r.color);
+    diagonal(history, _target, patternSize) {
+      const ps = patternSize || 6;
+      const window = ps * 5;
+      if (history.length < Math.min(15, window)) return { matched: false, confidence: 0, reason: 'Historico insuficiente' };
+      const colors = history.slice(0, window).map(r => r.color);
       let d = 0;
       for (let i = 0; i < Math.min(10, colors.length - 2); i++) {
         if (colors[i] !== colors[i + 1] && colors[i + 1] !== colors[i + 2]) d++;
@@ -77,17 +90,21 @@ const RobotEngine = {
       const allColors = [...new Set(colors)];
       const others = allColors.filter(c => c !== colors[0]);
       const target = others.length ? others[0] : (colors[0] === 'RED' ? 'BLACK' : 'RED');
-      return { matched: score >= 60, target, confidence: Math.min(score, 95), pattern: colors.slice(0, 6), reason: score >= 60 ? 'Diagonal detectada' : 'Sem diagonal' };
+      return { matched: score >= 60, target, confidence: Math.min(score, 95), pattern: colors.slice(0, ps), reason: score >= 60 ? 'Diagonal detectada' : 'Sem diagonal' };
     },
 
     padroesCores(history, target, patternSize) {
       const pSize = patternSize || 3;
-      if (history.length < 15) return { matched: false, confidence: 0, reason: 'Historico insuficiente' };
+      if (history.length < Math.max(pSize + 1, 5)) return { matched: false, confidence: 0, reason: 'Historico insuficiente' };
       
       const rawTargetColor = target?.color || 'any';
       const targetMult = target?.multiplier || null;
-      const colors = history.map(r => r.color);
-      const multipliers = history.map(r => r.multiplier);
+      const colors = [];
+      const multis = [];
+      for (let i = 0; i < history.length; i++) {
+        colors.push(history[i].color);
+        multis.push(history[i].multiplier);
+      }
       const now = Date.now();
       
       const isMultiTarget = rawTargetColor.includes('+');
@@ -95,245 +112,158 @@ const RobotEngine = {
       const allowedColors = isMultiTarget ? rawTargetColor.split('+').map(c => c.toUpperCase()) : null;
       
       const colorLabels = { RED: 'VERMELHO', BLACK: 'PRETO', GREY: 'PRETO', BLUE: 'AZUL', GREEN: 'VERDE' };
-      
       const analyses = [];
       
-      const sequences = {};
+      const seqMap = {};
       for (let i = 0; i <= colors.length - pSize; i++) {
-        const seq = colors.slice(i, i + pSize).join('-');
-        if (!sequences[seq]) sequences[seq] = [];
-        sequences[seq].push(i);
-      }
-      
-      let bestSeqPattern = null;
-      let bestSeqScore = 0;
-      
-      for (const [seq, positions] of Object.entries(sequences)) {
-        if (positions.length < 2) continue;
-        const seqColors = seq.split('-');
-        let nextWins = 0;
-        let totalNext = 0;
-        
-        for (const pos of positions) {
-          const nextIdx = pos + pSize;
-          if (nextIdx < colors.length) {
-            totalNext++;
-            if (effectiveTarget === 'any') {
-              nextWins++;
-            } else if (colors[nextIdx] === effectiveTarget) {
-              nextWins++;
-            }
+        let seq = colors[i];
+        for (let j = 1; j < pSize; j++) seq += '-' + colors[i + j];
+        if (!seqMap[seq]) seqMap[seq] = { count: 0, wins: 0, lastPos: i };
+        seqMap[seq].count++;
+        const nextIdx = i + pSize;
+        if (nextIdx < colors.length) {
+          if (effectiveTarget === 'any' || colors[nextIdx] === effectiveTarget) {
+            seqMap[seq].wins++;
           }
         }
-        
-        if (totalNext === 0) continue;
-        const winRate = (nextWins / totalNext) * 100;
-        const recentPos = positions[positions.length - 1];
-        const recencyBoost = Math.max(0, 100 - (recentPos * 2));
-        const finalScore = Math.round(winRate * 0.7 + recencyBoost * 0.3);
-        
-        if (finalScore > bestSeqScore) {
-          bestSeqScore = finalScore;
-          bestSeqPattern = {
-            sequence: seqColors,
-            wins: nextWins,
-            total: totalNext,
-            winRate: Math.round(winRate),
-            positions: positions.slice(-3),
-            recency: recentPos
-          };
+      }
+      
+      let bestScore = 0;
+      let bestData = null;
+      for (const [seq, d] of Object.entries(seqMap)) {
+        if (d.count < 2) continue;
+        const winRate = (d.wins / d.count) * 100;
+        const recency = Math.max(0, 100 - d.lastPos * 2);
+        const score = Math.round(winRate * 0.7 + recency * 0.3);
+        if (score > bestScore) {
+          bestScore = score;
+          bestData = { seq: seq.split('-'), wins: d.wins, total: d.count, winRate: Math.round(winRate) };
         }
       }
-      
-      if (bestSeqPattern) {
-        analyses.push({
-          type: 'sequencia',
-          score: bestSeqScore,
-          detail: `Seq ${bestSeqPattern.wins}x/${bestSeqPattern.total} (${bestSeqPattern.winRate}%)`,
-          pattern: bestSeqPattern.sequence
-        });
+      if (bestData) {
+        analyses.push({ type: 'sequencia', score: bestScore, detail: `Seq ${bestData.wins}x/${bestData.total} (${bestData.winRate}%)`, pattern: bestData.seq });
       }
       
-      let alternScore = 0;
-      let alternDetail = '';
-      const last10 = colors.slice(0, Math.min(20, colors.length));
-      let alternCount = 0;
-      for (let i = 0; i < last10.length - 1; i++) {
-        if (last10[i] !== last10[i + 1]) alternCount++;
+      let altCount = 0;
+      const checkLen = Math.min(20, colors.length);
+      for (let i = 0; i < checkLen - 1; i++) {
+        if (colors[i] !== colors[i + 1]) altCount++;
       }
-      alternScore = Math.round((alternCount / Math.max(last10.length - 1, 1)) * 100);
-      
+      const altScore = Math.round((altCount / Math.max(checkLen - 1, 1)) * 100);
       let streak = 1;
-      for (let i = 1; i < last10.length; i++) {
-        if (last10[i] === last10[0]) streak++;
-        else break;
+      for (let i = 1; i < checkLen; i++) {
+        if (colors[i] === colors[0]) streak++; else break;
       }
-      
-      if (alternScore >= 70 && streak <= 1) {
-        analyses.push({
-          type: 'alternado',
-          score: alternScore,
-          detail: `Alternancia ${alternScore}% - ${colorLabels[last10[0]] || last10[0]} atual`,
-          target: last10[0] === 'RED' ? 'BLACK' : 'RED'
-        });
+      if (altScore >= 70 && streak <= 1) {
+        analyses.push({ type: 'alternado', score: altScore, detail: `Alternancia ${altScore}%`, target: colors[0] === 'RED' ? 'BLACK' : 'RED' });
       }
       
       const freq = {};
-      colors.forEach(c => { freq[c] = (freq[c] || 0) + 1; });
+      for (let i = 0; i < colors.length; i++) freq[colors[i]] = (freq[colors[i]] || 0) + 1;
       const sorted = Object.entries(freq).sort((a, b) => a[1] - b[1]);
       if (sorted.length > 0) {
-        const [rareColor, rareCount] = sorted[0];
-        const total = colors.length;
-        const expected = total / (Object.keys(freq).length || 1);
-        const deviation = Math.round(((expected - rareCount) / expected) * 100);
-        
-        if (deviation >= 30) {
-          analyses.push({
-            type: 'atrasada',
-            score: Math.min(90, 50 + deviation),
-            detail: `${colorLabels[rareColor] || rareColor} atrasada ${rareCount}x (esperado ~${Math.round(expected)})`,
-            target: rareColor
-          });
+        const [rare, rareCount] = sorted[0];
+        const expected = colors.length / Object.keys(freq).length;
+        const dev = Math.round(((expected - rareCount) / expected) * 100);
+        if (dev >= 30) {
+          analyses.push({ type: 'atrasada', score: Math.min(90, 50 + dev), detail: `${colorLabels[rare] || rare} atrasada ${rareCount}x`, target: rare });
         }
       }
       
       if (targetMult) {
-        const multiFreq = {};
+        const mData = {};
         for (let i = 0; i < colors.length; i++) {
-          const m = multipliers[i];
-          if (m) {
-            if (!multiFreq[m]) multiFreq[m] = { total: 0, wins: {} };
-            multiFreq[m].total++;
-            multiFreq[m].wins[colors[i]] = (multiFreq[m].wins[colors[i]] || 0) + 1;
-          }
+          const m = multis[i];
+          if (!m) continue;
+          if (!mData[m]) mData[m] = { total: 0, wins: {} };
+          mData[m].total++;
+          mData[m].wins[colors[i]] = (mData[m].wins[colors[i]] || 0) + 1;
         }
-        
-        const multData = multiFreq[targetMult];
-        if (multData && multData.total >= 3) {
-          const sortedMult = Object.entries(multData.wins).sort((a, b) => b[1] - a[1]);
-          if (sortedMult.length > 0) {
-            const [bestColor, winCount] = sortedMult[0];
-            const winRate = Math.round((winCount / multData.total) * 100);
-            if (winRate >= 55) {
-              analyses.push({
-                type: 'multiplier',
-                score: winRate,
-                detail: `${targetMult}X: ${colorLabels[bestColor] || bestColor} ${winRate}% (${winCount}/${multData.total})`,
-                target: bestColor
-              });
-            }
+        const md = mData[targetMult];
+        if (md && md.total >= 3) {
+          const best = Object.entries(md.wins).sort((a, b) => b[1] - a[1])[0];
+          if (best) {
+            const wr = Math.round((best[1] / md.total) * 100);
+            if (wr >= 55) analyses.push({ type: 'multiplier', score: wr, detail: `${targetMult}X: ${colorLabels[best[0]] || best[0]} ${wr}%`, target: best[0] });
           }
         }
       }
       
-      const cyclePatterns = {};
-      for (let cycle = 2; cycle <= Math.min(8, Math.floor(colors.length / 3)); cycle++) {
-        const cycleKey = colors.slice(0, cycle).join('-');
+      for (let cycle = 2; cycle <= Math.min(6, Math.floor(colors.length / 3)); cycle++) {
         let matches = 0;
-        let totalCycles = 0;
-        
+        let total = 0;
+        const ref = colors.slice(0, cycle);
         for (let i = cycle; i <= colors.length - cycle; i += cycle) {
-          totalCycles++;
-          const segment = colors.slice(i, i + cycle).join('-');
-          if (segment === cycleKey) matches++;
-        }
-        
-        if (totalCycles >= 2) {
-          const matchRate = Math.round((matches / totalCycles) * 100);
-          if (matchRate >= 60) {
-            analyses.push({
-              type: 'ciclo',
-              score: matchRate,
-              detail: `Ciclo ${cycle}: ${matches}x/${totalCycles} (${matchRate}%)`,
-              cycle: cycle,
-              pattern: cycleKey.split('-')
-            });
+          total++;
+          let ok = true;
+          for (let j = 0; j < cycle; j++) {
+            if (colors[i + j] !== ref[j]) { ok = false; break; }
           }
+          if (ok) matches++;
+        }
+        if (total >= 2) {
+          const mr = Math.round((matches / total) * 100);
+          if (mr >= 60) analyses.push({ type: 'ciclo', score: mr, detail: `Ciclo ${cycle}: ${matches}x/${total}`, pattern: ref });
         }
       }
       
       if (colors.length >= pSize + 1) {
-        const currentSeq = colors.slice(0, pSize).join('-');
-        const nextColor = colors[pSize];
-        
-        if (sequences[currentSeq] && sequences[currentSeq].length >= 2) {
-          const positions = sequences[currentSeq];
-          let breakCount = 0;
-          let breaks = [];
-          
-          for (let i = 0; i < positions.length - 1; i++) {
-            const afterFirst = positions[i] + pSize;
-            const afterSecond = positions[i + 1] + pSize;
-            
-            if (afterFirst < colors.length && afterSecond < colors.length) {
-              if (colors[afterFirst] !== colors[afterSecond]) {
-                breakCount++;
-                breaks.push({
-                  expected: colors[afterFirst],
-                  actual: colors[afterSecond]
-                });
-              }
+        const curSeq = colors.slice(0, pSize).join('-');
+        const posList = seqMap[curSeq];
+        if (posList && posList.count >= 2) {
+          let breaks = 0;
+          for (let i = 0; i < Math.min(posList.count - 1, 5); i++) {
+            const p1 = i * pSize;
+            const p2 = (i + 1) * pSize;
+            if (p1 + pSize < colors.length && p2 + pSize < colors.length) {
+              if (colors[p1 + pSize] !== colors[p2 + pSize]) breaks++;
             }
           }
-          
-          if (breakCount > 0) {
-            const breakRate = Math.round((breakCount / Math.max(positions.length - 1, 1)) * 100);
-            analyses.push({
-              type: 'distorcao',
-              score: Math.min(85, 50 + breakRate),
-              detail: `Padrao distorcendo ${breakRate}% - ${breakCount} quebras`,
-              breaks: breaks.slice(-3)
-            });
+          if (breaks > 0) {
+            const br = Math.round((breaks / Math.min(posList.count - 1, 5)) * 100);
+            analyses.push({ type: 'distorcao', score: Math.min(85, 50 + br), detail: `Distorcao ${br}% - ${breaks} quebras` });
           }
         }
       }
       
       const confluences = analyses.filter(a => a.score >= 60).length;
-      const confluenciaScore = Math.min(95, confluences * 25);
-      
       if (confluences >= 2) {
-        analyses.push({
-          type: 'confluencia',
-          score: confluenciaScore,
-          detail: `${confluences} padroes concordando`
-        });
+        analyses.push({ type: 'confluencia', score: Math.min(95, confluences * 25), detail: `${confluences} padroes concordando` });
       }
       
-      const validAnalyses = analyses.filter(a => a.score >= 50);
-      
-      if (validAnalyses.length === 0) {
-        return { matched: false, confidence: 0, reason: 'Nenhum padrao detectado' };
+      const valid = analyses.filter(a => a.score >= 50);
+      if (valid.length === 0) {
+        const bestAny = analyses.length > 0 ? analyses.sort((a, b) => b.score - a.score)[0] : null;
+        return {
+          matched: false,
+          target: bestAny?.target || colors[0] === 'RED' ? 'BLACK' : 'RED',
+          confidence: bestAny ? Math.max(10, Math.round(bestAny.score * 0.6)) : 0,
+          pattern: bestAny?.pattern || colors.slice(0, pSize),
+          reason: bestAny ? `${bestAny.type.toUpperCase()}: ${bestAny.detail}` : 'Nenhum padrao detectado',
+          analyses: analyses.slice(0, 5),
+          confluences,
+          lastAnalysis: now
+        };
       }
       
-      validAnalyses.sort((a, b) => b.score - a.score);
-      const best = validAnalyses[0];
+      valid.sort((a, b) => b.score - a.score);
+      const best = valid[0];
       
       let suggested;
-      if (effectiveTarget !== 'any') {
-        suggested = effectiveTarget;
-      } else if (best.target) {
-        suggested = best.target;
-      } else if (best.pattern) {
-        const last = best.pattern[best.pattern.length - 1];
-        suggested = last === 'RED' ? 'BLACK' : 'RED';
-      } else {
-        suggested = 'RED';
-      }
-
-      if (allowedColors && !allowedColors.includes(suggested)) {
-        suggested = allowedColors[0];
-      }
+      if (effectiveTarget !== 'any') suggested = effectiveTarget;
+      else if (best.target) suggested = best.target;
+      else if (best.pattern) suggested = best.pattern[best.pattern.length - 1] === 'RED' ? 'BLACK' : 'RED';
+      else suggested = 'RED';
       
-      const confidence = Math.min(95, Math.max(10, best.score));
-      const allTypes = validAnalyses.map(a => a.type).join(', ');
+      if (allowedColors && !allowedColors.includes(suggested)) suggested = allowedColors[0];
       
       return {
-        matched: confidence >= 55,
+        matched: best.score >= 55,
         target: suggested,
-        confidence,
-        pattern: best.pattern || best.sequence || colors.slice(0, pSize),
+        confidence: Math.min(95, Math.max(10, best.score)),
+        pattern: best.pattern || colors.slice(0, pSize),
         reason: `${best.type.toUpperCase()}: ${best.detail}`,
-        analyses: validAnalyses.slice(0, 5),
+        analyses: valid.slice(0, 5),
         confluences,
         lastAnalysis: now
       };
@@ -358,16 +288,6 @@ const RobotEngine = {
       strategyResult.target = normalizeColor(strategyResult.target);
     }
 
-    if (!strategyResult.matched) {
-      robot.diagnostic.status = 'IDLE';
-      robot.diagnostic.decision = { approved: false, reason: strategyResult.reason };
-      robot.diagnostic.signalBlocked = true;
-      robot.diagnostic.blockReason = strategyResult.reason;
-      robot.signalFlow = { step1: 'Padrao identificado: ' + (robot.diagnostic.mainPattern || '--'), step2: 'Filtrado: ' + (strategyResult.reason || 'Sem padrao'), step3: 'Aguardando entrada...', step4: 'Placar sera atualizado apos resultado' };
-      robot.stats.signalsRejected++;
-      return null;
-    }
-
     const confluences = Object.values(robot.diagnostic.patternScores || {}).filter(v => v >= 60).length;
     const recentLosses = (robot.stats?.losses || 0) > (robot.stats?.wins || 0) ? Math.min(3, (robot.stats.losses - robot.stats.wins)) : 0;
     const streak = robot.stats?.currentStreak || 0;
@@ -388,6 +308,16 @@ const RobotEngine = {
     robot.diagnostic.risk = risk;
     robot.diagnostic.signalScore = signalScore;
 
+    if (!strategyResult.matched) {
+      robot.diagnostic.status = 'IDLE';
+      robot.diagnostic.decision = { approved: false, reason: strategyResult.reason };
+      robot.diagnostic.signalBlocked = true;
+      robot.diagnostic.blockReason = strategyResult.reason;
+      robot.signalFlow = { step1: 'Padrao identificado: ' + (robot.diagnostic.mainPattern || '--'), step2: 'Filtrado: ' + (strategyResult.reason || 'Sem padrao'), step3: 'Score: ' + signalScore + '/100', step4: 'Placar sera atualizado apos resultado' };
+      robot.stats.signalsRejected++;
+      return null;
+    }
+
     const filterMode = robot.filterMode || 'moderado';
     const thresholds = {
       desligado: { minConf: 0, minConfluences: 0, minScore: 0 },
@@ -396,14 +326,14 @@ const RobotEngine = {
       agressivo: { minConf: 45, minConfluences: 1, minScore: 30 }
     };
     const th = thresholds[filterMode] || thresholds.moderado;
-    const effectiveConf = th.minConf > 0 ? th.minConf : (robot.minimumConfidence || 80);
+    const effectiveConf = Math.max(th.minConf || 0, robot.minimumConfidence || 80);
 
     const filter = {
       padraoEncontrado: true,
       resultadosSuficientes: robot.history.length >= robot.resultsToAnalyze,
       confiancaMinima: strategyResult.confidence >= effectiveConf,
       confluencia: confluences >= th.minConfluences,
-      scoreMinimo: signalScore >= th.minScore,
+      scoreMinimo: signalScore >= (robot.minScore || th.minScore),
       intervaloRespeitado: Date.now() - robot.lastSignalTime >= (robot.intervalMin || 60) * 1000,
       semDuplicata: !robot.currentSignal,
       roboAtivo: robot.status === 'online'
@@ -557,7 +487,7 @@ const RobotEngine = {
       if (robot.status === 'online' && robot.game === label) {
         const pendingSignal = robot.currentSignal;
         const accepted = robot.receiveResult(result);
-        if (accepted && pendingSignal) robot.checkResult(result, pendingSignal);
+        if (pendingSignal) robot.checkResult(result, pendingSignal);
         EventBus.emit('robot:state', robot.getState());
       }
     });

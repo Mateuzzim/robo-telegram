@@ -20,6 +20,7 @@
     <div>
       <div class="robo-section"><div class="robo-section-title">Status do Robo</div><div id="robotStatus"></div></div>
       <div class="robo-section" style="margin-top:16px"><div class="robo-section-title">Diagnostico da IA</div><div id="diagnostico" style="max-height:350px;overflow-y:auto"></div></div>
+      <div class="robo-section" style="margin-top:16px"><div class="robo-section-title">Estrategias da IA</div><div id="estrategiasIA" style="max-height:none;overflow:visible"></div></div>
       <div class="robo-section" style="margin-top:16px;display:none" id="analisesSection"><div class="robo-section-title">Analises Padroes Cores</div><div id="analisesContent" style="max-height:300px;overflow-y:auto"></div></div>
       <div class="robo-section" style="margin-top:16px"><div class="robo-section-title">Filtro de Sinal</div><div id="filtro"></div></div>
       <div class="robo-section" style="margin-top:16px"><div class="robo-section-title">Placar e Estatisticas</div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px" id="placar"></div></div>
@@ -86,10 +87,20 @@ EventBus.on('robot:state', (d) => { if (d && d.id === robotId) { robotData = d; 
 EventBus.on('robot:log', (d) => { if (d && d.id === robotId) appendLog(d); });
 
 function appendLog(entry) {
-  if (consoleMode !== 'logs') return;
   const el = document.getElementById('consoleLogs');
+  if (!el) return;
   const cls = entry.message.includes('ERRO') ? 'log-err' : entry.message.includes('WIN') ? 'log-ok' : entry.message.includes('SINAL') ? 'log-info' : '';
   el.innerHTML = `<div class="log-entry"><span class="log-time">${formatTime(entry.time)}</span> | <span class="${cls}">${escapeHtml(entry.message)}</span></div>` + el.innerHTML;
+}
+
+function renderLogs() {
+  const el = document.getElementById('consoleLogs');
+  if (!el || !robotData) return;
+  const logs = robotData.logs || [];
+  el.innerHTML = logs.slice(-100).reverse().map(entry => {
+    const cls = entry.message.includes('ERRO') ? 'log-err' : entry.message.includes('WIN') ? 'log-ok' : entry.message.includes('SINAL') ? 'log-info' : '';
+    return `<div class="log-entry"><span class="log-time">${formatTime(entry.time)}</span> | <span class="${cls}">${escapeHtml(entry.message)}</span></div>`;
+  }).join('');
 }
 
 function switchConsole() {
@@ -102,6 +113,8 @@ function renderAll() {
   if (!robotData) return;
   const r = robotData;
   renderAnalises();
+  renderEstrategias();
+  renderLogs();
 
   const targetColorLabel = { any: 'QUALQUER', red: 'VERMELHO', black: 'PRETO', green: 'VERDE', blue: 'AZUL', grey: 'PRETO', gray: 'PRETO', white: 'BRANCO' };
   const formatColorLabel = color => targetColorLabel[String(color || '').toLowerCase()] || String(color || '--').toUpperCase();
@@ -118,12 +131,12 @@ function renderAll() {
       <button class="btn btn-sm btn-ghost" onclick="renameRobot()">Renomear</button>
     </div>
   </div>`;
-  document.getElementById('robotStatus').innerHTML = `<div class="grid-2" style="font-size:13px">
-    <div><span style="color:var(--text3)">Status:</span> <strong>${r.status}</strong></div>
-    <div><span style="color:var(--text3)">Jogo:</span> <strong>${r.game}</strong></div>
-    <div><span style="color:var(--text3)">Estrategia:</span> <strong>${r.strategy}</strong></div>
-    <div><span style="color:var(--text3)">Modo:</span> <strong>${r.mode}</strong></div>
-    <div><span style="color:var(--text3)">Ultimo resultado:</span> <strong>${r.lastResult ? (r.lastResult.color || r.lastResult.number) : '--'}</strong></div>
+  document.getElementById('robotStatus').innerHTML = `<div style="display:flex;gap:12px;flex-wrap:wrap;font-size:11px;align-items:center;text-transform:uppercase">
+    <span><span style="color:var(--text3)">Status:</span> <strong>${r.status}</strong></span>
+    <span><span style="color:var(--text3)">Jogo:</span> <strong>${r.game}</strong></span>
+    <span><span style="color:var(--text3)">Est:</span> <strong>${r.strategy}</strong></span>
+    <span><span style="color:var(--text3)">Modo:</span> <strong>${r.mode}</strong></span>
+    <span><span style="color:var(--text3)">Ult:</span> <strong>${r.lastResult ? (r.lastResult.color || r.lastResult.number) : '--'}</strong></span>
   </div>`;
   const d = r.diagnostic || {};
   const suggestedEntryLabel = d.suggestedEntry ? formatColorLabel(d.suggestedEntry) : '--';
@@ -133,121 +146,89 @@ function renderAll() {
   const diagColor = diagStatus === 'ACTIVE' ? 'var(--green)' : diagStatus === 'ANALYZING' ? 'var(--yellow)' : diagStatus === 'LOADING' ? 'var(--blue)' : 'var(--text3)';
   const diagBg = diagStatus === 'ACTIVE' ? 'rgba(41,217,120,.08)' : diagStatus === 'ANALYZING' ? 'rgba(224,197,64,.08)' : diagStatus === 'LOADING' ? 'rgba(35,104,255,.08)' : 'transparent';
   document.getElementById('diagnostico').innerHTML = `
-    <div style="padding:10px 14px;background:${diagBg};border:1px solid ${diagColor};border-radius:8px;margin-bottom:12px;display:flex;align-items:center;gap:10px">
-      <div style="width:10px;height:10px;border-radius:50%;background:${diagColor};animation:${diagStatus==='ACTIVE'?'pulse 1.5s infinite':diagStatus==='LOADING'?'pulse 1s infinite':'none'}"></div>
-      <div>
-        <div style="font-size:14px;font-weight:700;color:${diagColor}">${diagStatus}</div>
-        <div style="font-size:11px;color:var(--text3)">${d.analyzedResults || 0} resultados analisados</div>
-      </div>
-      <div style="margin-left:auto;text-align:right">
-        <div style="font-size:20px;font-weight:800;color:${(d.confidence||0)>=80?'var(--green)':(d.confidence||0)>=60?'var(--yellow)':'var(--red)'}">${d.confidence || 0}%</div>
-        <div style="font-size:10px;color:var(--text3)">CONFIANCA</div>
-        ${d.targetFiltered ? `<div style="font-size:10px;color:var(--blue);margin-top:2px">Filtrado: ${d.filteredCount || 0} cores</div>` : ''}
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:${diagBg};border:1px solid ${diagColor};border-radius:6px;margin-bottom:8px">
+      <div style="width:8px;height:8px;border-radius:50%;background:${diagColor};animation:${diagStatus==='ACTIVE'?'pulse 1.5s infinite':diagStatus==='LOADING'?'pulse 1s infinite':'none'}"></div>
+      <span style="font-size:11px;font-weight:700;color:${diagColor}">${diagStatus}</span>
+      <span style="font-size:10px;color:var(--text3)">${d.analyzedResults || 0} res.</span>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+        <span style="font-size:10px;color:var(--text3)">Score:</span>
+        <span style="font-size:13px;font-weight:800;color:var(--text)">${d.totalScore || 0}</span>
+        <span style="font-size:10px;color:var(--text3)">Conf:</span>
+        <span style="font-size:15px;font-weight:800;color:${(d.confidence||0)>=80?'var(--green)':(d.confidence||0)>=60?'var(--yellow)':'var(--red)'}">${d.confidence || 0}%</span>
       </div>
     </div>
-    <div class="grid-3" style="font-size:13px;margin-bottom:12px">
-      <div><span style="color:var(--text3)">Padrao:</span><br><strong>${d.mainPattern || '--'}</strong></div>
-      <div><span style="color:var(--text3)">Entrada:</span><br><strong style="color:var(--blue);font-size:16px">${suggestedEntryLabel}</strong></div>
-      <div><span style="color:var(--text3)">Score:</span><br><strong>${d.totalScore || 0}/100</strong></div>
+    <div style="display:flex;gap:12px;font-size:11px;margin-bottom:6px;flex-wrap:wrap">
+      <span><span style="color:var(--text3)">Pad:</span> <strong>${d.mainPattern || '--'}</strong></span>
+      <span><span style="color:var(--text3)">Entrada:</span> <strong style="color:var(--blue)">${suggestedEntryLabel}</strong></span>
+      <span><span style="color:var(--text3)">Conf:</span> <strong>${d.confluences || 0}</strong></span>
+      <span><span style="color:var(--text3)">Risco:</span> <strong style="color:${(d.risk||'BAIXO')==='ALTO'?'var(--red)':(d.risk||'BAIXO')==='MEDIO'?'var(--yellow)':'var(--green)'}">${d.risk || 'BAIXO'}</strong></span>
+      <span><span style="color:var(--text3)">Sinal:</span> <strong>${d.signalScore || 0}/100</strong></span>
     </div>
-    <div class="pattern-list">${Object.entries(d.patternScores || {}).map(([k,v]) => `<div class="pattern-item"><span>${k}</span><div class="pattern-bar"><div class="pattern-bar-fill" style="width:${v}%;background:${v>=80?'var(--green)':v>=60?'var(--yellow)':'var(--red)'}"></div></div><span>${v}%</span></div>`).join('')}</div>
-    ${d.decision ? `<div class="decision-box ${d.decision.approved?'decision-approved':'decision-rejected'}">${d.decision.approved?'SINAL APROVADO':'SINAL REJEITADO'}<br><span style="font-size:12px;font-weight:400">${d.decision.reason||''}</span></div>` : ''}
-    <div style="margin-top:12px;padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:8px">
-      <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px">Padroes Usados (nao repete)</div>
-      <div style="font-size:11px;color:var(--text3)">Indice do ciclo: <strong>${r.strategyIndex || 0}</strong> / 6</div>
-      ${Object.entries(r.usedPatterns || {}).filter(([k,v]) => v && v.length > 0).map(([color, patterns]) => `
-        <div style="margin-top:6px">
-          <span style="font-size:11px;color:var(--text2)">${color}:</span>
-          ${patterns.map(p => `<span style="display:inline-block;padding:2px 6px;margin:2px;background:rgba(41,130,255,.1);border:1px solid rgba(41,130,255,.2);border-radius:4px;font-size:10px;color:var(--blue)">${p.strategy}</span>`).join('')}
-        </div>
-      `).join('')}
-    </div>`;
+    <div class="pattern-list" style="margin-bottom:4px">${Object.entries(d.patternScores || {}).map(([k,v]) => `<div class="pattern-item"><span>${k}</span><div class="pattern-bar"><div class="pattern-bar-fill" style="width:${v}%;background:${v>=80?'var(--green)':v>=60?'var(--yellow)':'var(--red)'}"></div></div><span>${v}%</span></div>`).join('')}</div>
+    ${d.decision ? `<div style="padding:4px 8px;border-radius:4px;font-size:11px;margin-bottom:6px;background:${d.decision.approved?'rgba(41,217,120,.1)':'rgba(255,68,68,.1)'};border:1px solid ${d.decision.approved?'rgba(41,217,120,.3)':'rgba(255,68,68,.3)'};color:${d.decision.approved?'var(--green)':'var(--red)'}">${d.decision.approved?'SINAL APROVADO':'REJEITADO'}: ${d.decision.reason||''}</div>` : ''}
+    ${Object.keys(r.usedPatterns||{}).some(k => r.usedPatterns[k]?.length > 0) ? `<div style="font-size:9px;color:var(--text3);padding:4px 8px;background:var(--bg2);border:1px solid var(--border);border-radius:4px">Ciclo: ${r.strategyIndex || 0}/6 | Usados: ${Object.entries(r.usedPatterns||{}).filter(([k,v]) => v?.length > 0).map(([k,v]) => `${k}:${v.length}`).join(' ')}</div>` : ''}`;
   const s = r.stats || {};
   const histKey = r.game === 'double' ? 'historico-double-v1' : 'historico-wheel-v1';
   const histData = getHistory(histKey);
   const isDbl = r.game === 'double';
   document.getElementById('filtro').innerHTML = `
-    <div class="signal-flow">
-      <div class="sf-step">
-        <div class="sf-step-header">
-          <div class="sf-step-num sf-step-1">${d.mainPattern ? '1' : '...'}</div>
-          <span class="sf-step-label">Identifica a Entrada</span>
-          ${d.mainPattern ? '<span class="sf-badge sf-badge-ok">OK</span>' : ''}
-        </div>
-        ${d.mainPattern ? `<div class="sf-step-body">
-          <div class="sf-row"><span class="sf-key">Padrao:</span><strong>${d.mainPattern || '--'}</strong></div>
-          <div class="sf-row"><span class="sf-key">Entrada:</span><strong class="sf-blue">${suggestedEntryLabel}</strong></div>
-          <div class="sf-row"><span class="sf-key">Resultados:</span><span>${r.history?.length || 0} analisados</span></div>
-        </div>` : ''}
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px;font-size:10px">
+      <div style="padding:4px 6px;background:var(--bg2);border:1px solid var(--border);border-radius:4px;text-align:center">
+        <div style="color:var(--text3);font-size:9px">1. Padrao</div>
+        <div style="font-weight:700;color:${d.mainPattern?'var(--green)':'var(--text3)'};font-size:11px">${d.mainPattern ? '&#10003;' : '...'}</div>
       </div>
-      <div class="sf-step">
-        <div class="sf-step-header">
-          <div class="sf-step-num sf-step-2">${d.mainPattern ? '2' : '...'}</div>
-          <span class="sf-step-label">Analise da IA</span>
-          ${d.confidence ? '<span class="sf-badge sf-badge-ok">OK</span>' : ''}
-        </div>
-        ${d.mainPattern ? `<div class="sf-step-body">
-          <div class="sf-row"><span class="sf-key">Confianca:</span><strong style="color:${(d.confidence||0)>=80?'var(--green)':(d.confidence||0)>=60?'var(--yellow)':'var(--red)'}; font-size:16px">${d.confidence || 0}%</strong></div>
-          <div class="sf-row"><span class="sf-key">Confluencias:</span><strong>${d.confluences || 0}</strong></div>
-          <div class="sf-row"><span class="sf-key">Risco:</span><strong style="color:${(d.risk||'BAIXO')==='ALTO'?'var(--red)':(d.risk||'BAIXO')==='MEDIO'?'var(--yellow)':'var(--green)'}">${d.risk || 'BAIXO'}</strong></div>
-          <div class="sf-row"><span class="sf-key">Score do sinal:</span><strong style="font-size:16px">${d.signalScore || 0}/100</strong></div>
-          ${Object.keys(d.patternScores||{}).length ? `<div class="sf-patterns">${Object.entries(d.patternScores).map(([k,v]) => `<div class="sf-pat"><span>${k}</span><div class="sf-pat-bar"><div style="width:${v}%;background:${v>=80?'var(--green)':v>=60?'var(--yellow)':'var(--red)'}"></div></div><span>${v}%</span></div>`).join('')}</div>` : ''}
-        </div>` : ''}
+      <div style="padding:4px 6px;background:var(--bg2);border:1px solid var(--border);border-radius:4px;text-align:center">
+        <div style="color:var(--text3);font-size:9px">2. IA</div>
+        <div style="font-weight:700;color:${d.confidence>=60?'var(--green)':'var(--text3)'};font-size:11px">${d.confidence || 0}%</div>
       </div>
-      <div class="sf-step">
-        <div class="sf-step-header">
-          <div class="sf-step-num sf-step-3">${d.decision ? '3' : '...'}</div>
-          <span class="sf-step-label">Filtro de Sinal</span>
-          ${d.decision ? (d.decision.approved ? '<span class="sf-badge sf-badge-pass">APROVADO</span>' : '<span class="sf-badge sf-badge-fail">REJEITADO</span>') : ''}
-        </div>
-        ${d.decision ? `<div class="sf-step-body">
-          <div class="sf-filter-grid">${Object.entries(d.filterResults||{}).map(([k,v]) => `<div class="sf-filter-item ${v?'sf-fi-pass':'sf-fi-fail'}"><span class="sf-fi-icon">${v?'&#10003;':'&#10007;'}</span><span>${k}</span></div>`).join('')}</div>
-          ${d.blockReason ? `<div class="sf-row sf-warn"><span>Motivo:</span> <strong>${d.blockReason}</strong></div>` : ''}
-        </div>` : ''}
+      <div style="padding:4px 6px;background:var(--bg2);border:1px solid var(--border);border-radius:4px;text-align:center">
+        <div style="color:var(--text3);font-size:9px">3. Filtro</div>
+        <div style="font-weight:700;color:${d.decision?.approved?'var(--green)':d.decision?'var(--red)':'var(--text3)'};font-size:11px">${d.decision?.approved?'OK':d.decision?'X':'...'}</div>
       </div>
-      <div class="sf-step">
-        <div class="sf-step-header">
-          <div class="sf-step-num sf-step-4">${d.decision?.approved ? '4' : '...'}</div>
-          <span class="sf-step-label">Gera a Entrada</span>
-          ${d.decision?.approved ? `<span class="sf-badge ${entrySendState.badgeClass}">${entrySendState.badge}</span>` : ''}
-        </div>
-        ${d.decision?.approved ? `<div class="sf-step-body">
-          <div class="sf-row"><span class="sf-key">Alvo:</span><strong class="sf-blue" style="font-size:18px">${decisionTargetLabel}</strong></div>
-          <div class="sf-row"><span class="sf-key">Confianca:</span><strong>${d.decision.confidence || 0}%</strong></div>
-          <div class="sf-row"><span class="sf-key">Status:</span><strong style="color:${entrySendState.color}">${entrySendState.label}</strong></div>
-          <div class="sf-row"><span class="sf-key">Envio:</span><span>${entrySendState.detail}</span></div>
-          ${entrySendState.messageId ? `<div class="sf-row"><span class="sf-key">Msg ID:</span><span>${entrySendState.messageId}</span></div>` : ''}
-        </div>` : ''}
+      <div style="padding:4px 6px;background:var(--bg2);border:1px solid var(--border);border-radius:4px;text-align:center">
+        <div style="color:var(--text3);font-size:9px">4. Entrada</div>
+        <div style="font-weight:700;color:var(--blue);font-size:11px">${decisionTargetLabel !== '--' ? decisionTargetLabel : '...'}</div>
       </div>
-      <div class="sf-step">
-        <div class="sf-step-header">
-          <div class="sf-step-num sf-step-5">5</div>
-          <span class="sf-step-label">Placar Atualizado</span>
-        </div>
-        <div class="sf-step-body">
-          <div class="sf-row"><span class="sf-key">Sinais enviados:</span><span>${s.signals||0}</span></div>
-          <div class="sf-row"><span class="sf-key">Wins:</span><strong class="sf-green">${s.wins||0}</strong></div>
-          <div class="sf-row"><span class="sf-key">Loss:</span><strong class="sf-red">${s.losses||0}</strong></div>
-          <div class="sf-row"><span class="sf-key">Assertividade:</span><strong>${(s.signals||0)>0?Math.round(((s.wins||0)/s.signals)*100)+'%':'--%'}</strong></div>
-        </div>
+      <div style="padding:4px 6px;background:var(--bg2);border:1px solid var(--border);border-radius:4px;text-align:center">
+        <div style="color:var(--text3);font-size:9px">5. Placar</div>
+        <div style="font-weight:700;font-size:11px">${s.wins||0}W ${s.losses||0}L</div>
       </div>
     </div>`;
   document.getElementById('placar').innerHTML = [['Sinais',s.signals||0,'blue'],['Wins',s.wins||0,'green'],['Loss',s.losses||0,'red'],['Assertividade',(s.signals||0)>0?Math.round(((s.wins||0)/s.signals)*100)+'%':'--%','blue']].map(([l,v,c])=>`<div class="stat-card ${c}"><div class="stat-label">${l}</div><div class="stat-value">${v}</div></div>`).join('');
   if (!configFormRendered) {
     const tgOpts = (TARGETS[r.game] || TARGETS.double).map(t => `<option value="${t.value}" ${r.target?.color === t.value ? 'selected' : ''}>${t.label}</option>`).join('');
     document.getElementById('configForm').innerHTML = `
-      <div class="form-group"><label>Alvo (Cor)</label><select id="cfgTarget" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">${tgOpts}</select></div>
-      <div class="form-group"><label>Filtro de Sinal</label>
-        <select id="cfgFilterMode" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
-          <option value="desligado" ${r.filterMode==='desligado'?'selected':''}>Desligado</option>
-          <option value="conservador" ${r.filterMode==='conservador'?'selected':''}>Conservador (Conf >=80% | Conflu>=3 | Score>=75)</option>
-          <option value="moderado" ${r.filterMode==='moderado'||!r.filterMode?'selected':''}>Moderado (Conf >=65% | Conflu>=2 | Score>=55)</option>
-          <option value="agressivo" ${r.filterMode==='agressivo'?'selected':''}>Agressivo (Conf >=45% | Conflu>=1 | Score>=30)</option>
-        </select>
-      </div>
-      <div class="form-group"><label>Confianca Minima</label><input id="cfgConf" type="number" value="${r.minimumConfidence||80}"></div>
-      <div class="form-group"><label>Intervalo Min (seg)</label><input id="cfgInterval" type="number" value="${r.intervalMin||60}"></div>
-      <div class="form-group"><label>Gale Max</label><input id="cfgGale" type="number" value="${r.gale?.max||0}"></div>`;
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+        <div><label style="font-size:10px;color:var(--text3);display:block;margin-bottom:2px">Estrategia</label>
+          <select id="cfgStrategy" style="width:100%;padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px" onchange="document.getElementById('cfgPatternSizeGroup').style.display=this.value==='padroesCores'?'block':'none'">
+            <option value="todas" ${r.strategy==='todas'?'selected':''}>Todas</option>
+            <option value="alternancia" ${r.strategy==='alternancia'?'selected':''}>Alternancia</option>
+            <option value="repeticao" ${r.strategy==='repeticao'?'selected':''}>Repeticao</option>
+            <option value="frequencia" ${r.strategy==='frequencia'?'selected':''}>Frequencia</option>
+            <option value="tendencia" ${r.strategy==='tendencia'?'selected':''}>Tendencia</option>
+            <option value="espelhamento" ${r.strategy==='espelhamento'?'selected':''}>Espelhamento</option>
+            <option value="diagonal" ${r.strategy==='diagonal'?'selected':''}>Diagonal</option>
+            <option value="padroesCores" ${r.strategy==='padroesCores'?'selected':''}>Padroes Cores</option>
+          </select>
+        </div>
+        <div id="cfgPatternSizeGroup" style="display:${r.strategy==='padroesCores'?'block':'none'}"><label style="font-size:10px;color:var(--text3);display:block;margin-bottom:2px">Tam Padrao</label>
+          <select id="cfgPatternSize" style="width:100%;padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px">
+            ${[1,2,3,4,5,6].map(n => `<option value="${n}" ${(r.patternSize||3)===n?'selected':''}>${n} cor${n>1?'es':''}</option>`).join('')}
+          </select>
+        </div>
+        <div><label style="font-size:10px;color:var(--text3);display:block;margin-bottom:2px">Alvo</label><select id="cfgTarget" style="width:100%;padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px">${tgOpts}</select></div>
+        <div><label style="font-size:10px;color:var(--text3);display:block;margin-bottom:2px">Filtro</label>
+          <select id="cfgFilterMode" style="width:100%;padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px">
+            <option value="desligado" ${r.filterMode==='desligado'?'selected':''}>Desligado</option>
+            <option value="conservador" ${r.filterMode==='conservador'?'selected':''}>Conservador</option>
+            <option value="moderado" ${r.filterMode==='moderado'||!r.filterMode?'selected':''}>Moderado</option>
+            <option value="agressivo" ${r.filterMode==='agressivo'?'selected':''}>Agressivo</option>
+          </select>
+        </div>
+        <div><label style="font-size:10px;color:var(--text3);display:block;margin-bottom:2px">Conf Min</label><input id="cfgConf" type="number" value="${r.minimumConfidence||80}" style="width:100%;padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px"></div>
+        <div><label style="font-size:10px;color:var(--text3);display:block;margin-bottom:2px">Intervalo(s)</label><input id="cfgInterval" type="number" value="${r.intervalMin||60}" style="width:100%;padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px"></div>
+        <div><label style="font-size:10px;color:var(--text3);display:block;margin-bottom:2px">Gale Max</label><input id="cfgGale" type="number" value="${r.gale?.max||0}" style="width:100%;padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px"></div>
+      </div>`;
     configFormRendered = true;
   }
 
@@ -256,48 +237,40 @@ function renderAll() {
     const tg = r.telegram || { enabled: false, channelId: '' };
     const tgMessage = tg.message || {};
     document.getElementById('telegramConfig').innerHTML = `
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:10px;cursor:pointer">
-        <input type="checkbox" id="tgEnabled" ${tg.enabled ? 'checked' : ''}> Enviar sinais para Telegram
-      </label>
-      <div class="form-group"><label>Canal de Envio</label>
-        <select id="tgChannel" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
-          <option value="">Selecionar canal...</option>
-          ${channels.map(c => `<option value="${c.id}" ${tg.channelId === c.id ? 'selected' : ''}>${escapeHtml(c.name)} (${c.id})</option>`).join('')}
-        </select>
-      </div>
-      <div class="form-group"><label>Tipo de Mensagem</label>
-        <select id="tgMsgType" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
-          <option value="live" ${tg.msgType === 'live' ? 'selected' : ''}>Live (atualiza a cada resultado)</option>
-          <option value="signal" ${tg.msgType === 'signal' ? 'selected' : ''}>Sinal (entrada, win, loss, gale)</option>
-          <option value="both" ${tg.msgType === 'both' || !tg.msgType ? 'selected' : ''}>Live + Sinal</option>
-        </select>
-      </div>
-      <div class="form-group" style="margin-top:12px">
-        <label style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-          <span>Mensagem Custom - Live</span>
-          <button type="button" class="btn btn-sm btn-ghost" onclick="insertLiveVars()">Inserir variavel</button>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+          <input type="checkbox" id="tgEnabled" ${tg.enabled ? 'checked' : ''}> Telegram
         </label>
-        <textarea id="tgMessageLive" rows="6" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-family:monospace;resize:vertical" placeholder="Deixe vazio para usar a mensagem padrao. Use {variaveis} listadas abaixo.">${escapeHtml(tgMessage.live || '')}</textarea>
-        <div style="font-size:10px;color:var(--text3);margin-top:4px;line-height:1.5">
-          Variaveis: {robotName} {game} {gameName} {strategy} {mode} {status} {lastResult} {lastResultEmoji} {lastResultLabel} {diagnosticStatus} {analyzedResults} {confidenceDiag} {pattern} {entry} {entryEmoji} {entryLabel} {score} {wins} {losses} {rate} {signals} {winSG} {winG1} {winG2} {history} {historyEmojis} {time}
+        <select id="tgChannel" style="padding:4px 8px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:11px;min-width:140px">
+          <option value="">Canal...</option>
+          ${channels.map(c => `<option value="${c.id}" ${tg.channelId === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
+        </select>
+        <select id="tgMsgType" style="padding:4px 8px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:11px">
+          <option value="live" ${tg.msgType === 'live' ? 'selected' : ''}>Live</option>
+          <option value="signal" ${tg.msgType === 'signal' ? 'selected' : ''}>Sinal</option>
+          <option value="both" ${tg.msgType === 'both' || !tg.msgType ? 'selected' : ''}>Live+Sinal</option>
+        </select>
+        <button class="btn btn-sm btn-blue" onclick="testTelegramChannel()" id="btnTestTg">Testar</button>
+        <span id="testTgResult" style="font-size:10px"></span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
+            <span style="font-size:10px;color:var(--text3)">Msg Live</span>
+            <button type="button" class="btn btn-sm btn-ghost" onclick="insertLiveVars()" style="font-size:9px;padding:1px 4px">+var</button>
+          </div>
+          <textarea id="tgMessageLive" rows="3" style="width:100%;padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:11px;font-family:monospace;resize:vertical" placeholder="Padrao. Use {variaveis}.">${escapeHtml(tgMessage.live || '')}</textarea>
+        </div>
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
+            <span style="font-size:10px;color:var(--text3)">Msg Sinal</span>
+            <button type="button" class="btn btn-sm btn-ghost" onclick="insertEntryVars()" style="font-size:9px;padding:1px 4px">+var</button>
+          </div>
+          <textarea id="tgMessageEntry" rows="3" style="width:100%;padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:11px;font-family:monospace;resize:vertical" placeholder="Padrao. Use {variaveis}.">${escapeHtml(tgMessage.entry || '')}</textarea>
         </div>
       </div>
-      <div class="form-group" style="margin-top:10px">
-        <label style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-          <span>Mensagem Custom - Sinal (entrada/win/loss/gale)</span>
-          <button type="button" class="btn btn-sm btn-ghost" onclick="insertEntryVars()">Inserir variavel</button>
-        </label>
-        <textarea id="tgMessageEntry" rows="6" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-family:monospace;resize:vertical" placeholder="Deixe vazio para usar a mensagem padrao. Use {variaveis} listadas abaixo.">${escapeHtml(tgMessage.entry || '')}</textarea>
-        <div style="font-size:10px;color:var(--text3);margin-top:4px;line-height:1.5">
-          Variaveis: {robotName} {game} {strategy} {status} {target} {targetEmoji} {targetColor} {confidence} {gale} {galeMax} {wins} {losses} {rate} {signals} {history} {historyEmojis} {lastResult} {diagnosticStatus} {confidenceDiag} {pattern} {time}
-        </div>
-      </div>
-      <div style="margin-top:10px;display:flex;gap:8px">
-        <button class="btn btn-sm btn-blue" onclick="testTelegramChannel()" id="btnTestTg">Testar Canal</button>
-        <button class="btn btn-sm btn-ghost" onclick="clearTelegramMessages()">Limpar templates</button>
-        <span id="testTgResult" style="font-size:11px;align-self:center"></span>
-      </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:6px">Adicione canais em Configuracoes > Canais / Grupos</div>`;
+      <div style="font-size:9px;color:var(--text3);margin-top:4px">Live: {robotName} {game} {strategy} {status} {lastResult} {history} {wins} {losses} {rate} | Sinal: {target} {confidence} {gale} {historyEmojis}</div>
+      <div style="font-size:9px;color:var(--text3);margin-top:2px">Canais em Configuracoes > Canais / Grupos</div>`;
     tgFormRendered = true;
   }
   renderTelegramMessagePreview(r);
@@ -457,6 +430,9 @@ function loadRobot() {
   if (robot && robot.history.length < robot.resultsToAnalyze) {
     RobotEngine.loadHistoryFromStorage(robot);
   }
+  if (robot && robot.history.length > 0 && (!robot.diagnostic || !robot.diagnostic.strategyDetails || Object.keys(robot.diagnostic.strategyDetails).length === 0)) {
+    robot.analyze();
+  }
   robotData = robot?.getState();
   if (robotData) {
     renderAll();
@@ -538,6 +514,10 @@ function saveConfig() {
   robot.target = { color: targetColor, multiplier: targetMult ? parseInt(targetMult) : null };
   if (typeof robot.normalizeSavedSignalTargets === 'function') robot.normalizeSavedSignalTargets();
   robot.filterMode = document.getElementById('cfgFilterMode')?.value || 'moderado';
+  const newStrategy = document.getElementById('cfgStrategy')?.value;
+  if (newStrategy) robot.strategy = newStrategy;
+  const newPatternSize = document.getElementById('cfgPatternSize')?.value;
+  if (newPatternSize) robot.patternSize = parseInt(newPatternSize) || 3;
   robot.telegram = {
     enabled: document.getElementById('tgEnabled')?.checked || false,
     channelId: document.getElementById('tgChannel')?.value || '',
@@ -698,6 +678,123 @@ function renderAnalises() {
     ${html}
   `;
 }
+
+function renderEstrategias() {
+  const el = document.getElementById('estrategiasIA');
+  if (!robotData) { el.innerHTML = ''; return; }
+  const d = robotData.diagnostic || {};
+  const details = d.strategyDetails || {};
+  const names = Object.keys(details);
+  if (names.length === 0) { el.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:8px">Nenhuma estrategia analisada ainda.</div>'; return; }
+
+  const strategyLabels = {
+    alternancia: { icon: '&#8644;', color: 'var(--green)', name: 'Alternancia' },
+    repeticao: { icon: '&#8634;', color: 'var(--yellow)', name: 'Repeticao' },
+    frequencia: { icon: '&#128200;', color: 'var(--blue)', name: 'Frequencia' },
+    tendencia: { icon: '&#128200;', color: 'var(--purple, #a855f7)', name: 'Tendencia' },
+    espelhamento: { icon: '&#128256;', color: 'var(--cyan, #06b6d4)', name: 'Espelhamento' },
+    diagonal: { icon: '&#9660;', color: 'var(--orange, #f97316)', name: 'Diagonal' },
+    padroesCores: { icon: '&#127912;', color: 'var(--red)', name: 'Padroes Cores' }
+  };
+  const strategyTargets = {
+    alternancia: ['RED','BLACK','GREY'],
+    repeticao: ['RED','BLACK','GREY'],
+    frequencia: ['RED','BLACK','GREY'],
+    tendencia: ['RED','BLACK','GREY'],
+    espelhamento: ['RED','BLACK','GREY'],
+    diagonal: ['RED','BLACK','GREY'],
+    padroesCores: ['any','red','black','grey','red+grey','red+black']
+  };
+  const cfg = robotData.strategyConfig || {};
+
+  const html = names.map(name => {
+    const info = strategyLabels[name] || { icon: '&#10003;', color: 'var(--text3)', name };
+    const s = details[name];
+    const conf = s.confidence || 0;
+    const confColor = conf >= 80 ? 'var(--green)' : conf >= 60 ? 'var(--yellow)' : conf >= 30 ? 'var(--orange, #f97316)' : 'var(--red)';
+    const sc = cfg[name] || {};
+    const enabled = sc.enabled !== false;
+    const minConf = sc.minConfidence || 0;
+    const target = sc.target || 'any';
+    const defaultPS = { alternancia: 5, repeticao: 5, frequencia: 1, tendencia: 5, espelhamento: 5, diagonal: 6, padroesCores: 3 };
+    const ps = sc.patternSize || defaultPS[name] || 3;
+    const statusBadge = s.matched
+      ? '<span style="padding:1px 5px;border-radius:3px;font-size:9px;font-weight:700;background:rgba(41,217,120,.15);color:var(--green)">OK</span>'
+      : '<span style="padding:1px 5px;border-radius:3px;font-size:9px;font-weight:700;background:rgba(255,68,68,.1);color:var(--red)">--</span>';
+    const tgtOpts = (strategyTargets[name] || strategyTargets.alternancia).map(t => `<option value="${t}" ${target===t?'selected':''}>${t.toUpperCase()}</option>`).join('');
+
+    const pSizeBtn = `<div style="display:flex;align-items:center;gap:2px;margin-left:6px" title="Tamanho do padrao">
+      <button onclick="changePatternSize('${name}',-1)" style="width:18px;height:18px;border-radius:3px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1">-</button>
+      <span style="font-size:10px;font-weight:700;color:var(--text);min-width:14px;text-align:center">${ps}</span>
+      <button onclick="changePatternSize('${name}',1)" style="width:18px;height:18px;border-radius:3px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1">+</button>
+    </div>`;
+    return `<div style="padding:6px 10px;margin-bottom:4px;background:var(--bg2);border:1px solid ${enabled?confColor:'var(--border)'};border-radius:6px;opacity:${enabled?1:.5}">
+      <div style="display:flex;align-items:center;gap:6px;font-size:12px">
+        <input type="checkbox" ${enabled?'checked':''} onchange="toggleStrategy('${name}',this.checked)" style="cursor:pointer" title="Ativar/Desativar">
+        <span style="color:${info.color};font-size:13px">${info.icon}</span>
+        <span style="font-weight:700;min-width:80px;color:${info.color}">${info.name}</span>
+        ${pSizeBtn}
+        ${statusBadge}
+        <span style="font-size:16px;font-weight:800;color:${confColor};min-width:36px;text-align:right">${conf}%</span>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text3)">
+          <span>Min:</span>
+          <input type="number" value="${minConf}" min="0" max="100" style="width:40px;padding:2px 4px;background:var(--bg);border:1px solid var(--border);border-radius:3px;color:var(--text);font-size:11px;text-align:center" onchange="updateStrategyConfig('${name}','minConfidence',+this.value)">
+          <span>%</span>
+          <select style="padding:2px 4px;background:var(--bg);border:1px solid var(--border);border-radius:3px;color:var(--text);font-size:11px" onchange="updateStrategyConfig('${name}','target',this.value)">${tgtOpts}</select>
+        </div>
+      </div>
+      ${s.reason ? `<div style="font-size:10px;color:var(--text3);margin-top:3px;padding-left:20px">${escapeHtml(s.reason)}</div>` : ''}
+      ${s.pattern && s.pattern.length > 0 ? `<div style="margin-top:4px;padding-left:20px;display:flex;align-items:center;gap:4px;flex-wrap:wrap">${s.pattern.map(c => {
+        const bg = c === 'RED' ? '#ef4444' : c === 'GREEN' ? '#22c55e' : c === 'BLUE' ? '#3b82f6' : c === 'GREY' || c === 'BLACK' ? '#374151' : '#666';
+        const label = c === 'RED' ? 'V' : c === 'BLACK' ? 'P' : c === 'GREY' ? 'P' : c === 'GREEN' ? 'Vd' : c === 'BLUE' ? 'Az' : '?';
+        return `<span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:4px;background:${bg};font-size:9px;font-weight:700;color:white">${label}</span>`;
+      }).join('<span style="color:var(--text3);font-size:9px">&rarr;</span>')}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  el.innerHTML = html;
+}
+
+function changePatternSize(name, delta) {
+  if (!robotData) return;
+  if (!robotData.strategyConfig) robotData.strategyConfig = {};
+  if (!robotData.strategyConfig[name]) robotData.strategyConfig[name] = {};
+  const defaultPS = { alternancia: 5, repeticao: 5, frequencia: 1, tendencia: 5, espelhamento: 5, diagonal: 6, padroesCores: 3 };
+  let sz = (robotData.strategyConfig[name].patternSize || defaultPS[name] || 3) + delta;
+  if (sz < 1) sz = 1;
+  if (sz > 6) sz = 6;
+  robotData.strategyConfig[name].patternSize = sz;
+  if (name === 'padroesCores') robotData.patternSize = sz;
+  const robot = RobotEngine.getRobot(robotData.id);
+  if (robot) {
+    robot.strategyConfig = robotData.strategyConfig;
+    if (name === 'padroesCores') robot.patternSize = sz;
+    robot.analyze();
+    robotData = robot.getState();
+    RobotEngine.save();
+  }
+  renderAll();
+  renderAnalises();
+}
+
+function toggleStrategy(name, enabled) {
+  if (!robotData) return;
+  if (!robotData.strategyConfig) robotData.strategyConfig = {};
+  if (!robotData.strategyConfig[name]) robotData.strategyConfig[name] = {};
+  robotData.strategyConfig[name].enabled = enabled;
+  const robot = RobotEngine.getRobot(robotData.id);
+  if (robot) { robot.strategyConfig = robotData.strategyConfig; RobotEngine.save(); }
+}
+
+function updateStrategyConfig(name, key, value) {
+  if (!robotData) return;
+  if (!robotData.strategyConfig) robotData.strategyConfig = {};
+  if (!robotData.strategyConfig[name]) robotData.strategyConfig[name] = {};
+  robotData.strategyConfig[name][key] = value;
+  const robot = RobotEngine.getRobot(robotData.id);
+  if (robot) { robot.strategyConfig = robotData.strategyConfig; RobotEngine.save(); }
+}
+
 loadRobot();
 renderConnectionStatus();
 setInterval(loadRobot, 5000);

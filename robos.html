@@ -5,6 +5,30 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Robos</title>
 <link rel="stylesheet" href="style.css">
+<style>
+  html{zoom:0.75}
+  .hero{background:linear-gradient(135deg,rgba(35,104,255,.15),rgba(41,217,120,.1));border:1px solid var(--border);border-radius:16px;padding:24px 30px;margin-bottom:24px;position:relative;overflow:hidden}
+  .hero::before{content:'';position:absolute;top:-50%;right:-10%;width:300px;height:300px;background:radial-gradient(circle,rgba(35,104,255,.08),transparent 70%);border-radius:50%}
+  .hero::after{content:'';position:absolute;bottom:-40%;left:10%;width:200px;height:200px;background:radial-gradient(circle,rgba(41,217,120,.06),transparent 70%);border-radius:50%}
+  .hero h1{font-size:26px;font-weight:800;margin-bottom:4px;position:relative;z-index:1;display:flex;align-items:center;gap:10px}
+  .hero h1 .logo{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--blue),var(--green));display:flex;align-items:center;justify-content:center}
+  .hero p{color:var(--text3);font-size:13px;position:relative;z-index:1}
+  .stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px 18px;position:relative;overflow:hidden;transition:all .2s}
+  .stat-card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.3)}
+  .stat-card::before{content:'';position:absolute;top:0;left:0;width:4px;height:100%;border-radius:4px 0 0 4px}
+  .stat-card.green::before{background:var(--green)}
+  .stat-card.red::before{background:var(--red)}
+  .stat-card.blue::before{background:var(--blue)}
+  .stat-card .stat-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;margin-bottom:8px}
+  .stat-card .stat-value{font-size:28px;font-weight:800;line-height:1}
+  .stat-card .stat-label{font-size:11px;color:var(--text3);margin-top:4px;text-transform:uppercase;letter-spacing:.5px}
+  .section-title{font-size:14px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+  .section-title .dot-accent{width:8px;height:8px;border-radius:50%;background:var(--blue);animation:pulse 2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  .live-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+  .live-dot.on{background:var(--green);box-shadow:0 0 8px var(--green)}
+  .live-dot.off{background:var(--red)}
+</style>
 </head>
 <body>
 <nav class="nav">
@@ -18,15 +42,29 @@
     <a href="logs.html">Logs</a>
     <a href="mensagens.html">Mensagens</a>
   </div>
-  <div class="nav-status"><a href="ws-background.html" target="_blank" style="font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text3)">BG</a></div>
+  <div class="nav-status">
+    <a href="ws-background.html" target="_blank" style="font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text3);margin-right:8px">BG</a>
+  </div>
 </nav>
 <div class="container">
-  <div class="card-header"><span class="card-title">Todos os Robos</span><button class="btn btn-green" onclick="showCreate()">+ Novo Robo</button></div>
+  <div class="hero">
+    <h1><div class="logo"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="8.5" cy="16" r="1.5"/><circle cx="15.5" cy="16" r="1.5"/><path d="M12 11V7"/><path d="M8 7h8"/></svg></div> Gerenciar Robos</h1>
+    <p>Crie, edite e configure seus robos</p>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px" id="stats"></div>
+
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <div class="section-title" style="margin-bottom:0"><span class="dot-accent"></span> Todos os Robos</div>
+    <button class="btn btn-green" onclick="showCreate()">+ Novo Robo</button>
+  </div>
+
   <div class="card"><div class="table-wrap"><table>
-    <thead><tr><th>ID</th><th>Nome</th><th>Jogo</th><th>Estrategia</th><th>Status</th><th>Modo</th><th>Cor</th><th>Acoes</th></tr></thead>
+    <thead><tr><th>Robo</th><th>Estrategia</th><th>Status</th><th>Alvo</th><th>Conf</th><th>W/L</th><th>Modo</th><th>Intervalo</th><th>Gale</th><th>Acoes</th></tr></thead>
     <tbody id="robotsTable"></tbody>
   </table></div></div>
 </div>
+
 <div class="modal-overlay" id="modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
   <div class="modal" style="max-width:500px">
     <div class="modal-title" id="modalTitle">Novo Robo</div>
@@ -35,9 +73,10 @@
     <div class="form-group"><label>Jogo</label><select id="fGame" onchange="updateTargets()"><option value="wheel">Wheel</option><option value="double">Double</option></select></div>
     <div class="form-group"><label>Alvo (Cor / Multiplier)</label><select id="fTarget"></select></div>
     <div class="form-group"><label>Estrategia</label><select id="fStrategy" onchange="togglePatternSize()"><option value="todas">Todas (Analise Completa)</option><option value="alternancia">Alternancia</option><option value="repeticao">Repeticao</option><option value="frequencia">Frequencia</option><option value="tendencia">Tendencia</option><option value="espelhamento">Espelhamento</option><option value="diagonal">Diagonal</option><option value="padroesCores">Padroes Cores</option></select></div>
-    <div class="form-group" id="patternSizeGroup" style="display:none"><label>Tamanho do Padrao</label><select id="fPatternSize"><option value="3">3 cores</option><option value="4">4 cores</option><option value="5">5 cores</option><option value="6">6 cores</option></select></div>
+    <div class="form-group" id="patternSizeGroup" style="display:none"><label>Tamanho do Padrao</label><select id="fPatternSize"><option value="1">1 cor</option><option value="2">2 cores</option><option value="3" selected>3 cores</option><option value="4">4 cores</option><option value="5">5 cores</option><option value="6">6 cores</option></select></div>
     <div class="form-group"><label>Resultados para Analisar</label><input id="fResults" type="number" value="40"></div>
     <div class="form-group"><label>Confianca Minima (%)</label><input id="fConf" type="number" value="80"></div>
+    <div class="form-group"><label>Score Minimo</label><input id="fMinScore" type="number" value="52"></div>
     <div class="form-group"><label>Intervalo entre Sinais (seg)</label><input id="fInterval" type="number" value="60"></div>
     <div class="form-group"><label>Gale Maximo</label><input id="fGale" type="number" value="2"></div>
     <div class="form-group"><label>Modo</label><select id="fMode"><option value="monitoramento">Monitoramento</option><option value="telegram">Telegram</option></select></div>
@@ -127,6 +166,7 @@ function showEdit(id){
   togglePatternSize();
   document.getElementById('fResults').value = robot.resultsToAnalyze || 40;
   document.getElementById('fConf').value = robot.minimumConfidence || 80;
+  document.getElementById('fMinScore').value = robot.minScore || 52;
   document.getElementById('fInterval').value = robot.intervalMin || 60;
   document.getElementById('fGale').value = robot.gale?.max || 0;
   document.getElementById('fMode').value = robot.mode || 'monitoramento';
@@ -160,6 +200,7 @@ function createRobot(){
   const tgChannel = document.getElementById('fTgChannel').value;
   const tgMsgType = document.getElementById('fTgMsgType').value;
   const patternSize = strategy === 'padroesCores' ? parseInt(document.getElementById('fPatternSize').value) || 3 : 3;
+  const minScore = parseInt(document.getElementById('fMinScore').value) || 52;
 
   if (editId) {
     const robot = RobotEngine.getRobot(editId);
@@ -169,6 +210,7 @@ function createRobot(){
       robot.strategy = strategy;
       robot.resultsToAnalyze = results;
       robot.minimumConfidence = minConf;
+      robot.minScore = minScore;
       robot.intervalMin = interval;
       robot.gale.max = galeMax;
       robot.gale.enabled = galeMax > 0;
@@ -186,6 +228,7 @@ function createRobot(){
       target: { color: targetColor, multiplier: targetMult ? parseInt(targetMult) : null },
       resultsToAnalyze: results,
       minimumConfidence: minConf,
+      minScore,
       intervalMin: interval,
       galeMax, mode,
       telegram: { enabled: tgEnabled, channelId: tgChannel, msgType: tgMsgType },
@@ -196,23 +239,82 @@ function createRobot(){
   document.getElementById('modal').style.display='none';
   loadRobots();
 }
+function renderStats(){
+  const robots = RobotEngine.getAllStates();
+  const total = robots.length;
+  const online = robots.filter(r => r.status === 'online').length;
+  const offline = robots.filter(r => r.status === 'offline').length;
+  document.getElementById('stats').innerHTML = `
+    <div class="stat-card blue"><div class="stat-icon" style="background:rgba(35,104,255,.15)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2.5"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="8.5" cy="16" r="1.5"/><circle cx="15.5" cy="16" r="1.5"/><path d="M12 11V7"/></svg></div><div class="stat-value" style="color:var(--blue)">${total}</div><div class="stat-label">Total</div></div>
+    <div class="stat-card green"><div class="stat-icon" style="background:rgba(41,217,120,.15)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div class="stat-value" style="color:var(--green)">${online}</div><div class="stat-label">Online</div></div>
+    <div class="stat-card red"><div class="stat-icon" style="background:rgba(255,68,68,.15)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></div><div class="stat-value" style="color:var(--red)">${offline}</div><div class="stat-label">Offline</div></div>`;
+}
 function loadRobots(){
   const robots = RobotEngine.getAllStates();
-  document.getElementById('robotsTable').innerHTML = robots.map(r => `<tr>
-    <td style="font-size:12px;color:var(--text3)">${r.id}</td>
-    <td><strong>${escapeHtml(r.name)}</strong></td>
-    <td>${r.game}</td><td>${r.strategy}</td>
-    <td>${createBadge(r.status)}</td><td>${r.mode}</td>
-    <td style="font-size:12px">${getTargetLabel(r)}</td>
-    <td style="display:flex;gap:6px;align-items:center">
-      <a href="robo.html?id=${r.id}" class="btn btn-sm btn-blue">Abrir</a>
-      <button class="btn btn-sm btn-yellow" onclick="showEdit('${r.id}')">Editar</button>
-      ${r.status==='offline'
-        ? `<button class="btn btn-sm btn-green" onclick="start('${r.id}')">Play</button>`
-        : `<button class="btn btn-sm btn-red" onclick="stop('${r.id}')">Stop</button>`}
-      <button class="btn btn-sm btn-red" onclick="deleteRobot('${r.id}')">Del</button>
-    </td>
-  </tr>`).join('');
+  renderStats();
+  const stratOpts = ['todas','alternancia','repeticao','frequencia','tendencia','espelhamento','diagonal','padroesCores'];
+  const stratSVG = {
+    todas:'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',
+    alternancia:'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>',
+    repeticao:'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--yellow)" stroke-width="2.5"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>',
+    frequencia:'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2.5"><rect x="3" y="12" width="4" height="8"/><rect x="10" y="8" width="4" height="12"/><rect x="17" y="4" width="4" height="16"/></svg>',
+    tendencia:'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--purple,#a855f7)" stroke-width="2.5"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>',
+    espelhamento:'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--cyan,#06b6d4)" stroke-width="2.5"><path d="M12 3v18"/><path d="M8 7l-4 5 4 5"/><path d="M16 7l4 5-4 5"/></svg>',
+    diagonal:'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--orange,#f97316)" stroke-width="2.5"><path d="M4 20L20 4"/></svg>',
+    padroesCores:'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/></svg>'
+  };
+  document.getElementById('robotsTable').innerHTML = robots.map(r => {
+    const conf = r.diagnostic?.confidence || 0;
+    const confColor = conf >= 80 ? 'var(--green)' : conf >= 60 ? 'var(--yellow)' : 'var(--red)';
+    const wins = r.stats?.wins || 0;
+    const losses = r.stats?.losses || 0;
+    return `<tr>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="live-dot ${r.status==='online'?'on':'off'}"></span>
+          <div>
+            <strong style="font-size:12px">${escapeHtml(r.name)}</strong>
+            <div style="font-size:10px;color:var(--text3)">${r.game} &bull; ${r.id}</div>
+          </div>
+        </div>
+      </td>
+      <td>
+        <div style="display:flex;align-items:center;gap:4px">
+          ${stratSVG[r.strategy]||''}
+          <select style="padding:4px 8px;background:var(--bg);border:1px solid var(--blue);border-radius:4px;color:var(--blue);font-size:11px;font-weight:700;min-width:110px;cursor:pointer" onchange="changeRobotStrategy('${r.id}',this.value)">${stratOpts.map(s => `<option value="${s}" ${r.strategy===s?'selected':''}>${s}</option>`).join('')}</select>
+          ${r.strategy==='padroesCores' ? `<select style="padding:3px 4px;background:var(--bg);border:1px solid var(--border);border-radius:3px;color:var(--text);font-size:10px;cursor:pointer" onchange="changeRobotPatternSize('${r.id}',+this.value)">${[1,2,3,4,5,6].map(n => `<option value="${n}" ${(r.patternSize||3)===n?'selected':''}>${n}</option>`).join('')}</select>` : ''}
+        </div>
+      </td>
+      <td>${createBadge(r.status)}</td>
+      <td style="font-size:11px">${getTargetLabel(r)}</td>
+      <td style="font-size:12px;font-weight:700;color:${confColor}">${conf}%</td>
+      <td style="font-size:11px"><span style="color:var(--green)">${wins}W</span> <span style="color:var(--red)">${losses}L</span></td>
+      <td style="font-size:11px;color:var(--text3)">${r.mode}</td>
+      <td style="font-size:11px;color:var(--text3)">${r.intervalMin||60}s</td>
+      <td style="font-size:11px;color:var(--text3)">${r.gale?.max||0}</td>
+      <td style="display:flex;gap:4px;align-items:center">
+        <a href="robo.html?id=${r.id}" class="btn btn-sm btn-blue">Abrir</a>
+        <button class="btn btn-sm btn-yellow" onclick="showEdit('${r.id}')">Editar</button>
+        ${r.status==='offline'
+          ? `<button class="btn btn-sm btn-green" onclick="start('${r.id}')">Play</button>`
+          : `<button class="btn btn-sm btn-red" onclick="stop('${r.id}')">Stop</button>`}
+        <button class="btn btn-sm btn-red" onclick="deleteRobot('${r.id}')">Del</button>
+      </td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="10" style="color:var(--text3);text-align:center;padding:20px">Nenhum robo criado</td></tr>';
+}
+function changeRobotStrategy(id, strategy) {
+  const robot = RobotEngine.getRobot(id);
+  if (!robot) return;
+  robot.strategy = strategy;
+  RobotEngine.save();
+  loadRobots();
+}
+function changeRobotPatternSize(id, size) {
+  const robot = RobotEngine.getRobot(id);
+  if (!robot) return;
+  robot.patternSize = size;
+  RobotEngine.save();
 }
 function start(id){ RobotEngine.startRobot(id); loadRobots(); }
 function stop(id){ RobotEngine.stopRobot(id); loadRobots(); }
