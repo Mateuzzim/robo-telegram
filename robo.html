@@ -124,7 +124,7 @@ function renderAll() {
     <div><span style="color:var(--text3)">Estrategia:</span> <strong>${r.strategy}</strong></div>
     <div><span style="color:var(--text3)">Modo:</span> <strong>${r.mode}</strong></div>
     <div><span style="color:var(--text3)">Ultimo resultado:</span> <strong>${r.lastResult ? (r.lastResult.color || r.lastResult.number) : '--'}</strong></div>
-  </div>${renderSourceWarning(r)}`;
+  </div>`;
   const d = r.diagnostic || {};
   const suggestedEntryLabel = d.suggestedEntry ? formatColorLabel(d.suggestedEntry) : '--';
   const decisionTargetLabel = d.decision?.target ? formatColorLabel(d.decision.target) : '--';
@@ -475,14 +475,7 @@ function renderConnectionStatus() {
   const game = robotData?.game || 'wheel';
   const status = App.getSourceStatus(game);
   connDot.className = 'dot' + (status.connected ? '' : ' off');
-  connDot.title = status.reason || (status.connected ? 'Fonte online' : 'Fonte offline');
-}
-function renderSourceWarning(r) {
-  const status = App.getSourceStatus(r.game);
-  if (!status || status.connected) return '';
-  const expiresAt = status.expiresAt ? ' Expirou em: ' + formatDateTime(status.expiresAt) + '.' : '';
-  const reason = status.reason || 'Fonte offline';
-  return `<div style="margin-top:12px;padding:10px 12px;background:rgba(255,86,86,.08);border:1px solid rgba(255,86,86,.35);border-radius:8px;color:var(--red);font-size:12px"><strong>${escapeHtml(reason)}.</strong>${escapeHtml(expiresAt)} Atualize a URL/token em Configuracoes para o Double voltar a receber resultados.</div>`;
+  connDot.title = status.connected ? 'Fonte online' : '';
 }
 async function testTelegramChannel() {
   const resultEl = document.getElementById('testTgResult');
