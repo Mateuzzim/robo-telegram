@@ -25,6 +25,18 @@ const App = {
   },
 
   ensureBackgroundRunner() {
+    if (this._bgWindow && !this._bgWindow.closed) return;
+    if (!this._bgPopupBlocked) {
+      try {
+        this._bgWindow = window.open('ws-background.html', 'wsBgExecutor', 'width=200,height=100');
+        if (this._bgWindow) {
+          this._bgFallbackIframe = false;
+          this.startBackgroundHealthCheck();
+          return;
+        }
+      } catch(e) {}
+      this._bgPopupBlocked = true;
+    }
     if (!document.body || document.getElementById('__wsBackgroundRunner')) return;
     const frame = document.createElement('iframe');
     frame.id = '__wsBackgroundRunner';
@@ -33,6 +45,25 @@ const App = {
     frame.setAttribute('aria-hidden', 'true');
     frame.style.cssText = 'position:fixed;width:1px;height:1px;left:-9999px;top:-9999px;border:0;opacity:0;pointer-events:none';
     document.body.appendChild(frame);
+    this._bgFallbackIframe = true;
+    this.startBackgroundHealthCheck();
+  },
+
+  startBackgroundHealthCheck() {
+    if (this._bgHealthTimer) return;
+    this._bgHealthTimer = setInterval(() => {
+      if (this._bgFallbackIframe) {
+        const el = document.getElementById('__wsBackgroundRunner');
+        if (!el || !el.contentWindow) {
+          this._bgFallbackIframe = false;
+          this._bgWindow = null;
+          this.ensureBackgroundRunner();
+        }
+      } else if (!this._bgWindow || this._bgWindow.closed) {
+        this._bgWindow = null;
+        this.ensureBackgroundRunner();
+      }
+    }, 5000);
   },
 
   startRobotStateSync() {

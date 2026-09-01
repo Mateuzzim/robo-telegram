@@ -168,6 +168,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
     if (Sources.wheel && !Sources.wheel.connected) Sources.wheel.connect();
     if (Sources.double && !Sources.double.connected) Sources.double.connect();
+    RobotEngine.syncHistoriesFromStorage();
   }
 });
 
@@ -175,6 +176,19 @@ window.addEventListener('beforeunload', () => {
   if (Sources.wheel) Sources.wheel.disconnect();
   if (Sources.double) Sources.double.disconnect();
 });
+
+let _keepAliveCounter = 0;
+setInterval(() => {
+  _keepAliveCounter++;
+  const statusParts = [];
+  if (Sources.wheel) statusParts.push('wheel:' + (Sources.wheel.connected ? 'ON' : 'OFF'));
+  if (Sources.double) statusParts.push('double:' + (Sources.double.connected ? 'ON' : 'OFF'));
+  const robots = RobotEngine.getAllRobots().filter(r => r.status === 'online');
+  statusParts.push('robots:' + robots.length);
+  statusEl.textContent = '[' + new Date().toLocaleTimeString() + '] BG rodando | ' + statusParts.join(' | ') + ' | tick:' + _keepAliveCounter;
+  if (Sources.wheel && !Sources.wheel.connected) Sources.wheel.connect();
+  if (Sources.double && !Sources.double.connected) Sources.double.connect();
+}, 3000);
 </script>
 </body>
 </html>
