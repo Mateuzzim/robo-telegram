@@ -83,13 +83,14 @@ class WSSource {
   }
 
   emitHistory(results) {
-    ResultHistoryStore.merge(this.label, results);
-    EventBus.emit('results:history', { label: this.label, results });
+    const savedResults = ResultHistoryStore.merge(this.label, results);
+    EventBus.emit('results:history', { label: this.label, results: savedResults || [] });
   }
 
   emitResult(result) {
-    ResultHistoryStore.add(this.label, result);
-    EventBus.emit('result:new', { label: this.label, ...result });
+    const savedItem = ResultHistoryStore.add(this.label, result);
+    if (!savedItem) return;
+    EventBus.emit('result:new', { label: this.label, ...result, storageId: savedItem.storageId, time: savedItem.time });
   }
 
   normalizeResult(raw) {
@@ -272,7 +273,8 @@ class WSSource {
 
 const ResultHistoryStore = {
   keys: { wheel: 'historico-wheel-v1', double: 'historico-double-v1' },
-  maxResults: 100,
+  maxResults: 500,
+  duplicateWindowMs: 15000,
 
   getKey(label) {
     return this.keys[label];
@@ -290,41 +292,43 @@ const ResultHistoryStore = {
   save(label, history) {
     const key = this.getKey(label);
     if (!key) return;
-    const seen = new Set();
-    const deduped = [];
+    const seenRounds = new Set();
+    const saved = [];
     for (const item of history) {
-      const k = this.itemKey(item);
-      if (seen.has(k)) continue;
-      seen.add(k);
-      deduped.push(item);
+      if (!item) continue;
+      const roundKey = this.stableKey(item);
+      if (roundKey) {
+        if (seenRounds.has(roundKey)) continue;
+        seenRounds.add(roundKey);
+      }
+      saved.push(item);
     }
-    localStorage.setItem(key, JSON.stringify(deduped.slice(0, this.maxResults)));
+    localStorage.setItem(key, JSON.stringify(saved.slice(0, this.maxResults)));
   },
 
   add(label, result) {
     const item = this.toStorageItem(label, result);
-    if (!item) return;
+    if (!item) return null;
     const history = this.load(label);
-    const key = this.itemKey(item);
-    if (history.some(h => this.itemKey(h) === key)) return;
+    if (this.isImmediateDuplicate(history[0], item)) return null;
     history.unshift(item);
     this.save(label, history);
+    return item;
   },
 
   merge(label, results) {
-    if (!Array.isArray(results) || !results.length) return;
+    if (!Array.isArray(results) || !results.length) return [];
     const history = this.load(label);
-    const existing = new Set(history.map(item => this.itemKey(item)));
     const incoming = [];
     for (const result of results) {
       const item = this.toStorageItem(label, result);
       if (!item) continue;
-      const key = this.itemKey(item);
-      if (existing.has(key)) continue;
-      existing.add(key);
       incoming.push(item);
     }
-    this.save(label, incoming.concat(history));
+    if (!incoming.length) return [];
+    const overlap = this.findSnapshotOverlap(incoming, history);
+    this.save(label, incoming.concat(history.slice(overlap)));
+    return incoming;
   },
 
   toStorageItem(label, result) {
@@ -332,27 +336,73 @@ const ResultHistoryStore = {
     const base = {
       color: this.normalizeColor(result.color),
       multiplier: result.multiplier || null,
-      time: Date.now()
+      time: result.time || Date.now(),
+      storageId: result.storageId || this.createStorageId()
     };
     if (label === 'wheel') {
       const item = { cellIndex: result.number, cellColor: base.color, multiplier: base.multiplier, time: base.time };
       if (result.roundId) item.roundId = result.roundId;
+      else item.storageId = base.storageId;
       return item;
     }
     const item = { number: result.number, color: base.color, time: base.time };
     if (result.roundId) item.roundId = result.roundId;
+    else item.storageId = base.storageId;
     return item;
+  },
+
+  createStorageId() {
+    return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
   },
 
   normalizeColor(color) {
     return String(color || '').toLowerCase();
   },
 
-  itemKey(item) {
-    if (item.roundId) return 'round:' + item.roundId;
+  itemSignature(item) {
     const number = item.cellIndex ?? item.number ?? '';
     const color = this.normalizeColor(item.cellColor ?? item.color);
     return number + ':' + color + ':' + (item.multiplier || '');
+  },
+
+  stableKey(item) {
+    if (item.roundId) return 'round:' + item.roundId;
+    return '';
+  },
+
+  sameRoundOrSignature(a, b) {
+    if (!a || !b) return false;
+    const stableA = this.stableKey(a);
+    const stableB = this.stableKey(b);
+    if (stableA && stableB) return stableA === stableB;
+    return this.itemSignature(a) === this.itemSignature(b);
+  },
+
+  isImmediateDuplicate(previous, item) {
+    if (!previous) return false;
+    const stablePrevious = this.stableKey(previous);
+    const stableItem = this.stableKey(item);
+    if (stablePrevious && stableItem) return stablePrevious === stableItem;
+    const previousTime = Number(previous.time || 0);
+    const itemTime = Number(item.time || Date.now());
+    return this.itemSignature(previous) === this.itemSignature(item) &&
+      previousTime > 0 &&
+      Math.abs(itemTime - previousTime) < this.duplicateWindowMs;
+  },
+
+  findSnapshotOverlap(incoming, history) {
+    const max = Math.min(incoming.length, history.length);
+    for (let size = max; size > 0; size--) {
+      let matches = true;
+      for (let i = 0; i < size; i++) {
+        if (!this.sameRoundOrSignature(incoming[incoming.length - size + i], history[i])) {
+          matches = false;
+          break;
+        }
+      }
+      if (matches) return size;
+    }
+    return 0;
   }
 };
 

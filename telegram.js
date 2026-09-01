@@ -6,6 +6,7 @@ const TelegramService = {
   errorStoreKey: 'telegram-last-error-v1',
   lockPrefix: 'telegram-live-lock:',
   ownerKey: 'telegram-owner-name',
+  liveSendingTimeoutMs: 20000,
   clientId: uid(),
   initialized: false,
   queues: {},
@@ -36,6 +37,7 @@ const TelegramService = {
   },
 
   async sendAllInitialLiveMessages() {
+    if (!this.initialized) return;
     const robots = RobotEngine.getAllRobots().filter(robot => (
       robot.status === 'online' && this.shouldSendLive(robot)
     ));
@@ -53,7 +55,7 @@ const TelegramService = {
     if (!token) return;
     await this.cleanupStaleMessages();
     const robots = RobotEngine.getAllRobots().filter(r => (
-      r.status === 'online' && this.isTelegramEnabled(r)
+      r.status === 'online' && this.shouldSendLive(r)
     ));
     for (const robot of robots) {
       await this.recalibrateRobot(robot);
@@ -189,7 +191,6 @@ const TelegramService = {
   async handleResultChange(result) {
     await this.updateLiveMessages(result);
     await this.sendPendingEntryMessages(result);
-    await this.refreshResolvedEntryMessages(result);
   },
 
   async handleRobotStarted(d) {
@@ -424,7 +425,8 @@ const TelegramService = {
     const messages = this.getLiveMessages();
     const key = this.messageKey(robot);
     const current = messages[key];
-    if (current?.text === text) return true;
+    if (current?.sending && Date.now() - (current.updatedAt || 0) < this.liveSendingTimeoutMs) return false;
+    if (current?.messageId && current?.text === text) return true;
 
     if (current?.messageId) {
       const edited = await this.api(token, 'editMessageText', {
@@ -445,9 +447,37 @@ const TelegramService = {
         this.saveLiveMessages(messages);
         return true;
       }
-      delete messages[key];
-      this.saveLiveMessages(messages);
+      if (this.isEditMessageNotFound(edited)) {
+        delete messages[key];
+        this.saveLiveMessages(messages);
+      } else if (this.isMessageCantBeEdited(edited)) {
+        const deleted = await this.api(token, 'deleteMessage', {
+          chat_id: chatId,
+          message_id: current.messageId
+        });
+        if (!deleted.ok && !this.isAlreadyDeleted(deleted)) {
+          this.logApiError('editMessageText/live', edited);
+          this.logApiError('deleteMessage/live', deleted);
+          return false;
+        }
+        delete messages[key];
+        this.saveLiveMessages(messages);
+      } else {
+        this.logApiError('editMessageText/live', edited);
+        return false;
+      }
     }
+
+    const pending = this.getLiveMessages();
+    pending[key] = {
+      sending: true,
+      text,
+      robotId: robot.id,
+      chatId,
+      owner: this.clientId,
+      updatedAt: Date.now()
+    };
+    this.saveLiveMessages(pending);
 
     const sent = await this.api(token, 'sendMessage', {
       chat_id: chatId,
@@ -455,10 +485,16 @@ const TelegramService = {
       disable_web_page_preview: true
     });
     if (sent.ok && sent.result?.message_id) {
-      messages[key] = { messageId: sent.result.message_id, text, updatedAt: Date.now() };
-      this.saveLiveMessages(messages);
+      const latest = this.getLiveMessages();
+      latest[key] = { messageId: sent.result.message_id, text, updatedAt: Date.now() };
+      this.saveLiveMessages(latest);
       return true;
     } else {
+      const latest = this.getLiveMessages();
+      if (latest[key]?.sending && latest[key]?.owner === this.clientId) {
+        delete latest[key];
+        this.saveLiveMessages(latest);
+      }
       this.logApiError('sendMessage/live', sent);
       return false;
     }
@@ -474,6 +510,7 @@ const TelegramService = {
     const messages = this.getEntryMessages();
     const current = messages[key];
     const messageId = current?.messageId;
+    if (messageId && current?.text === text) return true;
 
     if (messageId) {
       const edited = await this.api(token, 'editMessageText', {
@@ -601,6 +638,20 @@ const TelegramService = {
     return response?.description && response.description.toLowerCase().includes('message is not modified');
   },
 
+  isEditMessageNotFound(response) {
+    const description = String(response?.description || '').toLowerCase();
+    return (
+      description.includes('message to edit not found') ||
+      description.includes('message identifier is not specified') ||
+      description.includes('message_id_invalid')
+    );
+  },
+
+  isMessageCantBeEdited(response) {
+    const description = String(response?.description || '').toLowerCase();
+    return description.includes('message can\'t be edited');
+  },
+
   isRecoverableEditError(response) {
     const description = String(response?.description || '').toLowerCase();
     return (
@@ -684,7 +735,6 @@ const TelegramService = {
         'Resultado: ' + resultEmoji + ' ' + resultLabel,
         '━━━━━━━━━━━━━━━━━━━',
         '📊 PLACAR: ✅' + wins + 'W / ❌' + losses + 'L (' + rate + '%)',
-        ...this.buildEntryHistoryLines(robot)
       ].join('\n');
     }
 
@@ -697,7 +747,6 @@ const TelegramService = {
         'Resultado: ' + resultEmoji + ' ' + resultLabel,
         '━━━━━━━━━━━━━━━━━━━',
         '📊 PLACAR: ✅' + wins + 'W / ❌' + losses + 'L (' + rate + '%)',
-        ...this.buildEntryHistoryLines(robot)
       ].join('\n');
     }
 
@@ -708,7 +757,6 @@ const TelegramService = {
         '⚡️ G' + (signal.gale || 1) + ' - TENTANDO NOVAMENTE',
         '━━━━━━━━━━━━━━━━━━━',
         'Resultado: ' + resultEmoji + ' ' + resultLabel,
-        ...this.buildEntryHistoryLines(robot)
       ].join('\n');
     }
 
@@ -719,8 +767,7 @@ const TelegramService = {
       target.emoji + ' ' + target.label,
       '━━━━━━━━━━━━━━━━━━━━',
       '📈 Aproveitamento: ' + rate + '%',
-      this.formatRateBar(rate),
-      ...this.buildEntryHistoryLines(robot)
+      this.formatRateBar(rate)
     ].join('\n');
   },
 
@@ -747,8 +794,8 @@ const TelegramService = {
       '{game}': robot.game === 'wheel' ? 'Wheel' : 'Double',
       '{strategy}': this.formatStrategy(robot.strategy),
       '{status}': status,
-      '{history}': this.buildEntryHistoryLines(robot).join('\n'),
-      '{historyEmojis}': this.formatRecentHistory(robot),
+      '{history}': '',
+      '{historyEmojis}': '',
       '{lastResult}': robot.lastResult ? this.colorEmoji(robot.lastResult.color) + ' ' + this.colorLabel(robot.lastResult.color) : '--',
       '{diagnosticStatus}': (robot.diagnostic?.status || 'IDLE'),
       '{confidenceDiag}': (robot.diagnostic?.confidence || 0) + '%',
@@ -942,21 +989,67 @@ const TelegramService = {
   },
 
   formatRecentHistory(robot) {
-    const key = robot.game === 'wheel' ? 'historico-wheel-v1' : 'historico-double-v1';
-    let history = [];
-    try {
-      const raw = JSON.parse(localStorage.getItem(key) || '[]');
-      if (Array.isArray(raw)) {
-        history = raw.slice(0, 10).map(r => ({
-          color: robot.game === 'double' ? (r.color || '').toUpperCase() : (r.cellColor || r.color || '').toUpperCase()
-        }));
-      }
-    } catch {}
-    if (!history.length && robot.history && robot.history.length) {
-      history = robot.history.slice(0, 10);
-    }
+    const history = this.getTelegramHistory(robot, 10);
     if (!history.length) return 'Aguardando resultados...';
     return history.map(item => this.colorEmoji(item.color)).join(' ');
+  },
+
+  getTelegramHistory(robot, limit) {
+    const stored = this.loadTelegramHistoryFromStorage(robot);
+    let history = stored.length ? stored : this.normalizeTelegramHistory(robot, robot.history || []);
+    if (robot.game === 'wheel') history = this.removeImmediateWheelDuplicates(history);
+    return history.slice(0, limit);
+  },
+
+  loadTelegramHistoryFromStorage(robot) {
+    const key = robot.game === 'wheel' ? 'historico-wheel-v1' : 'historico-double-v1';
+    try {
+      const raw = JSON.parse(localStorage.getItem(key) || '[]');
+      return this.normalizeTelegramHistory(robot, Array.isArray(raw) ? raw : []);
+    } catch {
+      return [];
+    }
+  },
+
+  normalizeTelegramHistory(robot, history) {
+    return history.map(r => {
+      const rawColor = robot.game === 'double' ? r.color : (r.cellColor ?? r.color);
+      const number = robot.game === 'double' ? (r.number ?? r.cellIndex) : (r.cellIndex ?? r.number);
+      const roundId = r.roundId ?? r.roundID ?? r.roundUuid ?? r.roundUUID ?? r.gameId ?? r.gameID ?? r.id ?? r.uuid;
+      const item = {
+        color: String(rawColor || '').toUpperCase(),
+        number,
+        multiplier: r.multiplier || null,
+        time: r.time || r.timestamp || 0
+      };
+      if (roundId !== undefined && roundId !== null) item.roundId = String(roundId);
+      if (r.storageId) item.storageId = String(r.storageId);
+      return item;
+    }).filter(item => item.color);
+  },
+
+  removeImmediateWheelDuplicates(history) {
+    const cleaned = [];
+    history.forEach(item => {
+      if (!this.isImmediateWheelDuplicate(cleaned[cleaned.length - 1], item)) {
+        cleaned.push(item);
+      }
+    });
+    return cleaned;
+  },
+
+  isImmediateWheelDuplicate(previous, item) {
+    if (!previous || !item) return false;
+    const previousRound = previous.roundId ? 'round:' + previous.roundId : '';
+    const itemRound = item.roundId ? 'round:' + item.roundId : '';
+    if (previousRound && itemRound) return previousRound === itemRound;
+    const previousSig = [previous.color || '', previous.number ?? '', previous.multiplier || ''].join(':');
+    const itemSig = [item.color || '', item.number ?? '', item.multiplier || ''].join(':');
+    if (previousSig !== itemSig) return false;
+    const previousTime = Number(previous.time || 0);
+    const itemTime = Number(item.time || 0);
+    if (!previousTime || !itemTime) return true;
+    return Math.abs(itemTime - previousTime) <= 15000;
   },
 
   colorEmoji(color) {

@@ -13,6 +13,7 @@ const DEFAULT_WS_AUTH = {
 };
 
 const MAX_RESULTS = 500;
+const DUPLICATE_WINDOW_MS = 15000;
 
 const KEYS = {
   double: "historico-double-v1",
@@ -226,6 +227,10 @@ function resultKeyWheel(r){ return `${r.cellIndex}:${r.cellColor}`; }
 function stableKeyDouble(r){ return r && r.roundId ? "round:" + r.roundId : ""; }
 function stableKeyWheel(r){ return r && r.roundId ? "round:" + r.roundId : ""; }
 
+function createStorageId(){
+  return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+}
+
 function loadHistory(key){
   try{
     const saved = JSON.parse(localStorage.getItem(key) || "null");
@@ -236,33 +241,48 @@ function loadHistory(key){
 
 function saveHistory(key, data){
   try{
-    const seen = new Set();
-    const deduped = [];
-    const keyFn = key === KEYS.wheel ? resultKeyWheel : resultKeyDouble;
+    const seenRounds = new Set();
+    const saved = [];
+    const stableKeyFn = key === KEYS.wheel ? stableKeyWheel : stableKeyDouble;
     for(const item of data){
-      const k = keyFn(item);
-      if(seen.has(k)) continue;
-      seen.add(k);
-      deduped.push(item);
+      const stable = stableKeyFn(item);
+      if(stable){
+        if(seenRounds.has(stable)) continue;
+        seenRounds.add(stable);
+      }
+      saved.push(item);
     }
-    localStorage.setItem(key, JSON.stringify(deduped.slice(0, MAX_RESULTS)));
+    localStorage.setItem(key, JSON.stringify(saved.slice(0, MAX_RESULTS)));
   }catch{}
 }
 
-function syncFromServer(key, items, normalizeFn, keyFn){
+function isImmediateDuplicate(previous, item, keyFn, stableKeyFn){
+  if(!previous || !item) return false;
+  const stablePrevious = stableKeyFn(previous);
+  const stableItem = stableKeyFn(item);
+  if(stablePrevious && stableItem) return stablePrevious === stableItem;
+  const previousTime = Number(previous.time || 0);
+  const itemTime = Number(item.time || Date.now());
+  return keyFn(previous) === keyFn(item) &&
+    previousTime > 0 &&
+    Math.abs(itemTime - previousTime) < DUPLICATE_WINDOW_MS;
+}
+
+function syncFromServer(key, items, normalizeFn, keyFn, stableKeyFn){
   if(!Array.isArray(items) || !items.length) return false;
-  const parsed = items.map(normalizeFn).filter(Boolean);
+  const parsed = items.map(normalizeFn).filter(Boolean).map(item => ({...item, time: item.time || Date.now(), storageId: item.roundId ? item.storageId : (item.storageId || createStorageId())}));
   if(!parsed.length) return false;
 
   let current = loadHistory(key);
   let added = false;
 
   for(const item of parsed){
-    const k = keyFn(item);
-    if(current.length && keyFn(current[0]) === k) continue;
+    if(isImmediateDuplicate(current[0], item, keyFn, stableKeyFn)) continue;
     let exists = false;
     for(let i=0;i<Math.min(current.length,20);i++){
-      if(keyFn(current[i])===k){exists=true;break;}
+      const stableCurrent = stableKeyFn(current[i]);
+      const stableItem = stableKeyFn(item);
+      if(stableCurrent && stableItem && stableCurrent === stableItem){exists=true;break;}
     }
     if(!exists){
       current.unshift(item);
@@ -302,7 +322,7 @@ function findSnapshotOverlap(parsed, current, keyFn, stableKeyFn){
 
 function syncSnapshotFromServer(storageKey, items, normalizeFn, keyFn, stableKeyFn){
   if(!Array.isArray(items) || !items.length) return false;
-  const parsed = items.map(normalizeFn).filter(Boolean);
+  const parsed = items.map(normalizeFn).filter(Boolean).map(item => ({...item, time: item.time || Date.now(), storageId: item.roundId ? item.storageId : (item.storageId || createStorageId())}));
   if(!parsed.length) return false;
 
   const current = loadHistory(storageKey);
@@ -326,17 +346,13 @@ function syncWheelFromServer(items){
 function addResult(key, item, normalizeFn, keyFn){
   const r = normalizeFn(item);
   if(!r) return false;
+  r.time = r.time || Date.now();
+  if(!r.roundId) r.storageId = r.storageId || createStorageId();
 
   let history = loadHistory(key);
-  const sig = keyFn(r);
+  const stableKeyFn = key === KEYS.wheel ? stableKeyWheel : stableKeyDouble;
   if(history.length){
-    const stable = r.roundId ? "round:" + r.roundId : "";
-    const topStable = history[0] && history[0].roundId ? "round:" + history[0].roundId : "";
-    if(stable || topStable){
-      if(stable && topStable && stable === topStable) return false;
-    }else if(keyFn(history[0]) === sig){
-      return false;
-    }
+    if(isImmediateDuplicate(history[0], r, keyFn, stableKeyFn)) return false;
   }
 
   history.unshift(r);

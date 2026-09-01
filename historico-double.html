@@ -58,19 +58,13 @@ const countEl = document.getElementById('resultCount');
 const connDot = document.getElementById('connDot');
 const connText = document.getElementById('connText');
 const STORAGE_KEY = 'historico-double-v1';
-const MAX_RESULTS = 1000;
+const MAX_RESULTS = 500;
 
 function loadHistory() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
     if (!Array.isArray(saved) || !saved.length) return [];
-    const seen = new Set();
-    return saved.filter(r => {
-      const k = String(r.number ?? r.cellIndex ?? '') + ':' + String(r.color ?? r.cellColor ?? '').toLowerCase();
-      if (seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    });
+    return saved;
   } catch {}
   return [];
 }

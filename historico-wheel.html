@@ -7,7 +7,8 @@
 <link rel="stylesheet" href="style.css">
 <style>
 #results{display:grid;grid-template-columns:repeat(20,1fr);gap:10px;width:100%}
-.result{aspect-ratio:1/1;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:clamp(14px,1.5vw,20px);font-weight:800;color:#fff;border:1px solid rgba(255,255,255,.09);box-shadow:0 8px 24px rgba(0,0,0,.28);user-select:none;min-height:40px}
+.result{aspect-ratio:1/1;border-radius:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:clamp(14px,1.5vw,20px);font-weight:800;color:#fff;border:1px solid rgba(255,255,255,.09);box-shadow:0 8px 24px rgba(0,0,0,.28);user-select:none;min-height:40px;line-height:1}
+.result .multiplier{font-size:clamp(8px,.8vw,11px);font-weight:700;opacity:.86}
 .red{background:linear-gradient(145deg,#ff4a55,#c7192d)}
 .black{background:linear-gradient(145deg,#262a33,#090a0e)}
 .grey,.gray{background:linear-gradient(145deg,#262a33,#090a0e)}
@@ -59,29 +60,68 @@ const countEl = document.getElementById('resultCount');
 const connDot = document.getElementById('connDot');
 const connText = document.getElementById('connText');
 const STORAGE_KEY = 'historico-wheel-v1';
-const MAX_RESULTS = 100;
+const MAX_RESULTS = 500;
+const DUPLICATE_WINDOW_MS = 15000;
 
 function loadHistory() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
     if (!Array.isArray(saved) || !saved.length) return [];
-    const seen = new Set();
-    return saved.filter(r => {
-      const k = String(r.cellIndex ?? r.number ?? '') + ':' + String(r.cellColor ?? r.color ?? '').toLowerCase() + ':' + (r.multiplier || '');
-      if (seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    });
+    const cleaned = removeImmediateDuplicates(saved);
+    if (cleaned.length !== saved.length) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned.slice(0, MAX_RESULTS)));
+    }
+    return cleaned;
   } catch {}
   return [];
+}
+
+function removeImmediateDuplicates(history) {
+  const cleaned = [];
+  for (const item of history) {
+    if (!isImmediateDuplicate(cleaned[cleaned.length - 1], item)) {
+      cleaned.push(item);
+    }
+  }
+  return cleaned;
+}
+
+function isImmediateDuplicate(previous, item) {
+  if (!previous || !item) return false;
+  const previousRound = getRoundKey(previous);
+  const itemRound = getRoundKey(item);
+  if (previousRound && itemRound) return previousRound === itemRound;
+  if (resultSignature(previous) !== resultSignature(item)) return false;
+  const previousTime = getResultTime(previous);
+  const itemTime = getResultTime(item);
+  if (!previousTime || !itemTime) return true;
+  return Math.abs(previousTime - itemTime) <= DUPLICATE_WINDOW_MS;
+}
+
+function getRoundKey(result) {
+  const roundId = result.roundId ?? result.roundID ?? result.roundUuid ?? result.roundUUID ?? result.gameId ?? result.gameID ?? result.id ?? result.uuid;
+  return roundId !== undefined && roundId !== null ? String(roundId) : '';
+}
+
+function resultSignature(result) {
+  return [
+    getNumber(result),
+    getColor(result),
+    result.multiplier || ''
+  ].join(':');
+}
+
+function getResultTime(result) {
+  return Number(result.time || result.timestamp || 0);
 }
 
 function render() {
   const history = loadHistory().slice(0, MAX_RESULTS);
   countEl.textContent = history.length + ' resultados';
-  resultsEl.innerHTML = history.map(r =>
-    `<div class="result ${getColor(r)}">${r.multiplier ? r.multiplier + 'X' : String(getNumber(r))}</div>`
-  ).join('');
+  resultsEl.innerHTML = history.map(r => {
+    const multiplier = r.multiplier ? `<span class="multiplier">${r.multiplier}X</span>` : '';
+    return `<div class="result ${getColor(r)}"><span>${String(getNumber(r))}</span>${multiplier}</div>`;
+  }).join('');
 }
 
 function getColor(result) {
@@ -90,6 +130,7 @@ function getColor(result) {
   if (c === 'green') return 'green';
   if (c === 'white') return 'white';
   if (c === 'blue') return 'blue';
+  if (c === 'grey' || c === 'gray') return 'grey';
   return 'black';
 }
 

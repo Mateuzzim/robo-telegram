@@ -19,6 +19,7 @@ class Robot {
     this.target = config.target || { color: 'any', multiplier: null };
     this.filterMode = config.filterMode || 'moderado';
     this.history = Array.isArray(config.history) ? config.history : [];
+    if (this.game === 'wheel') this.history = this.removeImmediateDuplicateResults(this.history);
     this.stats = {
       signals: 0, wins: 0, losses: 0, winSG: 0, winG1: 0, winG2: 0,
       currentStreak: 0, maxWinStreak: 0, maxLossStreak: 0,
@@ -59,13 +60,52 @@ class Robot {
     };
     const roundId = result?.roundId ?? result?.roundID ?? result?.roundUuid ?? result?.roundUUID ?? result?.gameId ?? result?.gameID ?? result?.id ?? result?.uuid;
     if (roundId !== undefined && roundId !== null) normalized.roundId = String(roundId);
+    if (result?.storageId) normalized.storageId = String(result.storageId);
+    if (result?.time) normalized.time = result.time;
     return normalized;
   }
 
   getResultKey(result) {
     const normalized = result?.color !== undefined && result?.number !== undefined ? result : this.normalizeResult(result);
     if (normalized.roundId) return 'round:' + normalized.roundId;
+    if (normalized.storageId) return 'stored:' + normalized.storageId;
     return (normalized.color || '') + ':' + (normalized.number ?? '');
+  }
+
+  getResultSignature(result) {
+    const normalized = result?.color !== undefined && result?.number !== undefined ? result : this.normalizeResult(result);
+    return [
+      normalized.color || '',
+      normalized.number ?? '',
+      normalized.multiplier || ''
+    ].join(':');
+  }
+
+  getResultTime(result) {
+    return Number(result?.time || result?.timestamp || 0);
+  }
+
+  isImmediateDuplicateResult(previous, result) {
+    if (!previous || !result) return false;
+    const prevKey = this.getResultKey(previous);
+    const nextKey = this.getResultKey(result);
+    if ((previous.roundId || result.roundId) && prevKey === nextKey) return true;
+    if (this.getResultSignature(previous) !== this.getResultSignature(result)) return false;
+    const prevTime = this.getResultTime(previous);
+    const nextTime = this.getResultTime(result) || Date.now();
+    if (!prevTime) return true;
+    return Math.abs(nextTime - prevTime) <= 15000;
+  }
+
+  removeImmediateDuplicateResults(history) {
+    if (!Array.isArray(history) || !history.length) return [];
+    const cleaned = [];
+    history.forEach(item => {
+      if (!this.isImmediateDuplicateResult(cleaned[cleaned.length - 1], item)) {
+        cleaned.push(item);
+      }
+    });
+    return cleaned;
   }
 
   getFixedTargetColor() {
@@ -105,9 +145,10 @@ class Robot {
     const normalized = this.normalizeResult(result);
     const color = normalized.color;
     const key = this.getResultKey(normalized);
+    if (this.game === 'wheel' && this.isImmediateDuplicateResult(this.history[0], normalized)) return false;
     this.lastResult = { ...result, ...normalized, resultKey: key };
     this.lastHeartbeat = Date.now();
-    this.history.unshift({ color, number: normalized.number, multiplier: normalized.multiplier, roundId: normalized.roundId, resultKey: key, timestamp: Date.now() });
+    this.history.unshift({ color, number: normalized.number, multiplier: normalized.multiplier, roundId: normalized.roundId, storageId: normalized.storageId, resultKey: key, timestamp: normalized.time || Date.now() });
     if (this.history.length > 200) this.history.pop();
     this.addLog('Resultado: ' + (color || normalized.number));
     this.analyze();

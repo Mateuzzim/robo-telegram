@@ -23,33 +23,29 @@ App.init();
 const statusEl = document.getElementById('status');
 
 const KEYS = { wheel: 'historico-wheel-v1', double: 'historico-double-v1' };
-const MAX_RESULTS = 100;
+const MAX_RESULTS = 500;
+const DUPLICATE_WINDOW_MS = 15000;
 
 function loadHistory(key) {
   try {
     const saved = JSON.parse(localStorage.getItem(key) || 'null');
-    if (!Array.isArray(saved)) return [];
-    const seen = new Set();
-    return saved.filter(r => {
-      const k = resultKey(r);
-      if (seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    });
+    if (Array.isArray(saved)) return saved;
   } catch {}
   return [];
 }
 
 function saveHistory(key, data) {
-  const seen = new Set();
-  const deduped = [];
+  const seenRounds = new Set();
+  const saved = [];
   for (const item of data) {
-    const k = resultKey(item);
-    if (seen.has(k)) continue;
-    seen.add(k);
-    deduped.push(item);
+    const roundKey = stableKey(item);
+    if (roundKey) {
+      if (seenRounds.has(roundKey)) continue;
+      seenRounds.add(roundKey);
+    }
+    saved.push(item);
   }
-  localStorage.setItem(key, JSON.stringify(deduped.slice(0, MAX_RESULTS)));
+  localStorage.setItem(key, JSON.stringify(saved.slice(0, MAX_RESULTS)));
 }
 
 function normalizeColor(color) {
@@ -62,12 +58,46 @@ function resultKey(r) {
   return number + ':' + color + ':' + (r.multiplier || '');
 }
 
-function isDuplicate(history, item) {
-  const key = resultKey(item);
-  for (let i = 0; i < Math.min(history.length, 5); i++) {
-    if (resultKey(history[i]) === key) return true;
+function stableKey(r) {
+  return r?.roundId ? 'round:' + r.roundId : '';
+}
+
+function createStorageId() {
+  return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+}
+
+function sameRoundOrResult(a, b) {
+  const stableA = stableKey(a);
+  const stableB = stableKey(b);
+  if (stableA && stableB) return stableA === stableB;
+  return resultKey(a) === resultKey(b);
+}
+
+function isDuplicate(previous, item) {
+  if (!previous) return false;
+  const stablePrevious = stableKey(previous);
+  const stableItem = stableKey(item);
+  if (stablePrevious && stableItem) return stablePrevious === stableItem;
+  const previousTime = Number(previous.time || 0);
+  const itemTime = Number(item.time || Date.now());
+  return resultKey(previous) === resultKey(item) &&
+    previousTime > 0 &&
+    Math.abs(itemTime - previousTime) < DUPLICATE_WINDOW_MS;
+}
+
+function findSnapshotOverlap(incoming, history) {
+  const max = Math.min(incoming.length, history.length);
+  for (let size = max; size > 0; size--) {
+    let matches = true;
+    for (let i = 0; i < size; i++) {
+      if (!sameRoundOrResult(incoming[incoming.length - size + i], history[i])) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches) return size;
   }
-  return false;
+  return 0;
 }
 
 function addResult(label, data) {
@@ -76,11 +106,13 @@ function addResult(label, data) {
   const history = loadHistory(key);
   let item;
   if (label === 'wheel') {
-    item = { cellIndex: data.number, cellColor: normalizeColor(data.color), multiplier: data.multiplier, time: Date.now() };
+    item = { cellIndex: data.number ?? data.cellIndex, cellColor: normalizeColor(data.color ?? data.cellColor), multiplier: data.multiplier, time: Date.now() };
   } else {
-    item = { number: data.number, color: normalizeColor(data.color), time: Date.now() };
+    item = { number: data.number ?? data.cellIndex, color: normalizeColor(data.color ?? data.cellColor), time: Date.now() };
   }
-  if (isDuplicate(history, item)) return;
+  if (data.roundId !== undefined && data.roundId !== null) item.roundId = String(data.roundId);
+  else item.storageId = data.storageId || createStorageId();
+  if (isDuplicate(history[0], item)) return;
   history.unshift(item);
   saveHistory(key, history);
   updateStatus(label, item);
@@ -90,15 +122,20 @@ function mergeHistory(label, results) {
   const key = KEYS[label];
   if (!key) return;
   const history = loadHistory(key);
-  const existing = new Set(history.map(r => resultKey(r)));
   const incoming = results.map(r => {
     if (label === 'wheel') {
-      return { cellIndex: r.number, cellColor: normalizeColor(r.color), multiplier: r.multiplier, time: Date.now() };
+      const item = { cellIndex: r.number ?? r.cellIndex, cellColor: normalizeColor(r.color ?? r.cellColor), multiplier: r.multiplier, time: r.time || Date.now() };
+      if (r.roundId !== undefined && r.roundId !== null) item.roundId = String(r.roundId);
+      else item.storageId = r.storageId || createStorageId();
+      return item;
     }
-    return { number: r.number, color: normalizeColor(r.color), time: Date.now() };
+    const item = { number: r.number ?? r.cellIndex, color: normalizeColor(r.color ?? r.cellColor), time: r.time || Date.now() };
+    if (r.roundId !== undefined && r.roundId !== null) item.roundId = String(r.roundId);
+    else item.storageId = r.storageId || createStorageId();
+    return item;
   });
-  const newItems = incoming.filter(r => !existing.has(resultKey(r)));
-  const merged = newItems.concat(history).slice(0, MAX_RESULTS);
+  const overlap = findSnapshotOverlap(incoming, history);
+  const merged = incoming.concat(history.slice(overlap)).slice(0, MAX_RESULTS);
   saveHistory(key, merged);
   updateStatus(label, merged[0]);
 }

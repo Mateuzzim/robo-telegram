@@ -27,7 +27,7 @@
   </div>
 </nav>
 <div class="container">
-  <div class="grid-5" id="stats" style="margin-bottom:20px"></div>
+  <div class="grid-6" id="stats" style="margin-bottom:20px"></div>
   <div class="grid-2">
     <div class="card">
       <div class="card-header"><span class="card-title">Robos Ativos</span></div>
@@ -61,8 +61,8 @@ const robotsEl = document.getElementById('robotsList');
 const signalsEl = document.getElementById('signalsTable');
 const connDot = document.getElementById('connDot');
 const connText = document.getElementById('connText');
-let feedEntries = [];
-let signals = [];
+let feedEvents = [];
+let signalEvents = [];
 
 EventBus.on('ws-status', (d) => {
   if (d.label === 'wheel') {
@@ -78,37 +78,176 @@ function renderConnectionStatus() {
 }
 
 EventBus.on('robot:log', (d) => {
-  feedEntries.unshift(d);
-  if (feedEntries.length > 100) feedEntries.pop();
+  upsertFeedEvent(d);
   renderFeed();
 });
 
 EventBus.on('signal:created', (d) => {
-  signals.unshift(d);
-  if (signals.length > 50) signals.pop();
+  upsertSignalEvent(d);
+  upsertFeedEvent({ time: d.createdAt || Date.now(), id: d.robotId, message: 'Sinal: ' + d.target });
+  renderDashboard();
   renderSignals();
+  renderFeed();
+});
+
+EventBus.on('signal:gale', (d) => {
+  upsertSignalEvent(d);
+  upsertFeedEvent({ time: Date.now(), id: d.robotId, message: 'Gale ' + (d.gale || 1) + ': ' + d.target });
+  renderDashboard();
+  renderSignals();
+  renderFeed();
 });
 
 EventBus.on('signal:win', (d) => {
-  feedEntries.unshift({ time: Date.now(), id: d.robotId, message: 'WIN! ' + d.target });
+  upsertSignalEvent(d);
+  upsertFeedEvent({ time: Date.now(), id: d.robotId, message: 'WIN! ' + d.target });
+  renderDashboard();
+  renderSignals();
   renderFeed();
 });
 
 EventBus.on('signal:loss', (d) => {
-  feedEntries.unshift({ time: Date.now(), id: d.robotId, message: 'LOSS! ' + d.target });
+  upsertSignalEvent(d);
+  upsertFeedEvent({ time: Date.now(), id: d.robotId, message: 'LOSS! ' + d.target });
+  renderDashboard();
+  renderSignals();
+  renderFeed();
+});
+
+EventBus.on('robot:state', () => {
+  renderDashboard();
+  renderSignals();
+  renderFeed();
+});
+
+EventBus.on('robots:synced', () => {
+  renderDashboard();
+  renderSignals();
   renderFeed();
 });
 
 function renderFeed() {
-  feedEl.innerHTML = feedEntries.slice(0, 30).map(e =>
-    `<div class="feed-entry"><span class="feed-time">${formatTime(e.time)}</span><span class="feed-robot">${escapeHtml(e.id)}</span><span class="feed-msg">${escapeHtml(e.message)}</span></div>`
+  const entries = getGlobalFeedEntries();
+  if (!entries.length) {
+    feedEl.innerHTML = '<div class="feed-entry" style="color:var(--text3);text-align:center">Nenhum evento registrado</div>';
+    return;
+  }
+  feedEl.innerHTML = entries.slice(0, 30).map(e =>
+    `<div class="feed-entry"><span class="feed-time">${formatTime(e.time)}</span><span class="feed-robot">${escapeHtml(e.robotName || e.id || '--')}</span><span class="feed-msg">${escapeHtml(e.message || '')}</span></div>`
   ).join('');
 }
 
+function upsertFeedEvent(entry) {
+  if (!entry || !entry.message) return;
+  const normalized = {
+    ...entry,
+    time: entry.time || Date.now()
+  };
+  const key = getFeedKey(normalized);
+  feedEvents = feedEvents.filter(e => getFeedKey(e) !== key);
+  feedEvents.unshift(normalized);
+  if (feedEvents.length > 200) feedEvents.length = 200;
+}
+
+function getGlobalFeedEntries() {
+  const byKey = new Map();
+  getStoredFeedEntries().forEach(entry => addFeedToMap(byKey, entry));
+  feedEvents.forEach(entry => addFeedToMap(byKey, entry));
+  return [...byKey.values()]
+    .sort((a, b) => (b.time || 0) - (a.time || 0))
+    .slice(0, 200);
+}
+
+function getStoredFeedEntries() {
+  return RobotEngine.getAllStates()
+    .flatMap(robot => (robot.logs || []).map(log => ({
+      ...log,
+      id: log.id || robot.id,
+      robotName: robot.name,
+      time: log.time || robot.lastHeartbeat || 0
+    })));
+}
+
+function addFeedToMap(map, entry) {
+  if (!entry || !entry.message) return;
+  const key = getFeedKey(entry);
+  const current = map.get(key);
+  if (!current || (entry.time || 0) >= (current.time || 0)) {
+    map.set(key, entry);
+  }
+}
+
+function getFeedKey(entry) {
+  return [entry.id || '', entry.time || '', entry.message || ''].join('|');
+}
+
 function renderSignals() {
+  const signals = getLatestSignals();
+  if (!signals.length) {
+    signalsEl.innerHTML = '<tr><td colspan="5" style="color:var(--text3);text-align:center;padding:16px">Nenhum sinal registrado</td></tr>';
+    return;
+  }
   signalsEl.innerHTML = signals.slice(0, 15).map(s =>
-    `<tr><td>${escapeHtml(s.robotId)}</td><td>${escapeHtml(s.target)}</td><td>${s.confidence}%</td><td><span class="badge badge-signal">${s.status}</span></td><td>${formatTime(s.createdAt)}</td></tr>`
+    `<tr><td>${escapeHtml(s.robotName || s.robotId)}</td><td>${escapeHtml(formatSignalTarget(s))}</td><td>${s.confidence || 0}%</td><td>${createSignalBadge(s.status)}</td><td>${formatTime(s.createdAt)}</td></tr>`
   ).join('');
+}
+
+function upsertSignalEvent(signal) {
+  if (!signal) return;
+  const key = getSignalKey(signal);
+  signalEvents = signalEvents.filter(s => getSignalKey(s) !== key);
+  signalEvents.unshift({ ...signal, updatedAt: Date.now() });
+  if (signalEvents.length > 100) signalEvents.length = 100;
+}
+
+function getLatestSignals() {
+  const byKey = new Map();
+  signalEvents.forEach(signal => addSignalToMap(byKey, signal));
+  RobotEngine.getAllStates().forEach(robot => {
+    addSignalToMap(byKey, normalizeRobotSignal(robot, robot.currentSignal));
+    addSignalToMap(byKey, normalizeRobotSignal(robot, robot.lastSignal));
+  });
+  return [...byKey.values()].sort((a, b) =>
+    (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0)
+  );
+}
+
+function normalizeRobotSignal(robot, signal) {
+  if (!signal) return null;
+  return {
+    ...signal,
+    robotId: signal.robotId || robot.id,
+    robotName: robot.name,
+    game: signal.game || robot.game,
+    createdAt: signal.createdAt || robot.lastSignalTime || robot.lastHeartbeat || Date.now(),
+    updatedAt: signal.result?.time || signal.updatedAt || signal.createdAt || robot.lastSignalTime || Date.now()
+  };
+}
+
+function addSignalToMap(map, signal) {
+  if (!signal) return;
+  const key = getSignalKey(signal);
+  const current = map.get(key);
+  if (!current || (signal.updatedAt || signal.createdAt || 0) >= (current.updatedAt || current.createdAt || 0)) {
+    map.set(key, signal);
+  }
+}
+
+function getSignalKey(signal) {
+  return signal.id || [signal.robotId || '', signal.createdAt || '', signal.target || ''].join('|');
+}
+
+function formatSignalTarget(signal) {
+  const target = String(signal.target || '--').toUpperCase();
+  const labels = { RED: 'Vermelho', BLACK: 'Preto', GREY: 'Preto', GREEN: 'Verde', BLUE: 'Azul', WHITE: 'Branco' };
+  return labels[target] || target;
+}
+
+function createSignalBadge(status) {
+  const value = String(status || 'approved').toLowerCase();
+  const labels = { approved: 'Sinal', gale_pending: 'Gale', win: 'Win', loss: 'Loss' };
+  const colors = { win: 'badge-online', loss: 'badge-error', gale_pending: 'badge-paused', approved: 'badge-signal' };
+  return `<span class="badge ${colors[value] || 'badge-signal'}">${labels[value] || value}</span>`;
 }
 
 function renderDashboard() {
@@ -118,13 +257,15 @@ function renderDashboard() {
   const paused = robots.filter(r => r.status === 'paused').length;
   const totalSignals = robots.reduce((s, r) => s + (r.stats?.signals || 0), 0);
   const totalWins = robots.reduce((s, r) => s + (r.stats?.wins || 0), 0);
+  const totalLosses = robots.reduce((s, r) => s + (r.stats?.losses || 0), 0);
 
   statsEl.innerHTML =
     createStatCard('Online', online, 'green') +
     createStatCard('Offline', offline, 'red') +
     createStatCard('Pausados', paused, 'yellow') +
     createStatCard('Sinais', totalSignals, 'blue') +
-    createStatCard('Wins', totalWins, 'green');
+    createStatCard('Wins', totalWins, 'green') +
+    createStatCard('Loss', totalLosses, 'red');
 
   robotsEl.innerHTML = robots.map(r =>
     `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
@@ -135,9 +276,12 @@ function renderDashboard() {
 }
 
 renderDashboard();
+renderFeed();
 renderSignals();
 renderConnectionStatus();
 setInterval(renderDashboard, 5000);
+setInterval(renderFeed, 5000);
+setInterval(renderSignals, 5000);
 setInterval(renderConnectionStatus, 2000);
 </script>
 </body>

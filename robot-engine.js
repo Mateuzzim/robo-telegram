@@ -243,7 +243,7 @@ const RobotEngine = {
     try {
       const raw = JSON.parse(localStorage.getItem(key) || '[]');
       if (!Array.isArray(raw) || !raw.length) return false;
-      const existing = new Set(robot.history.map(h => h.roundId ? 'round:' + h.roundId : h.color + ':' + h.number + ':' + (h.multiplier || '')));
+      const existing = new Set(robot.history.map(h => h.roundId ? 'round:' + h.roundId : (h.storageId ? 'stored:' + h.storageId : h.color + ':' + h.number + ':' + (h.multiplier || '') + ':' + (h.timestamp || ''))));
       let added = 0;
       for (let i = raw.length - 1; i >= 0; i--) {
         const r = raw[i];
@@ -251,12 +251,15 @@ const RobotEngine = {
         const color = typeof robot.normalizeColor === 'function' ? robot.normalizeColor(rawColor) : String(rawColor || '').toUpperCase();
         const number = robot.game === 'double' ? r.number : (r.cellIndex ?? r.number);
         const roundId = r.roundId ?? r.roundID ?? r.roundUuid ?? r.roundUUID ?? r.gameId ?? r.gameID ?? r.id ?? r.uuid;
-        const id = roundId !== undefined && roundId !== null ? 'round:' + String(roundId) : color + ':' + number + ':' + (r.multiplier || '');
+        const storageId = r.storageId ? String(r.storageId) : '';
+        const timestamp = r.time || Date.now();
+        const id = roundId !== undefined && roundId !== null ? 'round:' + String(roundId) : (storageId ? 'stored:' + storageId : color + ':' + number + ':' + (r.multiplier || '') + ':' + timestamp);
         if (existing.has(id)) continue;
         existing.add(id);
         const item = robot.game === 'double'
-          ? { color, number, roundId: roundId !== undefined && roundId !== null ? String(roundId) : undefined, timestamp: Date.now() }
-          : { color, number, multiplier: r.multiplier, roundId: roundId !== undefined && roundId !== null ? String(roundId) : undefined, timestamp: Date.now() };
+          ? { color, number, roundId: roundId !== undefined && roundId !== null ? String(roundId) : undefined, storageId: storageId || undefined, timestamp }
+          : { color, number, multiplier: r.multiplier, roundId: roundId !== undefined && roundId !== null ? String(roundId) : undefined, storageId: storageId || undefined, timestamp };
+        if (robot.game === 'wheel' && typeof robot.isImmediateDuplicateResult === 'function' && robot.isImmediateDuplicateResult(robot.history[0], item)) continue;
         robot.history.unshift(item);
         added++;
       }
@@ -302,12 +305,20 @@ EventBus.on('results:history', (d) => {
   if (!d || !d.results || !d.results.length) return;
   RobotEngine.getAllRobots().forEach(robot => {
     if (robot.status === 'online' && robot.game === d.label) {
+      const existingStable = new Set(robot.history
+        .map(h => h.roundId ? 'round:' + h.roundId : (h.storageId ? 'stored:' + h.storageId : ''))
+        .filter(Boolean));
       d.results.forEach(r => {
         const rawColor = r.color ?? r.cellColor;
         const color = typeof robot.normalizeColor === 'function' ? robot.normalizeColor(rawColor) : String(rawColor || '').toUpperCase();
         const number = r.number ?? r.cellIndex;
         const roundId = r.roundId ?? r.roundID ?? r.roundUuid ?? r.roundUUID ?? r.gameId ?? r.gameID ?? r.id ?? r.uuid;
-        robot.history.unshift({ color, number, multiplier: r.multiplier, roundId: roundId !== undefined && roundId !== null ? String(roundId) : undefined, timestamp: Date.now() });
+        const item = { color, number, multiplier: r.multiplier, roundId: roundId !== undefined && roundId !== null ? String(roundId) : undefined, storageId: r.storageId ? String(r.storageId) : undefined, timestamp: r.time || Date.now() };
+        const stableKey = item.roundId ? 'round:' + item.roundId : (item.storageId ? 'stored:' + item.storageId : '');
+        if (stableKey && existingStable.has(stableKey)) return;
+        if (robot.game === 'wheel' && typeof robot.isImmediateDuplicateResult === 'function' && robot.isImmediateDuplicateResult(robot.history[0], item)) return;
+        if (stableKey) existingStable.add(stableKey);
+        robot.history.unshift(item);
       });
       if (robot.history.length > 200) robot.history.length = 200;
       robot.diagnostic.analyzedResults = robot.history.length;

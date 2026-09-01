@@ -24,7 +24,7 @@
     <div class="dot" id="connDot"></div><span id="connText" style="font-size:12px;color:var(--text2)">Conectando...</span></div>
 </nav>
 <div class="container">
-  <div class="grid-5" id="stats" style="margin-bottom:20px"></div>
+  <div class="grid-6" id="stats" style="margin-bottom:20px"></div>
   <div class="monitor-section">
     <div class="card-header"><span class="card-title">Robos</span></div>
     <div class="robot-grid" id="robotGrid"></div>
@@ -51,7 +51,7 @@ const statsEl = document.getElementById('stats');
 const gridEl = document.getElementById('robotGrid');
 const connDot = document.getElementById('connDot');
 const connText = document.getElementById('connText');
-let feedEntries = [];
+let feedEvents = [];
 
 EventBus.on('ws-status', (d) => {
   if (d.label === 'wheel') {
@@ -67,19 +67,67 @@ function renderConnectionStatus() {
 }
 
 EventBus.on('robot:log', (d) => {
-  feedEntries.unshift(d);
-  if (feedEntries.length > 200) feedEntries.pop();
+  upsertFeedEvent(d);
   renderFeed();
 });
 
-EventBus.on('signal:created', (d) => { feedEntries.unshift({ time: Date.now(), id: d.robotId, message: 'Sinal: ' + d.target }); renderFeed(); });
-EventBus.on('signal:win', (d) => { feedEntries.unshift({ time: Date.now(), id: d.robotId, message: 'WIN! ' + d.target }); renderFeed(); });
-EventBus.on('signal:loss', (d) => { feedEntries.unshift({ time: Date.now(), id: d.robotId, message: 'LOSS! ' + d.target }); renderFeed(); });
+EventBus.on('signal:created', (d) => { upsertFeedEvent({ time: d.createdAt || Date.now(), id: d.robotId, message: 'Sinal: ' + d.target }); renderAll(); renderFeed(); });
+EventBus.on('signal:gale', (d) => { upsertFeedEvent({ time: Date.now(), id: d.robotId, message: 'Gale ' + (d.gale || 1) + ': ' + d.target }); renderAll(); renderFeed(); });
+EventBus.on('signal:win', (d) => { upsertFeedEvent({ time: Date.now(), id: d.robotId, message: 'WIN! ' + d.target }); renderAll(); renderFeed(); });
+EventBus.on('signal:loss', (d) => { upsertFeedEvent({ time: Date.now(), id: d.robotId, message: 'LOSS! ' + d.target }); renderAll(); renderFeed(); });
+EventBus.on('robot:state', () => { renderAll(); renderFeed(); });
+EventBus.on('robots:synced', () => { renderAll(); renderFeed(); });
 
 function renderFeed() {
-  feedEl.innerHTML = feedEntries.slice(0, 100).map(e =>
-    `<div class="feed-entry"><span class="feed-time">${formatTime(e.time)}</span><span class="feed-robot">${escapeHtml(e.id)}</span><span class="feed-msg">${escapeHtml(e.message)}</span></div>`
+  const entries = getGlobalFeedEntries();
+  if (!entries.length) {
+    feedEl.innerHTML = '<div class="feed-entry" style="color:var(--text3);text-align:center">Nenhum evento registrado</div>';
+    return;
+  }
+  feedEl.innerHTML = entries.slice(0, 100).map(e =>
+    `<div class="feed-entry"><span class="feed-time">${formatTime(e.time)}</span><span class="feed-robot">${escapeHtml(e.robotName || e.id || '--')}</span><span class="feed-msg">${escapeHtml(e.message || '')}</span></div>`
   ).join('');
+}
+
+function upsertFeedEvent(entry) {
+  if (!entry || !entry.message) return;
+  const normalized = { ...entry, time: entry.time || Date.now() };
+  const key = getFeedKey(normalized);
+  feedEvents = feedEvents.filter(e => getFeedKey(e) !== key);
+  feedEvents.unshift(normalized);
+  if (feedEvents.length > 300) feedEvents.length = 300;
+}
+
+function getGlobalFeedEntries() {
+  const byKey = new Map();
+  getStoredFeedEntries().forEach(entry => addFeedToMap(byKey, entry));
+  feedEvents.forEach(entry => addFeedToMap(byKey, entry));
+  return [...byKey.values()]
+    .sort((a, b) => (b.time || 0) - (a.time || 0))
+    .slice(0, 300);
+}
+
+function getStoredFeedEntries() {
+  return RobotEngine.getAllStates()
+    .flatMap(robot => (robot.logs || []).map(log => ({
+      ...log,
+      id: log.id || robot.id,
+      robotName: robot.name,
+      time: log.time || robot.lastHeartbeat || 0
+    })));
+}
+
+function addFeedToMap(map, entry) {
+  if (!entry || !entry.message) return;
+  const key = getFeedKey(entry);
+  const current = map.get(key);
+  if (!current || (entry.time || 0) >= (current.time || 0)) {
+    map.set(key, entry);
+  }
+}
+
+function getFeedKey(entry) {
+  return [entry.id || '', entry.time || '', entry.message || ''].join('|');
 }
 
 function renderAll() {
@@ -96,7 +144,9 @@ function renderAll() {
     createStatCard('Online', online, 'green') +
     createStatCard('Offline', offline, 'red') +
     createStatCard('Pausados', paused, 'yellow') +
+    createStatCard('Sinais', total, 'blue') +
     createStatCard('Wins', wins, 'green') +
+    createStatCard('Loss', losses, 'red') +
     createStatCard('Assertividade', assertividade + '%', 'blue');
 
   gridEl.innerHTML = robots.map(r => {
@@ -129,8 +179,10 @@ function toggleRobot(id, status) {
 }
 
 renderAll();
+renderFeed();
 renderConnectionStatus();
 setInterval(renderAll, 5000);
+setInterval(renderFeed, 5000);
 setInterval(renderConnectionStatus, 2000);
 </script>
 </body>
