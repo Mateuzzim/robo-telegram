@@ -941,7 +941,12 @@ const TelegramService = {
 
   getSignalTarget(robot, signal) {
     const cfgColor = String(robot.target?.color || '').toUpperCase();
-    const color = cfgColor && cfgColor !== 'ANY' && cfgColor !== 'ALL' ? cfgColor : String(signal.target || '').toUpperCase();
+    let color;
+    if (cfgColor && cfgColor !== 'ANY' && cfgColor !== 'ALL' && !cfgColor.includes('+')) {
+      color = cfgColor;
+    } else {
+      color = String(signal.target || '').toUpperCase();
+    }
     const multiplier = robot.target?.multiplier ? ' ' + robot.target.multiplier + 'X' : '';
     return {
       color,
