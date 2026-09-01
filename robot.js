@@ -18,6 +18,8 @@ class Robot {
     this.telegram.message.live = this.telegram.message.live || '';
     this.target = config.target || { color: 'any', multiplier: null };
     this.filterMode = config.filterMode || 'moderado';
+    this.patternSize = config.patternSize || 3;
+    this.lastPatternAnalysisTime = config.lastPatternAnalysisTime || 0;
     this.history = Array.isArray(config.history) ? config.history : [];
     if (this.game === 'wheel') this.history = this.removeImmediateDuplicateResults(this.history);
     this.stats = {
@@ -171,6 +173,18 @@ class Robot {
       return;
     }
 
+    const now = Date.now();
+    if (this.strategy === 'padroesCores' && (now - this.lastPatternAnalysisTime) < 60000) {
+      if (this.currentSignal) {
+        this.diagnostic.status = 'WAITING_RESULT';
+      }
+      EventBus.emit('robot:state', this.getState());
+      return;
+    }
+    if (this.strategy === 'padroesCores') {
+      this.lastPatternAnalysisTime = now;
+    }
+
     this.diagnostic.status = 'ANALYZING';
 
     const fixedTarget = this.getFixedTargetColor();
@@ -217,10 +231,12 @@ class Robot {
     for (const name of namesToTry) {
       if (!strategies[name]) continue;
       const fn = strategies[name];
-      const result = fn(this.history, this.target);
+      const result = name === 'padroesCores' ? fn(this.history, this.target, this.patternSize) : fn(this.history, this.target);
 
       this.diagnostic.mainPattern = name;
       this.diagnostic.confidence = result.confidence || 0;
+      if (result.analyses) this.diagnostic.analyses = result.analyses;
+      if (result.confluences !== undefined) this.diagnostic.confluences = result.confluences;
 
       if (!result.matched || result.confidence < minConf) {
         this.signalFlow = {
@@ -396,10 +412,10 @@ class Robot {
   }
 
   getState() {
-    return { id: this.id, name: this.name, game: this.game, strategy: this.strategy, status: this.status, mode: this.mode, target: this.target, filterMode: this.filterMode, telegram: { ...this.telegram, message: { ...(this.telegram.message || {}) } }, lastHeartbeat: this.lastHeartbeat, stats: { ...this.stats }, lastResult: this.lastResult, lastSignal: this.lastSignal, currentSignal: this.currentSignal, diagnostic: { ...this.diagnostic }, signalFlow: { ...this.signalFlow }, logs: [...this.logs], minimumConfidence: this.minimumConfidence, intervalMin: this.intervalMin, gale: { ...this.gale }, resultsToAnalyze: this.resultsToAnalyze, confirmations: this.confirmations, strategyIndex: this.strategyIndex, usedPatterns: JSON.parse(JSON.stringify(this.usedPatterns)), startedAt: this.startedAt };
+    return { id: this.id, name: this.name, game: this.game, strategy: this.strategy, status: this.status, mode: this.mode, target: this.target, filterMode: this.filterMode, patternSize: this.patternSize, lastPatternAnalysisTime: this.lastPatternAnalysisTime, telegram: { ...this.telegram, message: { ...(this.message || {}) } }, lastHeartbeat: this.lastHeartbeat, stats: { ...this.stats }, lastResult: this.lastResult, lastSignal: this.lastSignal, currentSignal: this.currentSignal, diagnostic: { ...this.diagnostic }, signalFlow: { ...this.signalFlow }, logs: [...this.logs], minimumConfidence: this.minimumConfidence, intervalMin: this.intervalMin, gale: { ...this.gale }, resultsToAnalyze: this.resultsToAnalyze, confirmations: this.confirmations, strategyIndex: this.strategyIndex, usedPatterns: JSON.parse(JSON.stringify(this.usedPatterns)), startedAt: this.startedAt };
   }
 
   toJSON() {
-    return { id: this.id, name: this.name, game: this.game, strategy: this.strategy, status: this.status, mode: this.mode, target: this.target, filterMode: this.filterMode, history: this.history.slice(0, 200), resultsToAnalyze: this.resultsToAnalyze, minimumConfidence: this.minimumConfidence, confirmations: this.confirmations, intervalMin: this.intervalMin, galeMax: this.gale.max, telegram: { ...this.telegram, message: { ...(this.telegram.message || {}) } }, stats: this.stats, lastHeartbeat: this.lastHeartbeat, lastResult: this.lastResult, lastSignal: this.lastSignal, currentSignal: this.currentSignal, galeCount: this.galeCount, lastSignalTime: this.lastSignalTime, diagnostic: this.diagnostic, signalFlow: this.signalFlow, logs: this.logs, strategyIndex: this.strategyIndex, usedPatterns: this.usedPatterns, startedAt: this.startedAt };
+    return { id: this.id, name: this.name, game: this.game, strategy: this.strategy, status: this.status, mode: this.mode, target: this.target, filterMode: this.filterMode, patternSize: this.patternSize, lastPatternAnalysisTime: this.lastPatternAnalysisTime, history: this.history.slice(0, 200), resultsToAnalyze: this.resultsToAnalyze, minimumConfidence: this.minimumConfidence, confirmations: this.confirmations, intervalMin: this.intervalMin, galeMax: this.gale.max, telegram: { ...this.telegram, message: { ...(this.message || {}) } }, stats: this.stats, lastHeartbeat: this.lastHeartbeat, lastResult: this.lastResult, lastSignal: this.lastSignal, currentSignal: this.currentSignal, galeCount: this.galeCount, lastSignalTime: this.lastSignalTime, diagnostic: this.diagnostic, signalFlow: this.signalFlow, logs: this.logs, strategyIndex: this.strategyIndex, usedPatterns: this.usedPatterns, startedAt: this.startedAt };
   }
 }

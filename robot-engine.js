@@ -78,14 +78,282 @@ const RobotEngine = {
       const others = allColors.filter(c => c !== colors[0]);
       const target = others.length ? others[0] : (colors[0] === 'RED' ? 'BLACK' : 'RED');
       return { matched: score >= 60, target, confidence: Math.min(score, 95), pattern: colors.slice(0, 6), reason: score >= 60 ? 'Diagonal detectada' : 'Sem diagonal' };
+    },
+
+    padroesCores(history, target, patternSize) {
+      const pSize = patternSize || 3;
+      if (history.length < 15) return { matched: false, confidence: 0, reason: 'Historico insuficiente' };
+      
+      const rawTargetColor = target?.color || 'any';
+      const targetMult = target?.multiplier || null;
+      const colors = history.map(r => r.color);
+      const multipliers = history.map(r => r.multiplier);
+      const now = Date.now();
+      
+      const isMultiTarget = rawTargetColor.includes('+');
+      const effectiveTarget = (rawTargetColor === 'any' || isMultiTarget) ? 'any' : rawTargetColor;
+      const allowedColors = isMultiTarget ? rawTargetColor.split('+').map(c => c.toUpperCase()) : null;
+      
+      const colorLabels = { RED: 'VERMELHO', BLACK: 'PRETO', GREY: 'PRETO', BLUE: 'AZUL', GREEN: 'VERDE' };
+      
+      const analyses = [];
+      
+      const sequences = {};
+      for (let i = 0; i <= colors.length - pSize; i++) {
+        const seq = colors.slice(i, i + pSize).join('-');
+        if (!sequences[seq]) sequences[seq] = [];
+        sequences[seq].push(i);
+      }
+      
+      let bestSeqPattern = null;
+      let bestSeqScore = 0;
+      
+      for (const [seq, positions] of Object.entries(sequences)) {
+        if (positions.length < 2) continue;
+        const seqColors = seq.split('-');
+        let nextWins = 0;
+        let totalNext = 0;
+        
+        for (const pos of positions) {
+          const nextIdx = pos + pSize;
+          if (nextIdx < colors.length) {
+            totalNext++;
+            if (effectiveTarget === 'any') {
+              nextWins++;
+            } else if (colors[nextIdx] === effectiveTarget) {
+              nextWins++;
+            }
+          }
+        }
+        
+        if (totalNext === 0) continue;
+        const winRate = (nextWins / totalNext) * 100;
+        const recentPos = positions[positions.length - 1];
+        const recencyBoost = Math.max(0, 100 - (recentPos * 2));
+        const finalScore = Math.round(winRate * 0.7 + recencyBoost * 0.3);
+        
+        if (finalScore > bestSeqScore) {
+          bestSeqScore = finalScore;
+          bestSeqPattern = {
+            sequence: seqColors,
+            wins: nextWins,
+            total: totalNext,
+            winRate: Math.round(winRate),
+            positions: positions.slice(-3),
+            recency: recentPos
+          };
+        }
+      }
+      
+      if (bestSeqPattern) {
+        analyses.push({
+          type: 'sequencia',
+          score: bestSeqScore,
+          detail: `Seq ${bestSeqPattern.wins}x/${bestSeqPattern.total} (${bestSeqPattern.winRate}%)`,
+          pattern: bestSeqPattern.sequence
+        });
+      }
+      
+      let alternScore = 0;
+      let alternDetail = '';
+      const last10 = colors.slice(0, Math.min(20, colors.length));
+      let alternCount = 0;
+      for (let i = 0; i < last10.length - 1; i++) {
+        if (last10[i] !== last10[i + 1]) alternCount++;
+      }
+      alternScore = Math.round((alternCount / Math.max(last10.length - 1, 1)) * 100);
+      
+      let streak = 1;
+      for (let i = 1; i < last10.length; i++) {
+        if (last10[i] === last10[0]) streak++;
+        else break;
+      }
+      
+      if (alternScore >= 70 && streak <= 1) {
+        analyses.push({
+          type: 'alternado',
+          score: alternScore,
+          detail: `Alternancia ${alternScore}% - ${colorLabels[last10[0]] || last10[0]} atual`,
+          target: last10[0] === 'RED' ? 'BLACK' : 'RED'
+        });
+      }
+      
+      const freq = {};
+      colors.forEach(c => { freq[c] = (freq[c] || 0) + 1; });
+      const sorted = Object.entries(freq).sort((a, b) => a[1] - b[1]);
+      if (sorted.length > 0) {
+        const [rareColor, rareCount] = sorted[0];
+        const total = colors.length;
+        const expected = total / (Object.keys(freq).length || 1);
+        const deviation = Math.round(((expected - rareCount) / expected) * 100);
+        
+        if (deviation >= 30) {
+          analyses.push({
+            type: 'atrasada',
+            score: Math.min(90, 50 + deviation),
+            detail: `${colorLabels[rareColor] || rareColor} atrasada ${rareCount}x (esperado ~${Math.round(expected)})`,
+            target: rareColor
+          });
+        }
+      }
+      
+      if (targetMult) {
+        const multiFreq = {};
+        for (let i = 0; i < colors.length; i++) {
+          const m = multipliers[i];
+          if (m) {
+            if (!multiFreq[m]) multiFreq[m] = { total: 0, wins: {} };
+            multiFreq[m].total++;
+            multiFreq[m].wins[colors[i]] = (multiFreq[m].wins[colors[i]] || 0) + 1;
+          }
+        }
+        
+        const multData = multiFreq[targetMult];
+        if (multData && multData.total >= 3) {
+          const sortedMult = Object.entries(multData.wins).sort((a, b) => b[1] - a[1]);
+          if (sortedMult.length > 0) {
+            const [bestColor, winCount] = sortedMult[0];
+            const winRate = Math.round((winCount / multData.total) * 100);
+            if (winRate >= 55) {
+              analyses.push({
+                type: 'multiplier',
+                score: winRate,
+                detail: `${targetMult}X: ${colorLabels[bestColor] || bestColor} ${winRate}% (${winCount}/${multData.total})`,
+                target: bestColor
+              });
+            }
+          }
+        }
+      }
+      
+      const cyclePatterns = {};
+      for (let cycle = 2; cycle <= Math.min(8, Math.floor(colors.length / 3)); cycle++) {
+        const cycleKey = colors.slice(0, cycle).join('-');
+        let matches = 0;
+        let totalCycles = 0;
+        
+        for (let i = cycle; i <= colors.length - cycle; i += cycle) {
+          totalCycles++;
+          const segment = colors.slice(i, i + cycle).join('-');
+          if (segment === cycleKey) matches++;
+        }
+        
+        if (totalCycles >= 2) {
+          const matchRate = Math.round((matches / totalCycles) * 100);
+          if (matchRate >= 60) {
+            analyses.push({
+              type: 'ciclo',
+              score: matchRate,
+              detail: `Ciclo ${cycle}: ${matches}x/${totalCycles} (${matchRate}%)`,
+              cycle: cycle,
+              pattern: cycleKey.split('-')
+            });
+          }
+        }
+      }
+      
+      if (colors.length >= pSize + 1) {
+        const currentSeq = colors.slice(0, pSize).join('-');
+        const nextColor = colors[pSize];
+        
+        if (sequences[currentSeq] && sequences[currentSeq].length >= 2) {
+          const positions = sequences[currentSeq];
+          let breakCount = 0;
+          let breaks = [];
+          
+          for (let i = 0; i < positions.length - 1; i++) {
+            const afterFirst = positions[i] + pSize;
+            const afterSecond = positions[i + 1] + pSize;
+            
+            if (afterFirst < colors.length && afterSecond < colors.length) {
+              if (colors[afterFirst] !== colors[afterSecond]) {
+                breakCount++;
+                breaks.push({
+                  expected: colors[afterFirst],
+                  actual: colors[afterSecond]
+                });
+              }
+            }
+          }
+          
+          if (breakCount > 0) {
+            const breakRate = Math.round((breakCount / Math.max(positions.length - 1, 1)) * 100);
+            analyses.push({
+              type: 'distorcao',
+              score: Math.min(85, 50 + breakRate),
+              detail: `Padrao distorcendo ${breakRate}% - ${breakCount} quebras`,
+              breaks: breaks.slice(-3)
+            });
+          }
+        }
+      }
+      
+      const confluences = analyses.filter(a => a.score >= 60).length;
+      const confluenciaScore = Math.min(95, confluences * 25);
+      
+      if (confluences >= 2) {
+        analyses.push({
+          type: 'confluencia',
+          score: confluenciaScore,
+          detail: `${confluences} padroes concordando`
+        });
+      }
+      
+      const validAnalyses = analyses.filter(a => a.score >= 50);
+      
+      if (validAnalyses.length === 0) {
+        return { matched: false, confidence: 0, reason: 'Nenhum padrao detectado' };
+      }
+      
+      validAnalyses.sort((a, b) => b.score - a.score);
+      const best = validAnalyses[0];
+      
+      let suggested;
+      if (effectiveTarget !== 'any') {
+        suggested = effectiveTarget;
+      } else if (best.target) {
+        suggested = best.target;
+      } else if (best.pattern) {
+        const last = best.pattern[best.pattern.length - 1];
+        suggested = last === 'RED' ? 'BLACK' : 'RED';
+      } else {
+        suggested = 'RED';
+      }
+
+      if (allowedColors && !allowedColors.includes(suggested)) {
+        suggested = allowedColors[0];
+      }
+      
+      const confidence = Math.min(95, Math.max(10, best.score));
+      const allTypes = validAnalyses.map(a => a.type).join(', ');
+      
+      return {
+        matched: confidence >= 55,
+        target: suggested,
+        confidence,
+        pattern: best.pattern || best.sequence || colors.slice(0, pSize),
+        reason: `${best.type.toUpperCase()}: ${best.detail}`,
+        analyses: validAnalyses.slice(0, 5),
+        confluences,
+        lastAnalysis: now
+      };
     }
   },
 
   evaluate(robot, strategyResult) {
     const normalizeColor = color => typeof robot.normalizeColor === 'function' ? robot.normalizeColor(color) : String(color || '').toUpperCase();
     const targetColor = normalizeColor(robot.target?.color || 'any');
+
     if (targetColor !== 'ANY' && targetColor !== 'ALL' && !targetColor.includes('+')) {
       strategyResult.target = targetColor;
+    } else if (targetColor.includes('+')) {
+      const allowed = targetColor.split('+').map(c => normalizeColor(c));
+      const normalized = normalizeColor(strategyResult.target);
+      if (allowed.includes(normalized)) {
+        strategyResult.target = normalized;
+      } else {
+        strategyResult.target = allowed[0];
+      }
     } else if (strategyResult.target) {
       strategyResult.target = normalizeColor(strategyResult.target);
     }

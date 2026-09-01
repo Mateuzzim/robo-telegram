@@ -8,10 +8,13 @@ class WSSource {
     this.reconnectDelay = 2000;
     this._initialLoaded = false;
     this._lastGameId = null;
+    this._lastNetworkCheck = 0;
+    this._lastIp = null;
   }
 
   connect() {
     if (!this.url || this.url.includes('your-')) return;
+    if (this.ws && (this.ws.readyState === WebSocket.CONNECTING || this.ws.readyState === WebSocket.OPEN)) return;
     const tokenStatus = this.getAuthorizationStatus();
     try {
       this.ws = new WebSocket(this.url);
@@ -262,6 +265,20 @@ class WSSource {
       this.reconnectDelay = Math.min(this.reconnectDelay * 1.5, 30000);
       this.connect();
     }, this.reconnectDelay);
+  }
+
+  forceReconnect() {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    if (this.ws) {
+      try { this.ws.close(); } catch {}
+      this.ws = null;
+    }
+    this.connected = false;
+    this.reconnectDelay = 2000;
+    this.connect();
   }
 
   disconnect() {

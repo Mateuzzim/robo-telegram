@@ -166,8 +166,8 @@ EventBus.on('ws-status', (d) => {
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
-    if (Sources.wheel && !Sources.wheel.connected) Sources.wheel.connect();
-    if (Sources.double && !Sources.double.connected) Sources.double.connect();
+    if (Sources.wheel && !Sources.wheel.connected) Sources.wheel.forceReconnect();
+    if (Sources.double && !Sources.double.connected) Sources.double.forceReconnect();
     RobotEngine.syncHistoriesFromStorage();
   }
 });
@@ -178,16 +178,40 @@ window.addEventListener('beforeunload', () => {
 });
 
 let _keepAliveCounter = 0;
+let _lastNetworkState = navigator.onLine;
+
+window.addEventListener('online', () => {
+  statusEl.textContent = '[' + new Date().toLocaleTimeString() + '] Rede detectada - reconectando...';
+  if (Sources.wheel) Sources.wheel.forceReconnect();
+  if (Sources.double) Sources.double.forceReconnect();
+});
+
+window.addEventListener('offline', () => {
+  statusEl.textContent = '[' + new Date().toLocaleTimeString() + '] Rede offline - aguardando...';
+});
+
 setInterval(() => {
   _keepAliveCounter++;
+  const isOnline = navigator.onLine;
+  if (isOnline !== _lastNetworkState) {
+    _lastNetworkState = isOnline;
+    if (isOnline) {
+      if (Sources.wheel) Sources.wheel.forceReconnect();
+      if (Sources.double) Sources.double.forceReconnect();
+    }
+  }
+
   const statusParts = [];
   if (Sources.wheel) statusParts.push('wheel:' + (Sources.wheel.connected ? 'ON' : 'OFF'));
   if (Sources.double) statusParts.push('double:' + (Sources.double.connected ? 'ON' : 'OFF'));
   const robots = RobotEngine.getAllRobots().filter(r => r.status === 'online');
   statusParts.push('robots:' + robots.length);
   statusEl.textContent = '[' + new Date().toLocaleTimeString() + '] BG rodando | ' + statusParts.join(' | ') + ' | tick:' + _keepAliveCounter;
-  if (Sources.wheel && !Sources.wheel.connected) Sources.wheel.connect();
-  if (Sources.double && !Sources.double.connected) Sources.double.connect();
+
+  if (isOnline) {
+    if (Sources.wheel && !Sources.wheel.connected) Sources.wheel.connect();
+    if (Sources.double && !Sources.double.connected) Sources.double.connect();
+  }
 }, 3000);
 </script>
 </body>

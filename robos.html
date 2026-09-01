@@ -34,7 +34,8 @@
     <div class="form-group"><label>Nome</label><input id="fName" placeholder="Ex: Wheel Alpha"></div>
     <div class="form-group"><label>Jogo</label><select id="fGame" onchange="updateTargets()"><option value="wheel">Wheel</option><option value="double">Double</option></select></div>
     <div class="form-group"><label>Alvo (Cor / Multiplier)</label><select id="fTarget"></select></div>
-    <div class="form-group"><label>Estrategia</label><select id="fStrategy"><option value="todas">Todas (Analise Completa)</option><option value="alternancia">Alternancia</option><option value="repeticao">Repeticao</option><option value="frequencia">Frequencia</option><option value="tendencia">Tendencia</option><option value="espelhamento">Espelhamento</option><option value="diagonal">Diagonal</option></select></div>
+    <div class="form-group"><label>Estrategia</label><select id="fStrategy" onchange="togglePatternSize()"><option value="todas">Todas (Analise Completa)</option><option value="alternancia">Alternancia</option><option value="repeticao">Repeticao</option><option value="frequencia">Frequencia</option><option value="tendencia">Tendencia</option><option value="espelhamento">Espelhamento</option><option value="diagonal">Diagonal</option><option value="padroesCores">Padroes Cores</option></select></div>
+    <div class="form-group" id="patternSizeGroup" style="display:none"><label>Tamanho do Padrao</label><select id="fPatternSize"><option value="3">3 cores</option><option value="4">4 cores</option><option value="5">5 cores</option><option value="6">6 cores</option></select></div>
     <div class="form-group"><label>Resultados para Analisar</label><input id="fResults" type="number" value="40"></div>
     <div class="form-group"><label>Confianca Minima (%)</label><input id="fConf" type="number" value="80"></div>
     <div class="form-group"><label>Intervalo entre Sinais (seg)</label><input id="fInterval" type="number" value="60"></div>
@@ -69,6 +70,10 @@
 <script src="app.js"></script>
 <script>
 App.init();
+function togglePatternSize() {
+  const strategy = document.getElementById('fStrategy').value;
+  document.getElementById('patternSizeGroup').style.display = strategy === 'padroesCores' ? 'block' : 'none';
+}
 function getChannels() { try { return JSON.parse(localStorage.getItem('telegram-channels') || '[]'); } catch { return []; } }
 function getTargetLabel(r) {
   const colorMap = { any:'QUALQUER', red:'VERMELHO', black:'PRETO', grey:'PRETO', green:'VERDE', blue:'AZUL' };
@@ -119,12 +124,16 @@ function showEdit(id){
   updateTargets();
   document.getElementById('fTarget').value = robot.target?.color || 'any';
   document.getElementById('fStrategy').value = robot.strategy || 'alternancia';
+  togglePatternSize();
   document.getElementById('fResults').value = robot.resultsToAnalyze || 40;
   document.getElementById('fConf').value = robot.minimumConfidence || 80;
   document.getElementById('fInterval').value = robot.intervalMin || 60;
   document.getElementById('fGale').value = robot.gale?.max || 0;
   document.getElementById('fMode').value = robot.mode || 'monitoramento';
   document.getElementById('fFilterMode').value = robot.filterMode || 'moderado';
+  if (robot.strategy === 'padroesCores') {
+    document.getElementById('fPatternSize').value = robot.patternSize || 3;
+  }
   const channels = getChannels();
   const sel = document.getElementById('fTgChannel');
   sel.innerHTML = '<option value="">Selecionar canal...</option>' + channels.map(c => `<option value="${c.id}">${escapeHtml(c.name)} (${c.id})</option>`).join('');
@@ -150,6 +159,7 @@ function createRobot(){
   const tgEnabled = document.getElementById('fTgEnabled').checked;
   const tgChannel = document.getElementById('fTgChannel').value;
   const tgMsgType = document.getElementById('fTgMsgType').value;
+  const patternSize = strategy === 'padroesCores' ? parseInt(document.getElementById('fPatternSize').value) || 3 : 3;
 
   if (editId) {
     const robot = RobotEngine.getRobot(editId);
@@ -166,6 +176,7 @@ function createRobot(){
       robot.target = { color: targetColor, multiplier: targetMult ? parseInt(targetMult) : null };
       robot.filterMode = filterMode;
       robot.telegram = { enabled: tgEnabled, channelId: tgChannel, msgType: tgMsgType, message: robot.telegram?.message || {} };
+      robot.patternSize = patternSize;
       RobotEngine.save();
     }
   } else {
@@ -177,7 +188,8 @@ function createRobot(){
       minimumConfidence: minConf,
       intervalMin: interval,
       galeMax, mode,
-      telegram: { enabled: tgEnabled, channelId: tgChannel, msgType: tgMsgType }
+      telegram: { enabled: tgEnabled, channelId: tgChannel, msgType: tgMsgType },
+      patternSize
     });
     RobotEngine.save();
   }
