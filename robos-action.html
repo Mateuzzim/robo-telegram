@@ -208,6 +208,10 @@ function renderRobotCard(r) {
   const signalTarget = r.currentSignal?.target || d.decision?.target || '';
   const signalConf = r.currentSignal?.confidence || d.confidence || 0;
   const tgMode = r.telegram?.msgType || 'consolidated';
+  const tgAction = r.telegram?.actionType || 'off';
+  const channelsArr = getChannels();
+  const channelsMap = {};
+  channelsArr.forEach(c => { channelsMap[c.id] = c.name; });
 
   const flow = d.signalFlow || {};
   const steps = [
@@ -307,9 +311,12 @@ function renderRobotCard(r) {
         <button class="rc-tg-btn ${tgMode === 'live' ? 'active-live' : ''}" onclick="setRobotTgMode('${r.id}','live')" title="Msg Live">L</button>
         <button class="rc-tg-btn ${tgMode === 'signal' ? 'active-signal' : ''}" onclick="setRobotTgMode('${r.id}','signal')" title="Msg Sinal">S</button>
         <button class="rc-tg-btn ${tgMode === 'both' ? 'active-both' : ''}" onclick="setRobotTgMode('${r.id}','both')" title="Live + Sinal">LS</button>
-        <button class="rc-tg-btn ${tgMode === 'consolidated' || !tgMode ? 'active-consolidated' : ''}" onclick="setRobotTgMode('${r.id}','consolidated')" title="Consolidado (painel)">C</button>
-        <button class="rc-tg-btn ${tgMode === 'off' ? 'active-off' : ''}" onclick="setRobotTgMode('${r.id}','off')" title="Desligado">X</button>
+        <button class="rc-tg-btn ${tgMode === 'consolidated' || !tgMode ? 'active-consolidated' : ''}" onclick="setRobotTgMode('${r.id}','consolidated')" title="Desligado (so Em Acao)">X</button>
       </div>
+      <div class="rc-tg-modes" style="margin-left:4px;border-left:1px solid var(--border);padding-left:4px">
+        <button class="rc-tg-btn ${tgAction === 'consolidated' ? 'active-both' : ''}" onclick="setRobotActionMode('${r.id}','consolidated')" title="Em Acao: ON">${tgAction === 'consolidated' ? '\u{1F4E4}' : '\u2716'}</button>
+      </div>
+      ${r.telegram?.actionChannelId ? '<span style="font-size:8px;color:var(--text3);align-self:center;margin-left:2px">\u{1F4E4}' + (channelsMap[r.telegram.actionChannelId] || r.telegram.actionChannelId.slice(-4)) + '</span>' : ''}
     </div>
   </div>`;
 }
@@ -340,6 +347,27 @@ function setRobotTgMode(id, mode) {
   } else {
     robot.telegram.enabled = true;
     robot.telegram.msgType = mode;
+  }
+  RobotEngine.save();
+  render();
+}
+
+function setRobotActionMode(id, mode) {
+  const robot = RobotEngine.getRobot(id);
+  if (!robot) return;
+  robot.telegram = robot.telegram || {};
+  if (!robot.telegram.actionChannelId) {
+    const channels = getChannels();
+    if (channels.length > 0) {
+      robot.telegram.actionChannelId = channels[0].id;
+      robot.telegram.actionType = 'consolidated';
+      alert('Canal Em Acao definido: ' + channels[0].name + '\nPara mudar, edite o robo em Robos.');
+    } else {
+      alert('Configure um canal em Configuracoes primeiro.');
+      return;
+    }
+  } else {
+    robot.telegram.actionType = mode;
   }
   RobotEngine.save();
   render();
@@ -499,8 +527,10 @@ function getHistory(key) { try { return JSON.parse(localStorage.getItem(key) || 
 function colorEmoji(c) { return { red: '\u{1F534}', black: '\u26AB', grey: '\u26AB', green: '\u{1F7E2}', blue: '\u{1F535}' }[(c||'').toLowerCase()] || '\u26AA'; }
 function colorLabel(c) { return { red: 'Vermelho', black: 'Preto', grey: 'Preto', green: 'Verde', blue: 'Azul' }[(c||'').toLowerCase()] || c; }
 
-function buildConsolidatedMessage() {
-  const robots = RobotEngine.getAllStates();
+function buildConsolidatedMessage(targetChannelId) {
+  let robots = RobotEngine.getAllStates();
+  robots = robots.filter(r => r.telegram?.actionChannelId && r.telegram?.actionType !== 'off');
+  if (targetChannelId) robots = robots.filter(r => r.telegram.actionChannelId === targetChannelId);
   if (robots.length === 0) return null;
   const now = new Date().toLocaleTimeString('pt-BR');
   const sep = '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501';
@@ -630,43 +660,70 @@ function buildConsolidatedMessage() {
 
 async function sendConsolidatedToTelegram() {
   const token = getToken();
-  const config = JSON.parse(localStorage.getItem('tg-action-config') || '{}');
-  const chatId = config.chatId || document.getElementById('tgChatId').value.trim();
+  if (!token) { document.getElementById('tgTestResult').innerHTML = '<span style="color:var(--red)">Configure o Bot Token primeiro</span>'; return; }
+  const robots = RobotEngine.getAllStates();
+  const actionChannels = new Map();
+  for (const r of robots) {
+    const ch = r.telegram?.actionChannelId;
+    if (ch && r.telegram?.actionType !== 'off') {
+      if (!actionChannels.has(ch)) actionChannels.set(ch, []);
+      actionChannels.get(ch).push(r);
+    }
+  }
+  if (actionChannels.size === 0) {
+    document.getElementById('tgTestResult').innerHTML = '<span style="color:var(--yellow)">Nenhum robo com canal Em Acao configurado</span>';
+    return;
+  }
   const btn = document.getElementById('btnSendTg');
   const resultEl = document.getElementById('tgTestResult');
-  if (!token) { resultEl.innerHTML = '<span style="color:var(--red)">Configure o Bot Token primeiro</span>'; return; }
-  if (!chatId) { resultEl.innerHTML = '<span style="color:var(--red)">Configure o Chat ID primeiro</span>'; return; }
-  const text = buildConsolidatedMessage();
-  if (!text) { resultEl.innerHTML = '<span style="color:var(--red)">Nenhum robo encontrado</span>'; return; }
   btn.disabled = true;
   btn.innerHTML = 'Enviando...';
-  resultEl.innerHTML = '<span style="color:var(--yellow)">Enviando para ' + chatId + '...</span>';
-  try {
-    const body = JSON.stringify({ chat_id: chatId, text: text, parse_mode: 'HTML', disable_web_page_preview: true });
-    console.log('[TG-Action] Request body:', body.substring(0, 500));
-    const resp = await fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: body
-    });
-    const result = await resp.json();
-    console.log('[TG-Action] Response:', JSON.stringify(result));
-    if (result.ok) {
-      resultEl.innerHTML = '<span style="color:var(--green)">&#10003; Enviado com sucesso! (msg ' + result.result.message_id + ')</span>';
-      localStorage.setItem('tg-action-last-send', JSON.stringify({ at: Date.now(), msgId: result.result.message_id }));
-      btn.innerHTML = '&#10003; Enviado!';
-      setTimeout(() => { btn.innerHTML = '\u{1F4E4} Enviar agora'; btn.disabled = false; }, 3000);
-    } else {
-      resultEl.innerHTML = '<span style="color:var(--red)">&#10007; Telegram: ' + (result.description || JSON.stringify(result)) + '</span>';
-      btn.innerHTML = '\u{1F4E4} Enviar para Telegram';
-      btn.disabled = false;
+  let sentCount = 0;
+  let editCount = 0;
+  let failCount = 0;
+
+  for (const [chatId, channelRobots] of actionChannels) {
+    const text = buildConsolidatedMessage(chatId);
+    if (!text) continue;
+    const lastSend = JSON.parse(localStorage.getItem('tg-action-last-send') || 'null');
+    const lastMsgId = lastSend?.chatId === chatId ? lastSend.msgId : null;
+    try {
+      let result;
+      if (lastMsgId) {
+        const editResp = await fetch('https://api.telegram.org/bot' + token + '/editMessageText', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: chatId, message_id: lastMsgId, text, parse_mode: 'HTML', disable_web_page_preview: true })
+        });
+        result = await editResp.json();
+        if (result.ok) {
+          editCount++;
+          localStorage.setItem('tg-action-last-send', JSON.stringify({ at: Date.now(), msgId: lastMsgId, chatId }));
+          continue;
+        }
+      }
+      const sendResp = await fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true })
+      });
+      result = await sendResp.json();
+      if (result.ok) {
+        sentCount++;
+        localStorage.setItem('tg-action-last-send', JSON.stringify({ at: Date.now(), msgId: result.result.message_id, chatId }));
+      } else {
+        failCount++;
+        console.error('[TG-Action] Send error for', chatId, result.description);
+      }
+    } catch (e) {
+      failCount++;
+      console.error('[TG-Action] Error for', chatId, e);
     }
-  } catch (e) {
-    console.error('[TG-Action] Fetch error:', e);
-    resultEl.innerHTML = '<span style="color:var(--red)">&#10007; Erro de rede: ' + e.message + '</span>';
-    btn.innerHTML = '\u{1F4E4} Enviar para Telegram';
-    btn.disabled = false;
   }
+
+  btn.innerHTML = '\u2705 Pronto!';
+  resultEl.innerHTML = '<span style="color:var(--green)">Editado: ' + editCount + ' | Novo: ' + sentCount + (failCount ? ' | Erro: ' + failCount : '') + '</span>';
+  setTimeout(() => { btn.innerHTML = '\u{1F4E4} Enviar agora'; btn.disabled = false; }, 2000);
 }
 
 function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; }
@@ -694,11 +751,13 @@ function startAutoSend() {
 
 function loadLastSendInfo() {
   const last = JSON.parse(localStorage.getItem('tg-action-last-send') || 'null');
-  if (last) {
+  const config = JSON.parse(localStorage.getItem('tg-action-config') || '{}');
+  const chatId = config.chatId || document.getElementById('tgChatId')?.value?.trim() || '';
+  const el = document.getElementById('tgTestResult');
+  if (last && last.chatId === chatId) {
     const ago = Math.round((Date.now() - last.at) / 1000);
-    const el = document.getElementById('tgTestResult');
-    if (el && ago < 300) {
-      el.innerHTML = '<span style="color:var(--green)">Ultimo envio: ' + ago + 's atras (msg ' + last.msgId + ')</span>';
+    if (ago < 600) {
+      el.innerHTML = '<span style="color:var(--green)">Msg #' + last.msgId + ' ativa (ultima atualizacao: ' + ago + 's atras)</span>';
     }
   }
 }
