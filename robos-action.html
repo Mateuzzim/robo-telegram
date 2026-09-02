@@ -62,6 +62,7 @@
   .rc-placar-item{text-align:center;padding:4px;background:var(--bg);border-radius:4px}
   .rc-placar-value{font-size:14px;font-weight:800}
   .rc-placar-label{font-size:8px;color:var(--text3);text-transform:uppercase}
+  .rc-actions{padding:8px 14px;border-top:1px solid var(--border);display:flex;gap:6px;justify-content:flex-end}
   .rc-flow{display:flex;gap:4px;margin-bottom:8px}
   .rc-flow-step{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 4px;text-align:center;position:relative}
   .rc-flow-step.active{border-color:var(--green);background:rgba(41,217,120,.05)}
@@ -76,15 +77,6 @@
   .empty-state p{font-size:13px}
   .auto-refresh{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text3);margin-bottom:12px}
   .auto-refresh .dot-sm{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
-  .rc-actions{padding:8px 14px;border-top:1px solid var(--border);display:flex;gap:6px;justify-content:flex-end;align-items:center;flex-wrap:wrap}
-  .rc-tg-modes{display:flex;gap:2px;margin-left:8px}
-  .rc-tg-btn{width:22px;height:22px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text3);font-size:8px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
-  .rc-tg-btn:hover{border-color:var(--blue);color:var(--text)}
-  .rc-tg-btn.active-live{background:rgba(41,217,120,.15);border-color:var(--green);color:var(--green)}
-  .rc-tg-btn.active-signal{background:rgba(255,68,68,.15);border-color:var(--red);color:var(--red)}
-  .rc-tg-btn.active-both{background:rgba(35,104,255,.15);border-color:var(--blue);color:var(--blue)}
-  .rc-tg-btn.active-consolidated{background:rgba(255,193,7,.15);border-color:var(--yellow);color:var(--yellow)}
-  .rc-tg-btn.active-off{background:rgba(255,68,68,.08);border-color:rgba(255,68,68,.3);color:var(--red)}
 </style>
 </head>
 <body>
@@ -95,7 +87,6 @@
     <a href="monitoramento.html">Monitoramento</a>
     <a href="robos.html">Robos</a>
     <a href="robos-action.html" class="active">Em Acao</a>
-    <a href="central.html">Central</a>
     <a href="analise.html">Analise</a>
     <a href="configuracoes.html">Config</a>
   </div>
@@ -106,54 +97,8 @@
     <h1><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Robos em Acao</h1>
     <p>Visao geral de todos os robos em tempo real</p>
   </div>
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:8px;flex-wrap:wrap">
-    <div class="auto-refresh"><div class="dot-sm"></div> Atualizacao automatica a cada 3s</div>
-    <div style="display:flex;align-items:center;gap:8px">
-      <select id="autoSendInterval" style="padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px">
-        <option value="0">Auto-envio: Desligado</option>
-        <option value="30000">A cada 30s</option>
-        <option value="60000">A cada 1min</option>
-        <option value="180000">A cada 3min</option>
-        <option value="300000">A cada 5min</option>
-        <option value="600000">A cada 10min</option>
-      </select>
-      <button class="btn btn-blue" onclick="sendConsolidatedToTelegram()" id="btnSendTg" style="font-size:12px;padding:6px 14px">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;vertical-align:-2px"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
-        Enviar agora
-      </button>
-    </div>
-  </div>
+  <div class="auto-refresh"><div class="dot-sm"></div> Atualizacao automatica a cada 3s</div>
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px" id="globalStats"></div>
-  
-  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-      <div style="display:flex;align-items:center;gap:8px">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
-        <span style="font-size:14px;font-weight:700;color:var(--text)">Vincular Telegram</span>
-      </div>
-      <span id="tgStatus" style="font-size:10px;color:var(--text3)"></span>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr auto auto;gap:8px;align-items:end">
-      <div>
-        <label style="font-size:10px;color:var(--text3);display:block;margin-bottom:3px">Bot Token</label>
-        <input id="tgToken" type="password" placeholder="123456:ABC-DEF..." style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px">
-      </div>
-      <div>
-        <label style="font-size:10px;color:var(--text3);display:block;margin-bottom:3px">Canal/Grupo ID</label>
-        <input id="tgChatId" placeholder="-1001234567890" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px">
-      </div>
-      <button class="btn btn-blue" onclick="testTelegram()" id="btnTestTg" style="height:32px">Testar</button>
-      <button class="btn btn-green" onclick="saveTelegramConfig()" style="height:32px">Salvar</button>
-    </div>
-    <div style="display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap">
-      <button class="btn btn-sm btn-ghost" onclick="detectChatId()" style="font-size:10px">Detectar ID automatico</button>
-      <button class="btn btn-sm btn-green" onclick="applyTelegramToAll()" style="font-size:10px">Aplicar a Todos os Robos</button>
-      <button class="btn btn-sm btn-red" onclick="disableAllIndividualMsgs()" style="font-size:10px">Desligar msgs individuais</button>
-      <span id="tgTestResult" style="font-size:10px"></span>
-      <span style="font-size:9px;color:var(--text3);margin-left:auto">Adicione o bot ao canal/grupo primeiro</span>
-    </div>
-  </div>
-  
   <div class="robot-grid" id="robotGrid"></div>
 </div>
 <script src="config.js"></script>
@@ -207,11 +152,6 @@ function renderRobotCard(r) {
   const isGale = r.currentSignal && r.currentSignal.status === 'gale_pending';
   const signalTarget = r.currentSignal?.target || d.decision?.target || '';
   const signalConf = r.currentSignal?.confidence || d.confidence || 0;
-  const tgMode = r.telegram?.msgType || 'consolidated';
-  const tgAction = r.telegram?.actionType || 'off';
-  const channelsArr = getChannels();
-  const channelsMap = {};
-  channelsArr.forEach(c => { channelsMap[c.id] = c.name; });
 
   const flow = d.signalFlow || {};
   const steps = [
@@ -307,16 +247,6 @@ function renderRobotCard(r) {
       ${r.status === 'offline'
         ? `<button class="btn btn-sm btn-green" onclick="toggleRobot('${r.id}','start')">Play</button>`
         : `<button class="btn btn-sm btn-red" onclick="toggleRobot('${r.id}','stop')">Stop</button>`}
-      <div class="rc-tg-modes">
-        <button class="rc-tg-btn ${tgMode === 'live' ? 'active-live' : ''}" onclick="setRobotTgMode('${r.id}','live')" title="Msg Live">L</button>
-        <button class="rc-tg-btn ${tgMode === 'signal' ? 'active-signal' : ''}" onclick="setRobotTgMode('${r.id}','signal')" title="Msg Sinal">S</button>
-        <button class="rc-tg-btn ${tgMode === 'both' ? 'active-both' : ''}" onclick="setRobotTgMode('${r.id}','both')" title="Live + Sinal">LS</button>
-        <button class="rc-tg-btn ${tgMode === 'consolidated' || !tgMode ? 'active-consolidated' : ''}" onclick="setRobotTgMode('${r.id}','consolidated')" title="Desligado (so Em Acao)">X</button>
-      </div>
-      <div class="rc-tg-modes" style="margin-left:4px;border-left:1px solid var(--border);padding-left:4px">
-        <button class="rc-tg-btn ${tgAction === 'consolidated' ? 'active-both' : ''}" onclick="setRobotActionMode('${r.id}','consolidated')" title="Em Acao: ON">${tgAction === 'consolidated' ? '\u{1F4E4}' : '\u2716'}</button>
-      </div>
-      ${r.telegram?.actionChannelId ? '<span style="font-size:8px;color:var(--text3);align-self:center;margin-left:2px">\u{1F4E4}' + (channelsMap[r.telegram.actionChannelId] || r.telegram.actionChannelId.slice(-4)) + '</span>' : ''}
     </div>
   </div>`;
 }
@@ -337,439 +267,10 @@ function toggleRobot(id, action) {
   render();
 }
 
-function setRobotTgMode(id, mode) {
-  const robot = RobotEngine.getRobot(id);
-  if (!robot) return;
-  robot.telegram = robot.telegram || {};
-  if (mode === 'off') {
-    robot.telegram.enabled = false;
-    robot.telegram.msgType = 'consolidated';
-  } else {
-    robot.telegram.enabled = true;
-    robot.telegram.msgType = mode;
-  }
-  RobotEngine.save();
-  render();
-}
-
-function setRobotActionMode(id, mode) {
-  const robot = RobotEngine.getRobot(id);
-  if (!robot) return;
-  robot.telegram = robot.telegram || {};
-  if (!robot.telegram.actionChannelId) {
-    const channels = getChannels();
-    if (channels.length > 0) {
-      robot.telegram.actionChannelId = channels[0].id;
-      robot.telegram.actionType = 'consolidated';
-      alert('Canal Em Acao definido: ' + channels[0].name + '\nPara mudar, edite o robo em Robos.');
-    } else {
-      alert('Configure um canal em Configuracoes primeiro.');
-      return;
-    }
-  } else {
-    robot.telegram.actionType = mode;
-  }
-  RobotEngine.save();
-  render();
-}
-
-function getChannels() { try { return JSON.parse(localStorage.getItem('telegram-channels') || '[]'); } catch { return []; } }
-function saveChannels(channels) { localStorage.setItem('telegram-channels', JSON.stringify(channels)); }
-function getToken() { return localStorage.getItem('telegram-bot-token') || ''; }
-function setToken(t) { localStorage.setItem('telegram-bot-token', t); }
-
-function loadTelegramConfig() {
-  const token = getToken();
-  const channels = getChannels();
-  const saved = JSON.parse(localStorage.getItem('tg-action-config') || '{}');
-  document.getElementById('tgToken').value = token || '';
-  document.getElementById('tgChatId').value = saved.chatId || '';
-  const statusEl = document.getElementById('tgStatus');
-  if (token && channels.length > 0) {
-    statusEl.innerHTML = '<span style="color:var(--green)">&#10003; Configurado (' + channels.length + ' canais)</span>';
-  } else if (token) {
-    statusEl.innerHTML = '<span style="color:var(--yellow)">Token salvo, sem canais</span>';
-  } else {
-    statusEl.innerHTML = '<span style="color:var(--red)">Nao configurado</span>';
-  }
-}
-
-function saveTelegramConfig() {
-  const token = document.getElementById('tgToken').value.trim();
-  const chatId = document.getElementById('tgChatId').value.trim();
-  if (!token) { alert('Insira o Bot Token'); return; }
-  if (!chatId) { alert('Insira o Chat ID do canal/grupo'); return; }
-  setToken(token);
-  localStorage.setItem('tg-action-config', JSON.stringify({ chatId }));
-  const channels = getChannels();
-  const existing = channels.find(c => c.id === chatId);
-  if (!existing) {
-    channels.push({ id: chatId, name: 'Canal ' + chatId, createdAt: Date.now() });
-    saveChannels(channels);
-  }
-  document.getElementById('tgTestResult').innerHTML = '<span style="color:var(--green)">Configuracao salva!</span>';
-  loadTelegramConfig();
-}
-
-async function testTelegram() {
-  const token = document.getElementById('tgToken').value.trim() || getToken();
-  const chatId = document.getElementById('tgChatId').value.trim();
-  const resultEl = document.getElementById('tgTestResult');
-  const btn = document.getElementById('btnTestTg');
-  if (!token) { resultEl.innerHTML = '<span style="color:var(--red)">Token nao informado</span>'; return; }
-  if (!chatId) { resultEl.innerHTML = '<span style="color:var(--red)">Chat ID nao informado</span>'; return; }
-  btn.disabled = true;
-  btn.textContent = '...';
-  try {
-    const resp = await fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text: '&#129302; Teste de conexao - Robos em Acao\nHorario: ' + new Date().toLocaleTimeString('pt-BR'), parse_mode: 'HTML', disable_web_page_preview: true })
-    });
-    const result = await resp.json();
-    if (result.ok) {
-      resultEl.innerHTML = '<span style="color:var(--green)">&#10003; Conectado! Chat: ' + chatId + '</span>';
-      setToken(token);
-      const channels = getChannels();
-      const existing = channels.find(c => c.id === chatId);
-      if (!existing) {
-        channels.push({ id: chatId, name: 'Canal ' + chatId, createdAt: Date.now() });
-        saveChannels(channels);
-      }
-      loadTelegramConfig();
-    } else {
-      resultEl.innerHTML = '<span style="color:var(--red)">&#10007; ' + (result.description || 'Erro') + '</span>';
-    }
-  } catch (e) {
-    resultEl.innerHTML = '<span style="color:var(--red)">&#10007; ' + e.message + '</span>';
-  }
-  btn.disabled = false;
-  btn.textContent = 'Testar';
-}
-
-async function detectChatId() {
-  const token = document.getElementById('tgToken').value.trim() || getToken();
-  const resultEl = document.getElementById('tgTestResult');
-  if (!token) { resultEl.innerHTML = '<span style="color:var(--red)">Insira o Token primeiro</span>'; return; }
-  resultEl.innerHTML = '<span style="color:var(--yellow)">Buscando updates...</span>';
-  try {
-    const resp = await fetch('https://api.telegram.org/bot' + token + '/getUpdates?limit=5');
-    const result = await resp.json();
-    if (!result.ok) {
-      resultEl.innerHTML = '<span style="color:var(--red)">' + (result.description || 'Erro') + '</span>';
-      return;
-    }
-    const chats = new Map();
-    for (const update of result.result || []) {
-      const msg = update.message || update.my_chat_member;
-      if (msg && msg.chat) {
-        const c = msg.chat;
-        if (c.id && !chats.has(c.id)) {
-          chats.set(c.id, { id: String(c.id), title: c.title || c.first_name || 'Chat ' + c.id, type: c.type || 'unknown' });
-        }
-      }
-    }
-    if (chats.size === 0) {
-      resultEl.innerHTML = '<span style="color:var(--yellow)">Nenhum chat encontrado. Envie uma mensagem ao bot primeiro.</span>';
-      return;
-    }
-    let html = '<div style="margin-top:6px;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:6px">';
-    html += '<div style="font-size:10px;color:var(--text3);margin-bottom:4px">Chats encontrados (clique para selecionar):</div>';
-    for (const [, chat] of chats) {
-      html += '<div onclick="document.getElementById(\'tgChatId\').value=\'' + chat.id + '\'" style="padding:4px 8px;margin:2px 0;background:var(--bg2);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:11px;display:flex;justify-content:space-between">';
-      html += '<span>' + escapeHtml(chat.title) + '</span>';
-      html += '<span style="color:var(--blue)">' + chat.id + ' (' + chat.type + ')</span>';
-      html += '</div>';
-    }
-    html += '</div>';
-    resultEl.innerHTML = html;
-  } catch (e) {
-    resultEl.innerHTML = '<span style="color:var(--red)">' + e.message + '</span>';
-  }
-}
-
-function applyTelegramToAll() {
-  const chatId = document.getElementById('tgChatId').value.trim();
-  if (!chatId) { alert('Insira o Chat ID primeiro'); return; }
-  const robots = RobotEngine.getAllRobots();
-  let count = 0;
-  for (const robot of robots) {
-    robot.telegram = robot.telegram || {};
-    robot.telegram.enabled = true;
-    robot.telegram.channelId = chatId;
-    robot.telegram.msgType = 'consolidated';
-    if (!robot.telegram.message) robot.telegram.message = {};
-    count++;
-  }
-  RobotEngine.save();
-  document.getElementById('tgTestResult').innerHTML = '<span style="color:var(--green)">&#10003; ' + count + ' robo(s) atualizados! Msgs individuais desligadas.</span>';
-}
-
-function disableAllIndividualMsgs() {
-  const robots = RobotEngine.getAllRobots();
-  let count = 0;
-  for (const robot of robots) {
-    if (robot.telegram && robot.telegram.msgType !== 'consolidated') {
-      robot.telegram.msgType = 'consolidated';
-      count++;
-    }
-  }
-  RobotEngine.save();
-  const el = document.getElementById('tgTestResult');
-  if (count > 0) {
-    el.innerHTML = '<span style="color:var(--green)">&#10003; ' + count + ' robo(s) atualizados - msgs live/sinal desligadas</span>';
-  } else {
-    el.innerHTML = '<span style="color:var(--yellow)">Todos os robos ja estao em modo consolidado</span>';
-  }
-}
-
-function getHistory(key) { try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch { return []; } }
-function colorEmoji(c) { return { red: '\u{1F534}', black: '\u26AB', grey: '\u26AB', green: '\u{1F7E2}', blue: '\u{1F535}' }[(c||'').toLowerCase()] || '\u26AA'; }
-function colorLabel(c) { return { red: 'Vermelho', black: 'Preto', grey: 'Preto', green: 'Verde', blue: 'Azul' }[(c||'').toLowerCase()] || c; }
-
-function buildConsolidatedMessage(targetChannelId) {
-  let robots = RobotEngine.getAllStates();
-  robots = robots.filter(r => r.telegram?.actionChannelId && r.telegram?.actionType !== 'off');
-  if (targetChannelId) robots = robots.filter(r => r.telegram.actionChannelId === targetChannelId);
-  if (robots.length === 0) return null;
-  const now = new Date().toLocaleTimeString('pt-BR');
-  const sep = '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501';
-  const br = '';
-  const lines = [];
-
-  lines.push('\u{1F916} <b>PAINEL EM ACAO</b> \u{1F552} ' + now);
-  lines.push(sep);
-
-  let totalWins = 0, totalLosses = 0, totalSignals = 0, onlineCount = 0;
-  for (const r of robots) {
-    totalWins += r.stats?.wins || 0;
-    totalLosses += r.stats?.losses || 0;
-    totalSignals += r.stats?.signals || 0;
-    if (r.status === 'online') onlineCount++;
-  }
-  const totalResolved = totalWins + totalLosses;
-  const globalRate = totalResolved > 0 ? Math.round((totalWins / totalResolved) * 100) : 0;
-
-  function bar(pct, len) {
-    len = len || 10;
-    const filled = Math.round((pct / 100) * len);
-    return '<code>' + '\u2588'.repeat(filled) + '\u2591'.repeat(len - filled) + '</code>';
-  }
-  function rateColor(pct) { return pct >= 70 ? '\u{1F7E2}' : pct >= 50 ? '\u{1F7E1}' : '\u{1F534}'; }
-  function confBar(pct, len) {
-    len = len || 8;
-    const filled = Math.round((pct / 100) * len);
-    return '<code>' + '\u2588'.repeat(filled) + '\u2591'.repeat(len - filled) + '</code>';
-  }
-
-  lines.push('\u{1F4CB} <b>RESUMO GLOBAL</b>');
-  lines.push('\u{1F7E2} Online: <b>' + onlineCount + '/' + robots.length + '</b>');
-  lines.push('\u2705' + totalWins + 'W  \u274C' + totalLosses + 'L  \u{1F4CA} ' + totalSignals + ' sinais');
-  lines.push(rateColor(globalRate) + ' ' + bar(globalRate) + ' <b>' + globalRate + '%</b>');
-  lines.push(br);
-
-  for (const r of robots) {
-    const s = r.stats || {};
-    const w = s.wins || 0;
-    const l = s.losses || 0;
-    const resolved = w + l;
-    const rate = resolved > 0 ? Math.round((w / resolved) * 100) : 0;
-    const statusIcon = r.status === 'online' ? '\u2705' : '\u274C';
-    const gameIcon = r.game === 'wheel' ? '\u{1F3B0}' : '\u{1F3B2}';
-    const isSignal = r.currentSignal?.status === 'approved';
-    const isGale = r.currentSignal?.status === 'gale_pending';
-    const d = r.diagnostic || {};
-    const histKey = r.game === 'double' ? 'historico-double-v1' : 'historico-wheel-v1';
-    const hist = getHistory(histKey).slice(0, 30);
-    const histEmojis = hist.slice(0, 13).map(h => colorEmoji(h.color || h.cellColor)).join('');
-    const lastResult = r.lastResult ? colorEmoji(r.lastResult.color) + ' ' + colorLabel(r.lastResult.color) : '--';
-    const targetColor = r.target?.color || 'any';
-    const targetEmoji = targetColor === 'any' ? '\u2B50' : colorEmoji(targetColor);
-    const targetLabel = targetColor === 'any' ? 'QUALQUER' : colorLabel(targetColor).toUpperCase();
-    const conf = d.confidence || 0;
-    const modeLabel = r.mode === 'monitoramento' ? '\u{1F4E1} Monitor' : r.mode === 'telegram' ? '\u{1F4E8} Telegram' : r.mode;
-    const galeMax = r.gale?.max || 0;
-    const streak = s.currentStreak || 0;
-    const streakLabel = streak > 0 ? '+' + streak : streak < 0 ? '' + streak : '0';
-
-    lines.push(sep);
-    lines.push(statusIcon + ' <b>' + escapeHtml(r.name) + '</b> ' + gameIcon + ' ' + r.game.toUpperCase());
-    lines.push(br);
-
-    lines.push('\u2699\uFE0F <b>CONFIG</b>');
-    lines.push(modeLabel + ' | \u{1F3AF} ' + targetEmoji + ' <b>' + targetLabel + '</b>');
-    lines.push('\u{1F50E} ' + (r.strategies || [r.strategy || '--']).join(', '));
-    lines.push(br);
-
-    lines.push('\u{1F9E0} <b>IA</b>');
-    lines.push(rateColor(conf) + ' ' + confBar(conf) + ' <b>' + conf + '%</b>');
-    lines.push('\u2B50 Score: <b>' + (d.totalScore || d.signalScore || 0) + '/100</b>');
-    if (r.diagnostic?.mainPattern) {
-      lines.push('\u{1F50D} Padrao: <code>' + r.diagnostic.mainPattern + '</code>');
-    }
-    lines.push(br);
-
-    lines.push('\u{1F3B0} <b>HISTORICO</b>');
-    lines.push(histEmojis);
-    const freq = {};
-    hist.forEach(h => { const c = (h.color || h.cellColor || '').toLowerCase(); freq[c] = (freq[c] || 0) + 1; });
-    const freqEntries = Object.entries(freq).sort((a, b) => b[1] - a[1]);
-    if (freqEntries.length > 0) {
-      const maxFreq = freqEntries[0][1];
-      const freqLine = freqEntries.slice(0, 4).map(([c, n]) => {
-        const pct = Math.round((n / hist.length) * 100);
-        return colorEmoji(c) + '<code>' + '\u2588'.repeat(Math.max(1, Math.round((n / maxFreq) * 6))) + '</code> ' + n + '(' + pct + '%)';
-      }).join('  ');
-      lines.push(freqLine);
-    }
-    lines.push('\u{1F519} Ultimo: ' + lastResult + ' | Seq: <b>' + streakLabel + '</b>');
-    lines.push(br);
-
-    lines.push('\u{1F3C6} <b>RESULTADO</b>');
-    lines.push(rateColor(rate) + ' ' + bar(rate) + ' <b>' + w + 'W ' + l + 'L (' + rate + '%)</b>');
-    if (s.winSG || s.winG1 || s.winG2) {
-      lines.push('\u{1F3AF} SG:' + (s.winSG || 0) + (s.winG1 || galeMax >= 1 ? ' | G1:' + (s.winG1 || 0) : '') + (s.winG2 || galeMax >= 2 ? ' | G2:' + (s.winG2 || 0) : ''));
-    }
-
-    if (r.diagnostic?.filterOutput) {
-      const fo = r.diagnostic.filterOutput;
-      const foPct = fo.totalFilters > 0 ? Math.round((fo.passedCount / fo.totalFilters) * 100) : 0;
-      lines.push(br);
-      lines.push('\u{1F9EA} <b>FILTROS</b>');
-      lines.push(bar(foPct, 8) + ' ' + fo.passedCount + '/' + fo.totalFilters + ' (score: ' + fo.avgScore + ')');
-    }
-
-    if (isSignal) {
-      lines.push(br);
-      lines.push('\u{1F534} \u{1F6A8} <b>SINAL! ENTRAR NO ' + colorEmoji(r.target?.color) + ' ' + colorLabel(r.target?.color).toUpperCase() + '</b>');
-    } else if (isGale) {
-      lines.push(br);
-      lines.push('\u{1F7E1} \u26A1 <b>GALE ' + (r.currentSignal?.gale || 1) + ' - ' + colorEmoji(r.currentSignal?.target) + ' ' + colorLabel(r.currentSignal?.target).toUpperCase() + '</b>');
-    }
-    lines.push(br);
-  }
-
-  lines.push(sep);
-  lines.push('\u{1F4CA} <b>TOTAL</b>');
-  lines.push('\u2705' + totalWins + 'W  \u274C' + totalLosses + 'L  (' + globalRate + '%)');
-  lines.push('\u{1F4E8} ' + totalSignals + ' sinais enviados');
-  lines.push(br);
-  lines.push('\u{1F553} ' + now);
-  return lines.join('\n');
-}
-
-async function sendConsolidatedToTelegram() {
-  const token = getToken();
-  if (!token) { document.getElementById('tgTestResult').innerHTML = '<span style="color:var(--red)">Configure o Bot Token primeiro</span>'; return; }
-  const robots = RobotEngine.getAllStates();
-  const actionChannels = new Map();
-  for (const r of robots) {
-    const ch = r.telegram?.actionChannelId;
-    if (ch && r.telegram?.actionType !== 'off') {
-      if (!actionChannels.has(ch)) actionChannels.set(ch, []);
-      actionChannels.get(ch).push(r);
-    }
-  }
-  if (actionChannels.size === 0) {
-    document.getElementById('tgTestResult').innerHTML = '<span style="color:var(--yellow)">Nenhum robo com canal Em Acao configurado</span>';
-    return;
-  }
-  const btn = document.getElementById('btnSendTg');
-  const resultEl = document.getElementById('tgTestResult');
-  btn.disabled = true;
-  btn.innerHTML = 'Enviando...';
-  let sentCount = 0;
-  let editCount = 0;
-  let failCount = 0;
-
-  for (const [chatId, channelRobots] of actionChannels) {
-    const text = buildConsolidatedMessage(chatId);
-    if (!text) continue;
-    const lastSend = JSON.parse(localStorage.getItem('tg-action-last-send') || 'null');
-    const lastMsgId = lastSend?.chatId === chatId ? lastSend.msgId : null;
-    try {
-      let result;
-      if (lastMsgId) {
-        const editResp = await fetch('https://api.telegram.org/bot' + token + '/editMessageText', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chat_id: chatId, message_id: lastMsgId, text, parse_mode: 'HTML', disable_web_page_preview: true })
-        });
-        result = await editResp.json();
-        if (result.ok) {
-          editCount++;
-          localStorage.setItem('tg-action-last-send', JSON.stringify({ at: Date.now(), msgId: lastMsgId, chatId }));
-          continue;
-        }
-      }
-      const sendResp = await fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true })
-      });
-      result = await sendResp.json();
-      if (result.ok) {
-        sentCount++;
-        localStorage.setItem('tg-action-last-send', JSON.stringify({ at: Date.now(), msgId: result.result.message_id, chatId }));
-      } else {
-        failCount++;
-        console.error('[TG-Action] Send error for', chatId, result.description);
-      }
-    } catch (e) {
-      failCount++;
-      console.error('[TG-Action] Error for', chatId, e);
-    }
-  }
-
-  btn.innerHTML = '\u2705 Pronto!';
-  resultEl.innerHTML = '<span style="color:var(--green)">Editado: ' + editCount + ' | Novo: ' + sentCount + (failCount ? ' | Erro: ' + failCount : '') + '</span>';
-  setTimeout(() => { btn.innerHTML = '\u{1F4E4} Enviar agora'; btn.disabled = false; }, 2000);
-}
-
-function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; }
-
-let _autoSendTimer = null;
-function setupAutoSend() {
-  const select = document.getElementById('autoSendInterval');
-  if (!select) return;
-  const saved = localStorage.getItem('tg-action-auto-send') || '0';
-  select.value = saved;
-  select.onchange = function() {
-    localStorage.setItem('tg-action-auto-send', this.value);
-    startAutoSend();
-  };
-  startAutoSend();
-}
-function startAutoSend() {
-  if (_autoSendTimer) { clearInterval(_autoSendTimer); _autoSendTimer = null; }
-  const ms = parseInt(document.getElementById('autoSendInterval')?.value || '0');
-  if (ms > 0) {
-    _autoSendTimer = setInterval(() => { sendConsolidatedToTelegram(); }, ms);
-    console.log('[TG-Action] Auto-envio ativo:', ms + 'ms');
-  }
-}
-
-function loadLastSendInfo() {
-  const last = JSON.parse(localStorage.getItem('tg-action-last-send') || 'null');
-  const config = JSON.parse(localStorage.getItem('tg-action-config') || '{}');
-  const chatId = config.chatId || document.getElementById('tgChatId')?.value?.trim() || '';
-  const el = document.getElementById('tgTestResult');
-  if (last && last.chatId === chatId) {
-    const ago = Math.round((Date.now() - last.at) / 1000);
-    if (ago < 600) {
-      el.innerHTML = '<span style="color:var(--green)">Msg #' + last.msgId + ' ativa (ultima atualizacao: ' + ago + 's atras)</span>';
-    }
-  }
-}
-
 render();
-loadTelegramConfig();
-setupAutoSend();
-loadLastSendInfo();
 EventBus.on('robots:synced', render);
 EventBus.on('robot:state', render);
 setInterval(render, 3000);
-setInterval(loadLastSendInfo, 30000);
 </script>
 </body>
 </html>

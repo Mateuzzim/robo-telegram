@@ -57,7 +57,6 @@
     <a href="monitoramento.html">Monitoramento</a>
     <a href="robos.html" class="active">Robos</a>
     <a href="robos-action.html">Em Acao</a>
-    <a href="central.html">Central</a>
     <a href="analise.html">Analise</a>
     <a href="configuracoes.html">Config</a>
     <a href="estatisticas.html">Estatisticas</a>
@@ -138,33 +137,16 @@
       <div class="filter-grid" id="fFilters"></div>
     </div>
     <div style="border-top:1px solid var(--border);margin:12px 0;padding-top:12px">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-        <input type="checkbox" id="fTgEnabled" style="width:16px;height:16px">
-        <label for="fTgEnabled" style="font-size:13px;cursor:pointer;margin:0">Enviar para Telegram</label>
-      </div>
-
-      <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px">
-        <div style="font-size:11px;font-weight:700;color:var(--green);margin-bottom:8px">\u{1F4E8} MSGS INDIVIDUAIS (Sinal/Live)</div>
-        <div class="form-group"><label>Canal</label><select id="fTgChannel"><option value="">Selecionar canal...</option></select></div>
-        <div class="form-group"><label>Tipo</label>
-          <select id="fTgMsgType">
-            <option value="live">Live (status do robo)</option>
-            <option value="signal">Sinal (entrada, win, loss, gale)</option>
-            <option value="both">Live + Sinal</option>
-            <option value="consolidated">Desligado (so Em Acao)</option>
-          </select>
-        </div>
-      </div>
-
-      <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px">
-        <div style="font-size:11px;font-weight:700;color:var(--yellow);margin-bottom:8px">\u{1F4E4} MSG EM ACAO (Painel consolidado)</div>
-        <div class="form-group"><label>Canal</label><select id="fTgActionChannel"><option value="">Selecionar canal...</option></select></div>
-        <div class="form-group"><label>Tipo</label>
-          <select id="fTgActionType">
-            <option value="consolidated">Consolidado (painel atualizado)</option>
-            <option value="off">Desligado</option>
-          </select>
-        </div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:10px;cursor:pointer">
+        <input type="checkbox" id="fTgEnabled"> Enviar sinais para Telegram
+      </label>
+      <div class="form-group"><label>Canal Telegram</label><select id="fTgChannel"><option value="">Selecionar canal...</option></select></div>
+      <div class="form-group"><label>Tipo de Mensagem</label>
+        <select id="fTgMsgType">
+          <option value="live">Live (atualiza a cada resultado)</option>
+          <option value="signal">Sinal (entrada, win, loss, gale)</option>
+          <option value="both">Live + Sinal</option>
+        </select>
       </div>
     </div>
     <div style="display:flex;gap:8px;margin-top:16px"><button class="btn btn-green" onclick="createRobot()" id="modalBtn">Criar</button><button class="btn btn-ghost" onclick="document.getElementById('modal').style.display='none'">Cancelar</button></div>
@@ -222,13 +204,10 @@ function showCreate(){
   document.getElementById('fEditId').value = '';
   updateTargets();
   setSelectedStrategies(['todas']);
-  _currentFilterSelection = RobotFilters.getDefaultFilters();
   renderFilters();
   const channels = getChannels();
-  const channelOpts = '<option value="">Selecionar canal...</option>' + channels.map(c => `<option value="${c.id}">${escapeHtml(c.name)} (${c.id})</option>`).join('');
-  document.getElementById('fTgChannel').innerHTML = channelOpts;
-  document.getElementById('fTgActionChannel').innerHTML = channelOpts;
-  document.getElementById('fTgActionType').value = 'consolidated';
+  const sel = document.getElementById('fTgChannel');
+  sel.innerHTML = '<option value="">Selecionar canal...</option>' + channels.map(c => `<option value="${c.id}">${escapeHtml(c.name)} (${c.id})</option>`).join('');
   document.getElementById('modal').style.display='flex';
 }
 function showEdit(id){
@@ -250,21 +229,20 @@ function showEdit(id){
   document.getElementById('fGale').value = robot.gale?.max || 0;
   document.getElementById('fMode').value = robot.mode || 'monitoramento';
   document.getElementById('fFilterMode').value = robot.filterMode || 'moderado';
-  _currentFilterSelection = (robot.filters && robot.filters.length > 0) ? robot.filters : RobotFilters.getDefaultFilters();
   renderFilters();
+  if (robot.filters && robot.filters.length > 0) {
+    setSelectedFilters(robot.filters);
+  }
   if (strategies.includes('padroesCores')) {
     document.getElementById('fPatternSize').value = robot.patternSize || 3;
   }
   const channels = getChannels();
-  const channelOpts = '<option value="">Selecionar canal...</option>' + channels.map(c => `<option value="${c.id}">${escapeHtml(c.name)} (${c.id})</option>`).join('');
-  document.getElementById('fTgChannel').innerHTML = channelOpts;
-  document.getElementById('fTgActionChannel').innerHTML = channelOpts;
+  const sel = document.getElementById('fTgChannel');
+  sel.innerHTML = '<option value="">Selecionar canal...</option>' + channels.map(c => `<option value="${c.id}">${escapeHtml(c.name)} (${c.id})</option>`).join('');
   const tg = robot.telegram || {};
   document.getElementById('fTgEnabled').checked = !!tg.enabled;
   document.getElementById('fTgChannel').value = tg.channelId || '';
   document.getElementById('fTgMsgType').value = tg.msgType || 'both';
-  document.getElementById('fTgActionChannel').value = tg.actionChannelId || '';
-  document.getElementById('fTgActionType').value = tg.actionType || 'consolidated';
   document.getElementById('modal').style.display='flex';
 }
 function getSelectedStrategies() {
@@ -279,9 +257,7 @@ function setSelectedStrategies(strategies) {
   });
 }
 
-let _currentFilterSelection = null;
-
-function renderFilters(preset) {
+function renderFilters() {
   const container = document.getElementById('fFilters');
   if (!container || typeof RobotFilters === 'undefined') return;
   const groups = RobotFilters.getFilterGroups();
@@ -291,11 +267,10 @@ function renderFilters(preset) {
     markov: 'Markov', complexidade: 'Complexidade', qualidade: 'Qualidade',
     sinal: 'Sinal', operacional: 'Operacional', robustez: 'Robustez'
   };
-  const activeFilters = preset || _currentFilterSelection || RobotFilters.getDefaultFilters();
   container.innerHTML = Object.entries(groups).map(([group, filters]) => {
     return `<div class="filter-group">
       <div class="filter-group-title">${groupLabels[group] || group}</div>
-      ${filters.map(f => `<div class="filter-item"><label><input type="checkbox" value="${f.key}" onchange="updateFilterCount()" ${activeFilters.includes(f.key) ? 'checked' : ''}><span>${f.label}</span></label><span class="f-tag" title="${f.desc}">${f.desc.substring(0, 20)}...</span></div>`).join('')}
+      ${filters.map(f => `<div class="filter-item"><label><input type="checkbox" value="${f.key}" onchange="updateFilterCount()" checked><span>${f.label}</span></label><span class="f-tag" title="${f.desc}">${f.desc.substring(0, 20)}...</span></div>`).join('')}
     </div>`;
   }).join('');
   updateFilterCount();
@@ -307,7 +282,6 @@ function getSelectedFilters() {
 }
 
 function setSelectedFilters(filters) {
-  _currentFilterSelection = filters;
   const checkboxes = document.querySelectorAll('#fFilters input[type="checkbox"]');
   checkboxes.forEach(cb => {
     cb.checked = filters.includes(cb.value);
@@ -410,7 +384,6 @@ function autoSelectFilters() {
   const allFilters = typeof RobotFilters !== 'undefined' ? Object.keys(RobotFilters.ALL_FILTERS) : [];
   selected = selected.filter(f => allFilters.includes(f));
 
-  _currentFilterSelection = selected;
   setSelectedFilters(selected);
   updateFilterCount();
 
@@ -450,8 +423,6 @@ function createRobot(){
   const tgEnabled = document.getElementById('fTgEnabled').checked;
   const tgChannel = document.getElementById('fTgChannel').value;
   const tgMsgType = document.getElementById('fTgMsgType').value;
-  const tgActionChannel = document.getElementById('fTgActionChannel').value;
-  const tgActionType = document.getElementById('fTgActionType').value;
   const patternSize = strategies.includes('padroesCores') ? parseInt(document.getElementById('fPatternSize').value) || 3 : 3;
   const filters = getSelectedFilters();
   const minScore = parseInt(document.getElementById('fMinScore').value) || 52;
@@ -472,7 +443,7 @@ function createRobot(){
       robot.mode = mode;
       robot.target = { color: targetColor, multiplier: targetMult ? parseInt(targetMult) : null };
       robot.filterMode = filterMode;
-      robot.telegram = { enabled: tgEnabled, channelId: tgChannel, msgType: tgMsgType, actionChannelId: tgActionChannel, actionType: tgActionType, message: robot.telegram?.message || {} };
+      robot.telegram = { enabled: tgEnabled, channelId: tgChannel, msgType: tgMsgType, message: robot.telegram?.message || {} };
       robot.patternSize = patternSize;
       robot.filters = filters;
       RobotEngine.save();
@@ -487,7 +458,7 @@ function createRobot(){
       minScore,
       intervalMin: interval,
       galeMax, mode,
-      telegram: { enabled: tgEnabled, channelId: tgChannel, msgType: tgMsgType, actionChannelId: tgActionChannel, actionType: tgActionType },
+      telegram: { enabled: tgEnabled, channelId: tgChannel, msgType: tgMsgType },
       patternSize
     });
     RobotEngine.save();
