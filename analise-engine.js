@@ -1586,19 +1586,9 @@ const AnaliseEngine = (() => {
     const data = Store.get(STORAGE_KEY) || {};
     let changed = false;
     Object.entries(data).forEach(([id, config]) => {
-      if (!config.analises) config.analises = [...ALL_ANALISES];
-      ALL_ANALISES.forEach(a => {
-        if (!config.analises.includes(a)) { config.analises.push(a); changed = true; }
-      });
-      if (!config.analiseOrder) {
-        config.analiseOrder = config.analises ? [...config.analises] : [...ALL_ANALISES];
-        changed = true;
-      } else {
-        ALL_ANALISES.forEach(a => {
-          if (!config.analiseOrder.includes(a)) { config.analiseOrder.push(a); changed = true; }
-        });
-      }
-      if (!config.config) config.config = {};
+      if (!config.analises) { config.analises = [...ALL_ANALISES]; changed = true; }
+      if (!config.analiseOrder) { config.analiseOrder = [...(config.analises || ALL_ANALISES)]; changed = true; }
+      if (!config.config) { config.config = {}; changed = true; }
       const defaultConfigs = {
         estatistica: { showDistribution: true, showStreak: true, showMaxStreaks: true, maxStreakEntries: 3, showMostDelayed: true, showChi2: true, showStdDev: true },
         padroes: { showCorrelations: true },
