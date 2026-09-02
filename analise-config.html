@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Configurar Analise</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  html{zoom:0.8}
+  .config-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .config-section{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:18px;position:relative;overflow:hidden}
+  .config-section::before{content:'';position:absolute;top:0;left:0;width:4px;height:100%;border-radius:4px 0 0 4px}
+  .config-section.hist::before{background:var(--yellow)}
+  .config-section.est::before{background:var(--blue)}
+  .config-section.pad::before{background:var(--purple,#a855f7)}
+  .config-section.tmp::before{background:var(--orange,#f97316)}
+  .config-section.pre::before{background:var(--cyan,#06b6d4)}
+  .config-section.prob::before{background:var(--pink,#ec4899)}
+  .config-section.tend::before{background:var(--emerald,#10b981)}
+  .config-section.seq::before{background:var(--indigo,#6366f1)}
+  .config-section.pred::before{background:var(--blue,#3b82f6)}
+  .config-section.anom::before{background:var(--red,#ef4444)}
+  .config-section.conf::before{background:var(--purple,#a855f7)}
+  .config-section.mat::before{background:var(--teal,#14b8a6)}
+  .config-section.ent::before{background:var(--pink,#f472b6)}
+  .config-section.gen::before{background:var(--green,#22c55e)}
+  .config-section.multi::before{background:var(--violet,#8b5cf6)}
+  .config-section.comb::before{background:var(--green)}
+  .config-section h3{font-size:14px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+  .config-section h3 .icon{font-size:18px}
+  .config-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)}
+  .config-row:last-child{border-bottom:none}
+  .config-row label{font-size:12px;color:var(--text2);flex:1}
+  .config-row input[type=number]{width:70px;padding:6px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;text-align:center}
+  .config-row input[type=range]{width:120px;accent-color:var(--cyan,#06b6d4)}
+  .config-row .range-val{font-size:11px;color:var(--cyan,#06b6d4);font-weight:700;min-width:30px;text-align:right}
+  .toggle{position:relative;width:40px;height:22px;cursor:pointer}
+  .toggle input{opacity:0;width:0;height:0}
+  .toggle .slider{position:absolute;inset:0;background:var(--bg4);border-radius:11px;transition:.2s;border:1px solid var(--border)}
+  .toggle .slider::before{content:'';position:absolute;width:16px;height:16px;border-radius:50%;background:var(--text3);top:2px;left:2px;transition:.2s}
+  .toggle input:checked + .slider{background:var(--cyan,#06b6d4);border-color:var(--cyan,#06b6d4)}
+  .toggle input:checked + .slider::before{transform:translateX(18px);background:#fff}
+  .save-bar{position:sticky;bottom:0;background:var(--bg2);border-top:1px solid var(--border);padding:14px 20px;display:flex;justify-content:center;gap:12px;z-index:10}
+  .bot-info{background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;gap:16px}
+  .bot-info .bot-icon{width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,var(--purple,#a855f7),var(--cyan,#06b6d4));display:flex;align-items:center;justify-content:center;font-size:20px}
+  .bot-info .bot-name{font-size:16px;font-weight:700}
+  .bot-info .bot-game{font-size:11px;color:var(--text3);text-transform:uppercase}
+  .toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--green);color:#fff;padding:10px 24px;border-radius:8px;font-size:13px;font-weight:600;z-index:999;opacity:0;transition:opacity .3s;pointer-events:none}
+  .toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="bot-info" id="botInfo">
+    <div class="bot-icon">⚙</div>
+    <div><div class="bot-name" id="botName">Carregando...</div><div class="bot-game" id="botGame"></div></div>
+  </div>
+
+  <div class="config-grid" id="configGrid"></div>
+</div>
+
+<div class="save-bar">
+  <button class="btn btn-green" onclick="saveConfig()">Salvar Configuracoes</button>
+  <button class="btn" style="background:var(--bg4);color:var(--text2)" onclick="resetDefaults()">Restaurar Padrao</button>
+  <button class="btn" style="background:var(--bg4);color:var(--text2)" onclick="window.close()">Fechar</button>
+</div>
+
+<div class="toast" id="toast">Configuracoes salvas!</div>
+
+<script src="config.js"></script>
+<script src="saved-data.js"></script>
+<script src="store.js"></script>
+<script src="event-bus.js"></script>
+<script src="utils.js"></script>
+<script src="analise-engine.js"></script>
+<script>
+const params = new URLSearchParams(window.location.search);
+const botId = params.get('bot');
+
+const DEFAULTS = {
+  historico: { maxEmojis: 100, emojisPerLine: 13 },
+  estatistica: { showDistribution: true, showStreak: true, showMaxStreaks: true, maxStreakEntries: 3, showMostDelayed: true, showChi2: true, showStdDev: true },
+  padroes: { alternanciaThreshold: 55, repeticaoThreshold: 35, dominanciaThreshold: 50, showCorrelations: true, maxCorrelationsLag: 5 },
+  temporal: { showCycles: true, showPeriods: true, showVolatility: true, chunkCount: 5 },
+  previsao: { showTopN: 3, bayesWeight: 0.6, recentWeight: 0.4, streakBonus: 0.05, showStreakInfluence: true, showConfidence: true },
+  probabilidade: { showEdge: true, showRecomendacao: true },
+  tendencia: { showPeriods: true, periodSize: 10 },
+  sequencia: { showTriplets: true, showAfterRules: true, topPairs: 6, topTriplets: 4 },
+  predAvancada: { showTopN: 3, showModels: true, showConfidence: true },
+  anomalias: { showSummary: true, severityThreshold: 50 },
+  confluenciaIA: { showRecommendation: true, showTopFactor: true, freqWeight: 0.15, streakWeight: 0.12, gapWeight: 0.13, chi2Weight: 0.10, patternWeight: 0.12, temporalWeight: 0.10, recoveryWeight: 0.10, consistencyWeight: 0.10, momentumWeight: 0.08, correlationWeight: 0.07, valueWeight: 0.03 },
+  matrizTransicao: { showPrediction: true, showFlows: true },
+  entropia: { showDistribution: true, showAssessment: true },
+  algoritmoGenetico: { showHistory: true, showTopRules: true },
+  multidimensional: { showTopFactor: true, showLowFactor: true, showRecommendation: true },
+  combinada: { showScore: true, showRecomendacao: true }
+};
+
+function getConfig() {
+  return (bot && bot.config) ? JSON.parse(JSON.stringify(bot.config)) : JSON.parse(JSON.stringify(DEFAULTS));
+}
+
+const bot = AnaliseEngine.getBot(botId);
+if (!bot) {
+  document.getElementById('botName').textContent = 'Bot nao encontrado';
+} else {
+  document.getElementById('botName').textContent = bot.name;
+  document.getElementById('botGame').textContent = bot.game + ' | ' + bot.id;
+  renderConfig();
+}
+
+function renderConfig() {
+  const cfg = getConfig();
+  const sections = [
+    {
+      id: 'historico', title: 'Historico', icon: '📊', cls: 'hist',
+      rows: [
+        { key: 'maxEmojis', label: 'Maximo de emojis', type: 'number', min: 20, max: 200, step: 10 },
+        { key: 'emojisPerLine', label: 'Emojis por linha', type: 'number', min: 5, max: 20, step: 1 }
+      ]
+    },
+    {
+      id: 'estatistica', title: 'Estatisticas', icon: '📈', cls: 'est',
+      rows: [
+        { key: 'showDistribution', label: 'Mostrar distribuicao de cores', type: 'toggle' },
+        { key: 'showStreak', label: 'Mostrar streak atual', type: 'toggle' },
+        { key: 'showMaxStreaks', label: 'Mostrar maiores streaks', type: 'toggle' },
+        { key: 'maxStreakEntries', label: 'Qtd de max streaks', type: 'number', min: 1, max: 10, step: 1 },
+        { key: 'showMostDelayed', label: 'Mostrar cor mais atrasada', type: 'toggle' },
+        { key: 'showChi2', label: 'Mostrar qui-quadrado', type: 'toggle' },
+        { key: 'showStdDev', label: 'Mostrar desvio padrao', type: 'toggle' }
+      ]
+    },
+    {
+      id: 'padroes', title: 'Padroes', icon: '🔄', cls: 'pad',
+      rows: [
+        { key: 'alternanciaThreshold', label: 'Limiar alternancia (%)', type: 'range', min: 30, max: 80, step: 1, suffix: '%' },
+        { key: 'repeticaoThreshold', label: 'Limiar repeticao (%)', type: 'range', min: 15, max: 60, step: 1, suffix: '%' },
+        { key: 'dominanciaThreshold', label: 'Limiar dominancia (%)', type: 'range', min: 30, max: 80, step: 1, suffix: '%' },
+        { key: 'showCorrelations', label: 'Mostrar correlacoes', type: 'toggle' },
+        { key: 'maxCorrelationsLag', label: 'Max lag correlacoes', type: 'number', min: 1, max: 10, step: 1 }
+      ]
+    },
+    {
+      id: 'temporal', title: 'Analise Temporal', icon: '⏰', cls: 'tmp',
+      rows: [
+        { key: 'showCycles', label: 'Mostrar ciclos', type: 'toggle' },
+        { key: 'showPeriods', label: 'Mostrar periodos', type: 'toggle' },
+        { key: 'showVolatility', label: 'Mostrar volatilidade', type: 'toggle' },
+        { key: 'chunkCount', label: 'Qtd de periodos', type: 'number', min: 2, max: 10, step: 1 }
+      ]
+    },
+    {
+      id: 'previsao', title: 'Previsao IA', icon: '🧠', cls: 'pre',
+      rows: [
+        { key: 'showTopN', label: 'Top N previsoes', type: 'number', min: 1, max: 5, step: 1 },
+        { key: 'bayesWeight', label: 'Peso Bayesiano', type: 'range', min: 0.1, max: 0.9, step: 0.05, suffix: '', dec: 2 },
+        { key: 'recentWeight', label: 'Peso Recent (10)', type: 'range', min: 0.1, max: 0.9, step: 0.05, suffix: '', dec: 2 },
+        { key: 'streakBonus', label: 'Bonus streak', type: 'range', min: 0.01, max: 0.2, step: 0.01, suffix: '', dec: 2 },
+        { key: 'showStreakInfluence', label: 'Mostrar influencia streak', type: 'toggle' },
+        { key: 'showConfidence', label: 'Mostrar confianca', type: 'toggle' }
+      ]
+    },
+    {
+      id: 'probabilidade', title: 'Probabilidade', icon: '🔢', cls: 'prob',
+      rows: [
+        { key: 'showEdge', label: 'Mostrar edge total', type: 'toggle' },
+        { key: 'showRecomendacao', label: 'Mostrar recomendacao', type: 'toggle' }
+      ]
+    },
+    {
+      id: 'tendencia', title: 'Tendencia', icon: '📊', cls: 'tend',
+      rows: [
+        { key: 'showPeriods', label: 'Mostrar periodos', type: 'toggle' },
+        { key: 'periodSize', label: 'Tamanho do periodo', type: 'number', min: 5, max: 50, step: 5 }
+      ]
+    },
+    {
+      id: 'sequencia', title: 'Sequencias', icon: '🔗', cls: 'seq',
+      rows: [
+        { key: 'showTriplets', label: 'Mostrar tripletos', type: 'toggle' },
+        { key: 'showAfterRules', label: 'Mostrar regras apos', type: 'toggle' },
+        { key: 'topPairs', label: 'Qtd de pares', type: 'number', min: 3, max: 10, step: 1 },
+        { key: 'topTriplets', label: 'Qtd de tripletos', type: 'number', min: 2, max: 8, step: 1 }
+      ]
+    },
+    {
+      id: 'predAvancada', title: 'Predição Avançada', icon: '🧮', cls: 'pred',
+      rows: [
+        { key: 'showTopN', label: 'Top N previsões', type: 'number', min: 1, max: 5, step: 1 },
+        { key: 'showModels', label: 'Mostrar modelos', type: 'toggle' },
+        { key: 'showConfidence', label: 'Mostrar confiança', type: 'toggle' }
+      ]
+    },
+    {
+      id: 'anomalias', title: 'Detector de Anomalias', icon: '🔍', cls: 'anom',
+      rows: [
+        { key: 'showSummary', label: 'Mostrar resumo', type: 'toggle' },
+        { key: 'severityThreshold', label: 'Limiar de severidade', type: 'range', min: 20, max: 80, step: 5, suffix: '%' }
+      ]
+    },
+    {
+      id: 'confluenciaIA', title: 'Confluência IA', icon: '🎯', cls: 'conf',
+      rows: [
+        { key: 'showRecommendation', label: 'Mostrar recomendação', type: 'toggle' },
+        { key: 'showTopFactor', label: 'Mostrar maior impacto', type: 'toggle' },
+        { key: 'freqWeight', label: 'Peso Frequência', type: 'range', min: 0.05, max: 0.30, step: 0.01, suffix: '', dec: 2 },
+        { key: 'streakWeight', label: 'Peso Streak', type: 'range', min: 0.05, max: 0.25, step: 0.01, suffix: '', dec: 2 },
+        { key: 'gapWeight', label: 'Peso Atraso', type: 'range', min: 0.05, max: 0.25, step: 0.01, suffix: '', dec: 2 },
+        { key: 'chi2Weight', label: 'Peso Chi²', type: 'range', min: 0.05, max: 0.20, step: 0.01, suffix: '', dec: 2 },
+        { key: 'patternWeight', label: 'Peso Padrão', type: 'range', min: 0.05, max: 0.25, step: 0.01, suffix: '', dec: 2 },
+        { key: 'temporalWeight', label: 'Peso Temporal', type: 'range', min: 0.05, max: 0.20, step: 0.01, suffix: '', dec: 2 },
+        { key: 'recoveryWeight', label: 'Peso Recuperação', type: 'range', min: 0.05, max: 0.20, step: 0.01, suffix: '', dec: 2 },
+        { key: 'consistencyWeight', label: 'Peso Consistência', type: 'range', min: 0.05, max: 0.20, step: 0.01, suffix: '', dec: 2 },
+        { key: 'momentumWeight', label: 'Peso Momentum', type: 'range', min: 0.03, max: 0.15, step: 0.01, suffix: '', dec: 2 },
+        { key: 'correlationWeight', label: 'Peso Correlação', type: 'range', min: 0.03, max: 0.15, step: 0.01, suffix: '', dec: 2 },
+        { key: 'valueWeight', label: 'Peso Valor', type: 'range', min: 0.01, max: 0.10, step: 0.01, suffix: '', dec: 2 }
+      ]
+    },
+    {
+      id: 'matrizTransicao', title: 'Matriz de Transição', icon: '🔲', cls: 'mat',
+      rows: [
+        { key: 'showPrediction', label: 'Mostrar predição', type: 'toggle' },
+        { key: 'showFlows', label: 'Mostrar fluxos fortes', type: 'toggle' }
+      ]
+    },
+    {
+      id: 'entropia', title: 'Entropia', icon: '🌀', cls: 'ent',
+      rows: [
+        { key: 'showDistribution', label: 'Mostrar distribuição', type: 'toggle' },
+        { key: 'showAssessment', label: 'Mostrar avaliação', type: 'toggle' }
+      ]
+    },
+    {
+      id: 'algoritmoGenetico', title: 'Algoritmo Genético', icon: '🧬', cls: 'gen',
+      rows: [
+        { key: 'showHistory', label: 'Mostrar evolução', type: 'toggle' },
+        { key: 'showTopRules', label: 'Mostrar top regras', type: 'toggle' }
+      ]
+    },
+    {
+      id: 'multidimensional', title: 'Multidimensional', icon: '🎯', cls: 'multi',
+      rows: [
+        { key: 'showTopFactor', label: 'Mostrar maior fator', type: 'toggle' },
+        { key: 'showLowFactor', label: 'Mostrar menor fator', type: 'toggle' },
+        { key: 'showRecommendation', label: 'Mostrar recomendação', type: 'toggle' }
+      ]
+    },
+    {
+      id: 'combinada', title: 'Score Confluencia', icon: '💡', cls: 'comb',
+      rows: [
+        { key: 'showScore', label: 'Mostrar score', type: 'toggle' },
+        { key: 'showRecomendacao', label: 'Mostrar recomendacao', type: 'toggle' }
+      ]
+    }
+  ];
+
+  const grid = document.getElementById('configGrid');
+  grid.innerHTML = sections.map(sec => {
+    const rowsHtml = sec.rows.map(row => {
+      const val = cfg[sec.id] !== undefined ? cfg[sec.id][row.key] : DEFAULTS[sec.id][row.key];
+      if (row.type === 'toggle') {
+        return '<div class="config-row"><label>' + row.label + '</label><label class="toggle"><input type="checkbox" data-section="' + sec.id + '" data-key="' + row.key + '"' + (val ? ' checked' : '') + '><span class="slider"></span></label></div>';
+      }
+      if (row.type === 'range') {
+        const displayVal = row.dec ? Number(val).toFixed(row.dec) : val;
+        return '<div class="config-row"><label>' + row.label + '</label><input type="range" min="' + row.min + '" max="' + row.max + '" step="' + row.step + '" value="' + val + '" data-section="' + sec.id + '" data-key="' + row.key + '" oninput="updateRange(this)"><span class="range-val">' + displayVal + (row.suffix||'') + '</span></div>';
+      }
+      return '<div class="config-row"><label>' + row.label + '</label><input type="number" min="' + row.min + '" max="' + row.max + '" step="' + row.step + '" value="' + val + '" data-section="' + sec.id + '" data-key="' + row.key + '"></div>';
+    }).join('');
+    return '<div class="config-section ' + sec.cls + '"><h3><span class="icon">' + sec.icon + '</span> ' + sec.title + '</h3>' + rowsHtml + '</div>';
+  }).join('');
+}
+
+function updateRange(el) {
+  const sec = el.dataset.section;
+  const key = el.dataset.key;
+  const row = sections_flat.find(r => r.section === sec && r.key === key);
+  const displayVal = row && row.dec ? Number(el.value).toFixed(row.dec) : el.value;
+  const suffix = row ? (row.suffix || '') : '';
+  el.nextElementSibling.textContent = displayVal + suffix;
+}
+
+const sections_flat = [
+  { section: 'previsao', key: 'bayesWeight', dec: 2 },
+  { section: 'previsao', key: 'recentWeight', dec: 2 },
+  { section: 'previsao', key: 'streakBonus', dec: 2 },
+  { section: 'padroes', key: 'alternanciaThreshold', suffix: '%' },
+  { section: 'padroes', key: 'repeticaoThreshold', suffix: '%' },
+  { section: 'padroes', key: 'dominanciaThreshold', suffix: '%' }
+];
+
+function gatherConfig() {
+  const cfg = JSON.parse(JSON.stringify(DEFAULTS));
+  document.querySelectorAll('[data-section][data-key]').forEach(el => {
+    const sec = el.dataset.section;
+    const key = el.dataset.key;
+    if (!cfg[sec]) cfg[sec] = {};
+    if (el.type === 'checkbox') {
+      cfg[sec][key] = el.checked;
+    } else if (el.type === 'range' || el.type === 'number') {
+      cfg[sec][key] = parseFloat(el.value);
+    }
+  });
+  return cfg;
+}
+
+function saveConfig() {
+  if (!bot) return;
+  const cfg = gatherConfig();
+  const storageKey = 'analise-bots-v1';
+  const allBots = JSON.parse(localStorage.getItem(storageKey) || '{}');
+  if (!allBots[botId]) allBots[botId] = {};
+  allBots[botId].config = cfg;
+  localStorage.setItem(storageKey, JSON.stringify(allBots));
+  const toast = document.getElementById('toast');
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 2000);
+}
+
+function resetDefaults() {
+  if (!bot) return;
+  const storageKey = 'analise-bots-v1';
+  const allBots = JSON.parse(localStorage.getItem(storageKey) || '{}');
+  if (!allBots[botId]) allBots[botId] = {};
+  allBots[botId].config = JSON.parse(JSON.stringify(DEFAULTS));
+  localStorage.setItem(storageKey, JSON.stringify(allBots));
+  renderConfig();
+  const toast = document.getElementById('toast');
+  toast.textContent = 'Restaurado para padrao!';
+  toast.classList.add('show');
+  setTimeout(() => { toast.classList.remove('show'); toast.textContent = 'Configuracoes salvas!'; }, 2000);
+}
+</script>
+</body>
+</html>

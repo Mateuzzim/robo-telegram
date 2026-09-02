@@ -16,9 +16,40 @@
 <script src="robot.js"></script>
 <script src="robot-engine.js"></script>
 <script src="telegram.js"></script>
+<script src="analise-engine.js"></script>
+<script src="analise-telegram.js"></script>
 <script src="app.js"></script>
 <script>
 App.init();
+
+(function migrateWheelGreyToBlack() {
+  const key = 'historico-wheel-v1';
+  try {
+    const data = JSON.parse(localStorage.getItem(key) || '[]');
+    if (!Array.isArray(data)) return;
+    let changed = false;
+    data.forEach(item => {
+      const c = (item.cellColor || item.color || '').toLowerCase();
+      if (c === 'grey' || c === 'gray') {
+        item.cellColor = 'black';
+        if (item.color) item.color = 'black';
+        changed = true;
+      }
+    });
+    if (changed) {
+      localStorage.setItem(key, JSON.stringify(data));
+      console.log('[Migration] Wheel: grey -> black convertido em', data.length, 'resultados');
+    }
+  } catch {}
+})();
+
+AnaliseEngine.getAllBots().filter(b => b.status === 'online').forEach(b => {
+  AnaliseEngine.startBot(b.id);
+});
+
+setInterval(() => {
+  AnaliseEngine.syncFromStorage();
+}, 10000);
 
 const statusEl = document.getElementById('status');
 
@@ -151,6 +182,9 @@ function updateStatus(label, item) {
 EventBus.on('result:new', (d) => {
   if (d.label === 'wheel' || d.label === 'double') {
     addResult(d.label, d);
+    AnaliseEngine.getAllBots().filter(b => b.status === 'online' && b.game === d.label).forEach(b => {
+      AnaliseEngine.processBotIfNeeded(b.id);
+    });
   }
 });
 
@@ -169,6 +203,7 @@ document.addEventListener('visibilitychange', () => {
     if (Sources.wheel && !Sources.wheel.connected) Sources.wheel.forceReconnect();
     if (Sources.double && !Sources.double.connected) Sources.double.forceReconnect();
     RobotEngine.syncHistoriesFromStorage();
+    AnaliseEngine.syncFromStorage();
   }
 });
 
@@ -206,6 +241,8 @@ setInterval(() => {
   if (Sources.double) statusParts.push('double:' + (Sources.double.connected ? 'ON' : 'OFF'));
   const robots = RobotEngine.getAllRobots().filter(r => r.status === 'online');
   statusParts.push('robots:' + robots.length);
+  const analiseBots = AnaliseEngine.getAllBots().filter(b => b.status === 'online');
+  statusParts.push('analise:' + analiseBots.length);
   statusEl.textContent = '[' + new Date().toLocaleTimeString() + '] BG rodando | ' + statusParts.join(' | ') + ' | tick:' + _keepAliveCounter;
 
   if (isOnline) {

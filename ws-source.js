@@ -156,10 +156,10 @@ class WSSource {
     }
 
     const aliases = {
-      black: 'grey',
-      gray: 'grey',
-      grey: 'grey',
-      preto: 'grey',
+      black: 'black',
+      gray: 'black',
+      grey: 'black',
+      preto: 'black',
       red: 'red',
       vermelho: 'red',
       blue: 'blue',

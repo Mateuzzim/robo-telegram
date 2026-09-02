@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Analise</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  html{zoom:0.75}
+  .hero{background:linear-gradient(135deg,rgba(168,85,247,.15),rgba(6,182,212,.1));border:1px solid var(--border);border-radius:16px;padding:24px 30px;margin-bottom:24px;position:relative;overflow:hidden}
+  .hero::before{content:'';position:absolute;top:-50%;right:-10%;width:300px;height:300px;background:radial-gradient(circle,rgba(168,85,247,.08),transparent 70%);border-radius:50%}
+  .hero::after{content:'';position:absolute;bottom:-40%;left:10%;width:200px;height:200px;background:radial-gradient(circle,rgba(6,182,212,.06),transparent 70%);border-radius:50%}
+  .hero h1{font-size:26px;font-weight:800;margin-bottom:4px;position:relative;z-index:1;display:flex;align-items:center;gap:10px}
+  .hero h1 .logo{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--purple,#a855f7),var(--cyan,#06b6d4));display:flex;align-items:center;justify-content:center}
+  .hero p{color:var(--text3);font-size:13px;position:relative;z-index:1}
+  .stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px 18px;position:relative;overflow:hidden;transition:all .2s}
+  .stat-card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.3)}
+  .stat-card::before{content:'';position:absolute;top:0;left:0;width:4px;height:100%;border-radius:4px 0 0 4px}
+  .stat-card.green::before{background:var(--green)}
+  .stat-card.red::before{background:var(--red)}
+  .stat-card.blue::before{background:var(--blue)}
+  .stat-card.purple::before{background:var(--purple,#a855f7)}
+  .stat-card .stat-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;margin-bottom:8px}
+  .stat-card .stat-value{font-size:28px;font-weight:800;line-height:1}
+  .stat-card .stat-label{font-size:11px;color:var(--text3);margin-top:4px;text-transform:uppercase;letter-spacing:.5px}
+  .section-title{font-size:14px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+  .section-title .dot-accent{width:8px;height:8px;border-radius:50%;background:var(--purple,#a855f7);animation:pulse 2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  .live-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+  .live-dot.on{background:var(--green);box-shadow:0 0 8px var(--green)}
+  .live-dot.off{background:var(--red)}
+  .order-item{display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid var(--border);font-size:12px;cursor:grab;background:var(--card);transition:background .15s}
+  .order-item:last-child{border-bottom:none}
+  .order-item:active{cursor:grabbing;background:var(--bg)}
+  .order-item .order-num{font-weight:700;color:var(--text3);min-width:18px;font-size:11px}
+  .order-item .order-label{flex:1;color:var(--text)}
+  .order-item .order-btn{width:24px;height:24px;display:flex;align-items:center;justify-content:center;border:none;background:transparent;color:var(--text3);cursor:pointer;border-radius:4px;font-size:14px;line-height:1;transition:all .15s}
+  .order-item .order-btn:hover{background:var(--border);color:var(--text)}
+  .order-item.dragging{opacity:.5}
+  .order-item.over{border-top:2px solid var(--purple,#a855f7)}
+  .analise-tag-drag{display:inline-block;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;margin:1px;cursor:grab;transition:all .15s;user-select:none}
+  .analise-tag-drag:active{cursor:grabbing;transform:scale(1.1);box-shadow:0 2px 8px rgba(0,0,0,.3)}
+  .analise-tag-drag.dragging{opacity:.4}
+  .analise-tag-drag.over{outline:2px solid var(--purple,#a855f7);outline-offset:1px}
+  .analise-tag-drag.hist{background:rgba(234,179,8,.15);color:var(--yellow)}
+  .analise-tag-drag.est{background:rgba(35,104,255,.15);color:var(--blue)}
+  .analise-tag-drag.pad{background:rgba(168,85,247,.15);color:var(--purple,#a855f7)}
+  .analise-tag-drag.pre{background:rgba(6,182,212,.15);color:var(--cyan,#06b6d4)}
+  .analise-tag-drag.tmp{background:rgba(249,115,22,.15);color:var(--orange,#f97316)}
+  .analise-tag-drag.prob{background:rgba(236,72,153,.15);color:var(--pink,#ec4899)}
+  .analise-tag-drag.tend{background:rgba(16,185,129,.15);color:var(--emerald,#10b981)}
+  .analise-tag-drag.seq{background:rgba(99,102,241,.15);color:var(--indigo,#6366f1)}
+  .analise-tag-drag.pred{background:rgba(59,130,246,.15);color:var(--blue,#3b82f6)}
+  .analise-tag-drag.anom{background:rgba(239,68,68,.15);color:var(--red,#ef4444)}
+  .analise-tag-drag.conf{background:rgba(168,85,247,.15);color:var(--purple,#a855f7)}
+  .analise-tag-drag.mat{background:rgba(20,184,166,.15);color:var(--teal,#14b8a6)}
+  .analise-tag-drag.ent{background:rgba(244,114,182,.15);color:var(--pink,#f472b6)}
+  .analise-tag-drag.gen{background:rgba(34,197,94,.15);color:var(--green,#22c55e)}
+  .analise-tag-drag.multi{background:rgba(139,92,246,.15);color:var(--violet,#8b5cf6)}
+  .analise-tag{display:inline-block;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;margin:1px}
+  .analise-tag.est{background:rgba(35,104,255,.15);color:var(--blue)}
+  .analise-tag.pad{background:rgba(168,85,247,.15);color:var(--purple,#a855f7)}
+  .analise-tag.pre{background:rgba(6,182,212,.15);color:var(--cyan,#06b6d4)}
+  .analise-tag.tmp{background:rgba(249,115,22,.15);color:var(--orange,#f97316)}
+  .analise-tag.hist{background:rgba(234,179,8,.15);color:var(--yellow)}
+  .analise-tag.prob{background:rgba(236,72,153,.15);color:var(--pink,#ec4899)}
+  .analise-tag.tend{background:rgba(16,185,129,.15);color:var(--emerald,#10b981)}
+  .analise-tag.seq{background:rgba(99,102,241,.15);color:var(--indigo,#6366f1)}
+  .analise-tag.pred{background:rgba(59,130,246,.15);color:var(--blue,#3b82f6)}
+  .analise-tag.anom{background:rgba(239,68,68,.15);color:var(--red,#ef4444)}
+  .analise-tag.conf{background:rgba(168,85,247,.15);color:var(--purple,#a855f7)}
+  .analise-tag.mat{background:rgba(20,184,166,.15);color:var(--teal,#14b8a6)}
+  .analise-tag.ent{background:rgba(244,114,182,.15);color:var(--pink,#f472b6)}
+  .analise-tag.gen{background:rgba(34,197,94,.15);color:var(--green,#22c55e)}
+  .analise-tag.multi{background:rgba(139,92,246,.15);color:var(--violet,#8b5cf6)}
+  .btn-purple{background:rgba(168,85,247,.2);color:var(--purple,#a855f7);border:1px solid rgba(168,85,247,.3)}
+  .btn-purple:hover{background:rgba(168,85,247,.35)}
+  .btn-cyan{background:rgba(6,182,212,.2);color:var(--cyan,#06b6d4);border:1px solid rgba(6,182,212,.3)}
+  .btn-cyan:hover{background:rgba(6,182,212,.35)}
+  .checkbox-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .checkbox-grid label{display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;padding:4px 8px;border-radius:6px;border:1px solid var(--border);transition:all .15s}
+  .checkbox-grid label:hover{border-color:var(--purple,#a855f7)}
+  .checkbox-grid input:checked + span{color:var(--purple,#a855f7)}
+  .checkbox-grid label:has(input:checked){border-color:var(--purple,#a855f7);background:rgba(168,85,247,.08)}
+  .history-section{margin-top:24px}
+  #resultsDouble{display:grid;grid-template-columns:repeat(20,1fr);gap:10px;width:100%}
+  #resultsWheel{display:grid;grid-template-columns:repeat(20,1fr);gap:10px;width:100%}
+  .result{aspect-ratio:1/1;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:clamp(14px,1.5vw,20px);font-weight:800;color:#fff;border:1px solid rgba(255,255,255,.09);box-shadow:0 8px 24px rgba(0,0,0,.28);user-select:none;min-height:40px}
+  .result .multiplier{font-size:clamp(8px,.8vw,11px);font-weight:700;opacity:.86;margin-left:2px}
+  .result.red{background:linear-gradient(145deg,#ff4a55,#c7192d)}
+  .result.black{background:linear-gradient(145deg,#262a33,#090a0e)}
+  .result.grey,.result.gray{background:linear-gradient(145deg,#262a33,#090a0e)}
+  .result.green{background:linear-gradient(145deg,#29d978,#07883f)}
+  .result.blue{background:linear-gradient(145deg,#2368ff,#1748b3)}
+  .result.white{background:linear-gradient(145deg,#f5f5f5,#b8bdc8);color:#111}
+  @media(max-width:768px){#resultsDouble,#resultsWheel{grid-template-columns:repeat(12,1fr);gap:4px}.result{font-size:clamp(9px,2.6vw,13px);min-height:24px;border-radius:7px;box-shadow:none}}
+  @media(max-width:420px){#resultsDouble,#resultsWheel{grid-template-columns:repeat(10,1fr);gap:3px}.result{font-size:clamp(8px,2.7vw,11px);min-height:20px;border-radius:5px}}
+</style>
+</head>
+<body>
+<nav class="nav">
+  <span class="nav-brand">ANALISE</span>
+  <div class="nav-links">
+    <a href="index.html">Dashboard</a>
+    <a href="monitoramento.html">Monitoramento</a>
+    <a href="robos.html">Robos</a>
+    <a href="analise.html" class="active">Analise</a>
+    <a href="configuracoes.html">Config</a>
+    <a href="estatisticas.html">Estatisticas</a>
+    <a href="logs.html">Logs</a>
+    <a href="mensagens.html">Mensagens</a>
+  </div>
+  <div class="nav-status">
+    <a href="ws-background.html" target="_blank" style="font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text3);margin-right:8px">BG</a>
+  </div>
+</nav>
+<div class="container">
+  <div class="hero">
+    <h1><div class="logo"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div> Fabrica de Analise</h1>
+    <p>Crie robos de analise estatistica, padroes e previsoes para Telegram</p>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px" id="stats"></div>
+
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <div class="section-title" style="margin-bottom:0"><span class="dot-accent"></span> Todos os Robos de Analise</div>
+    <button class="btn btn-green" onclick="showCreate()">+ Novo Robo</button>
+  </div>
+
+  <div class="card"><div class="table-wrap"><table>
+    <thead><tr><th>Robo</th><th>Jogo</th><th>Analises</th><th>Status</th><th>Intervalo</th><th>Historico</th><th>Ultimo Relatorio</th><th>Acoes</th></tr></thead>
+    <tbody id="analiseTable"></tbody>
+  </table></div></div>
+
+  <div class="history-section">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Histórico Double</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span id="doubleCount" style="font-size:13px;color:var(--text2)">0 resultados</span>
+          <div class="dot" id="doubleDot"></div>
+          <span id="doubleConnText" style="font-size:12px;color:var(--text2)">Conectando...</span>
+        </div>
+      </div>
+      <div id="resultsDouble"></div>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <div class="card-header">
+        <span class="card-title">Histórico Wheel</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span id="wheelCount" style="font-size:13px;color:var(--text2)">0 resultados</span>
+          <div class="dot" id="wheelDot"></div>
+          <span id="wheelConnText" style="font-size:12px;color:var(--text2)">Conectando...</span>
+        </div>
+      </div>
+      <div id="resultsWheel"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-title" id="modalTitle">Novo Robo de Analise</div>
+    <input type="hidden" id="fEditId">
+    <div class="form-group"><label>Nome</label><input id="fName" placeholder="Ex: Analise Wheel Alpha"></div>
+    <div class="form-group"><label>Jogo</label><select id="fGame"><option value="wheel">Wheel 2X</option><option value="double">Double</option></select></div>
+
+    <div style="border-top:1px solid var(--border);margin:12px 0;padding-top:12px">
+      <label style="font-size:12px;font-weight:700;margin-bottom:8px;display:block">Tipos de Analise</label>
+      <div class="checkbox-grid">
+        <label><input type="checkbox" id="fAnaliseHist" checked value="historico"><span>Histórico</span></label>
+        <label><input type="checkbox" id="fAnaliseEst" checked value="estatistica"><span>Estatisticas Gerais</span></label>
+        <label><input type="checkbox" id="fAnalisePad" checked value="padroes"><span>Padroes Detectados</span></label>
+        <label><input type="checkbox" id="fAnalisePre" checked value="previsao"><span>Previsao IA</span></label>
+        <label><input type="checkbox" id="fAnaliseTmp" checked value="temporal"><span>Analise Temporal</span></label>
+        <label><input type="checkbox" id="fAnaliseProb" checked value="probabilidade"><span>Probabilidade</span></label>
+        <label><input type="checkbox" id="fAnaliseTend" checked value="tendencia"><span>Tendencia</span></label>
+        <label><input type="checkbox" id="fAnaliseSeq" checked value="sequencia"><span>Sequencias</span></label>
+        <label><input type="checkbox" id="fAnalisePred" checked value="predAvancada"><span>Predição Avançada</span></label>
+        <label><input type="checkbox" id="fAnaliseAnom" checked value="anomalias"><span>Anomalias</span></label>
+        <label><input type="checkbox" id="fAnaliseConf" checked value="confluenciaIA"><span>Confluência IA</span></label>
+        <label><input type="checkbox" id="fAnaliseMat" checked value="matrizTransicao"><span>Matriz Transição</span></label>
+        <label><input type="checkbox" id="fAnaliseEnt" checked value="entropia"><span>Entropia</span></label>
+        <label><input type="checkbox" id="fAnaliseGen" checked value="algoritmoGenetico"><span>Algoritmo Genético</span></label>
+        <label><input type="checkbox" id="fAnaliseMulti" checked value="multidimensional"><span>Multidimensional</span></label>
+      </div>
+    </div>
+
+    <div style="border-top:1px solid var(--border);margin:12px 0;padding-top:12px">
+      <label style="font-size:12px;font-weight:700;margin-bottom:8px;display:block">Ordem das Análises (arraste ou use ▲▼)</label>
+      <div id="analiseOrderList" style="max-height:250px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;background:var(--bg)"></div>
+    </div>
+
+    <div class="form-group"><label>Quantidade de Historico</label><input id="fHistorico" type="number" value="100" min="20" max="500"></div>
+    <div class="form-group"><label>Intervalo de Atualizacao (seg)</label><input id="fIntervalo" type="number" value="60" min="30" max="600"></div>
+
+    <div style="border-top:1px solid var(--border);margin:12px 0;padding-top:12px">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:10px;cursor:pointer">
+        <input type="checkbox" id="fTgEnabled"> Enviar relatorio para Telegram
+      </label>
+      <div class="form-group"><label>Canal Telegram</label><select id="fTgChannel"><option value="">Selecionar canal...</option></select></div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:16px"><button class="btn btn-green" onclick="createAnaliseBot()" id="modalBtn">Criar</button><button class="btn btn-ghost" onclick="document.getElementById('modal').style.display='none'">Cancelar</button></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="previewModal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal" style="max-width:550px">
+    <div class="modal-title" id="previewTitle">Preview da Mensagem Telegram</div>
+    <div id="previewContent" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:16px;font-size:12px;white-space:pre-wrap;font-family:monospace;max-height:70vh;overflow-y:auto;color:var(--text)"></div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn btn-blue" onclick="sendTestMessage()">Enviar Teste</button>
+      <button class="btn btn-ghost" onclick="testTelegramConnection()">Testar Conexao</button>
+      <button class="btn btn-ghost" onclick="document.getElementById('previewModal').style.display='none'">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="saved-data.js"></script>
+<script src="store.js"></script>
+<script src="event-bus.js"></script>
+<script src="utils.js"></script>
+<script src="ws-source.js"></script>
+<script src="robot.js"></script>
+<script src="robot-engine.js"></script>
+<script src="analise-engine.js"></script>
+<script src="analise-telegram.js"></script>
+<script src="telegram.js"></script>
+<script src="app.js"></script>
+<script>
+App.init();
+
+function getChannels() {
+  try { return JSON.parse(localStorage.getItem('telegram-channels') || '[]'); }
+  catch { return []; }
+}
+
+function showCreate() {
+  document.getElementById('modalTitle').textContent = 'Novo Robo de Analise';
+  document.getElementById('modalBtn').textContent = 'Criar';
+  document.getElementById('fEditId').value = '';
+  document.getElementById('fName').value = '';
+  document.getElementById('fGame').value = 'wheel';
+  document.getElementById('fAnaliseHist').checked = true;
+  document.getElementById('fAnaliseEst').checked = true;
+  document.getElementById('fAnalisePad').checked = true;
+  document.getElementById('fAnalisePre').checked = true;
+  document.getElementById('fAnaliseTmp').checked = true;
+  document.getElementById('fHistorico').value = 100;
+  document.getElementById('fIntervalo').value = 60;
+  document.getElementById('fTgEnabled').checked = false;
+  const channels = getChannels();
+  const sel = document.getElementById('fTgChannel');
+  sel.innerHTML = '<option value="">Selecionar canal...</option>' + channels.map(c => '<option value="'+c.id+'">'+escapeHtml(c.name)+' ('+c.id+')</option>').join('');
+  document.getElementById('modal').style.display = 'flex';
+  renderOrderList();
+}
+
+const ANALISE_NAMES = {
+  historico: 'Histórico', estatistica: 'Estatísticas', padroes: 'Padrões', previsao: 'Previsão IA',
+  temporal: 'Temporal', probabilidade: 'Probabilidade', tendencia: 'Tendência', sequencia: 'Sequências',
+  predAvancada: 'Predição Avançada', anomalias: 'Anomalias', confluenciaIA: 'Confluência IA',
+  matrizTransicao: 'Matriz Transição', entropia: 'Entropia', algoritmoGenetico: 'Algoritmo Genético',
+  multidimensional: 'Multidimensional'
+};
+
+const ANALISE_ICONS = {
+  historico: '📊', estatistica: '📈', padroes: '🔄', previsao: '🧠',
+  temporal: '⏰', probabilidade: '🔢', tendencia: '📊', sequencia: '🔗',
+  predAvancada: '🧮', anomalias: '🔍', confluenciaIA: '🎯',
+  matrizTransicao: '🔲', entropia: '🌀', algoritmoGenetico: '🧬',
+  multidimensional: '🎯'
+};
+
+function getCheckedAnalises() {
+  const ids = ['historico','estatistica','padroes','previsao','temporal','probabilidade','tendencia','sequencia','predAvancada','anomalias','confluenciaIA','matrizTransicao','entropia','algoritmoGenetico','multidimensional'];
+  const checked = [];
+  const checkboxMap = {
+    historico:'fAnaliseHist', estatistica:'fAnaliseEst', padroes:'fAnalisePad', previsao:'fAnalisePre',
+    temporal:'fAnaliseTmp', probabilidade:'fAnaliseProb', tendencia:'fAnaliseTend', sequencia:'fAnaliseSeq',
+    predAvancada:'fAnalisePred', anomalias:'fAnaliseAnom', confluenciaIA:'fAnaliseConf',
+    matrizTransicao:'fAnaliseMat', entropia:'fAnaliseEnt', algoritmoGenetico:'fAnaliseGen',
+    multidimensional:'fAnaliseMulti'
+  };
+  ids.forEach(id => {
+    const el = document.getElementById(checkboxMap[id]);
+    if (el && el.checked) checked.push(id);
+  });
+  return checked;
+}
+
+let currentOrder = [];
+
+function renderOrderList(savedOrder) {
+  const checked = getCheckedAnalises();
+  if (savedOrder) {
+    currentOrder = savedOrder.filter(id => checked.includes(id));
+    checked.forEach(id => { if (!currentOrder.includes(id)) currentOrder.push(id); });
+  } else {
+    const existing = currentOrder.filter(id => checked.includes(id));
+    checked.forEach(id => { if (!existing.includes(id)) existing.push(id); });
+    currentOrder = existing;
+  }
+  const container = document.getElementById('analiseOrderList');
+  if (!container) return;
+  container.innerHTML = currentOrder.map((id, i) => {
+    return '<div class="order-item" draggable="true" data-id="' + id + '">' +
+      '<span class="order-num">' + (i + 1) + '.</span>' +
+      '<span style="font-size:14px">' + (ANALISE_ICONS[id] || '📋') + '</span>' +
+      '<span class="order-label">' + (ANALISE_NAMES[id] || id) + '</span>' +
+      '<button class="order-btn" onclick="moveOrder(' + i + ',-1)" title="Mover cima">▲</button>' +
+      '<button class="order-btn" onclick="moveOrder(' + i + ',1)" title="Mover baixo">▼</button>' +
+    '</div>';
+  }).join('');
+
+  container.querySelectorAll('.order-item').forEach(item => {
+    item.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', item.dataset.id); item.classList.add('dragging'); });
+    item.addEventListener('dragend', () => item.classList.remove('dragging'));
+    item.addEventListener('dragover', e => { e.preventDefault(); item.classList.add('over'); });
+    item.addEventListener('dragleave', () => item.classList.remove('over'));
+    item.addEventListener('drop', e => {
+      e.preventDefault();
+      item.classList.remove('over');
+      const draggedId = e.dataTransfer.getData('text/plain');
+      const fromIdx = currentOrder.indexOf(draggedId);
+      const toIdx = currentOrder.indexOf(item.dataset.id);
+      if (fromIdx !== -1 && toIdx !== -1 && fromIdx !== toIdx) {
+        currentOrder.splice(fromIdx, 1);
+        currentOrder.splice(toIdx, 0, draggedId);
+        renderOrderList(currentOrder);
+      }
+    });
+  });
+}
+
+function moveOrder(idx, dir) {
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= currentOrder.length) return;
+  const temp = currentOrder[idx];
+  currentOrder[idx] = currentOrder[newIdx];
+  currentOrder[newIdx] = temp;
+  renderOrderList(currentOrder);
+}
+
+document.querySelectorAll('.checkbox-grid input[type="checkbox"]').forEach(cb => {
+  cb.addEventListener('change', () => renderOrderList(currentOrder));
+});
+
+document.addEventListener('dragstart', function(e) {
+  if (!e.target.classList.contains('analise-tag-drag')) return;
+  e.dataTransfer.setData('text/plain', JSON.stringify({ botId: e.target.dataset.bot, id: e.target.dataset.id, idx: parseInt(e.target.dataset.idx) }));
+  e.target.classList.add('dragging');
+  setTimeout(() => e.target.style.opacity = '0.4', 0);
+});
+
+document.addEventListener('dragend', function(e) {
+  if (!e.target.classList.contains('analise-tag-drag')) return;
+  e.target.classList.remove('dragging');
+  e.target.style.opacity = '';
+  document.querySelectorAll('.analise-tag-drag.over').forEach(el => el.classList.remove('over'));
+});
+
+document.addEventListener('dragover', function(e) {
+  const tag = e.target.closest('.analise-tag-drag');
+  if (!tag) return;
+  e.preventDefault();
+  document.querySelectorAll('.analise-tag-drag.over').forEach(el => el.classList.remove('over'));
+  tag.classList.add('over');
+});
+
+document.addEventListener('dragleave', function(e) {
+  const tag = e.target.closest('.analise-tag-drag');
+  if (tag) tag.classList.remove('over');
+});
+
+document.addEventListener('drop', function(e) {
+  const target = e.target.closest('.analise-tag-drag');
+  if (!target) return;
+  e.preventDefault();
+  target.classList.remove('over');
+
+  let data;
+  try { data = JSON.parse(e.dataTransfer.getData('text/plain')); } catch { return; }
+  if (!data.botId || !data.id || data.botId !== target.dataset.bot) return;
+
+  const bot = AnaliseEngine.getBot(data.botId);
+  if (!bot) return;
+
+  const order = [...(bot.analiseOrder || bot.analises || [])];
+  const fromIdx = data.idx;
+  const toIdx = parseInt(target.dataset.idx);
+
+  if (fromIdx === toIdx) return;
+
+  const moved = order.splice(fromIdx, 1)[0];
+  order.splice(toIdx, 0, moved);
+
+  AnaliseEngine.updateBot(data.botId, { analiseOrder: order });
+  loadBots();
+});
+
+function showEdit(id) {
+  const bot = AnaliseEngine.getBot(id);
+  if (!bot) return;
+  document.getElementById('modalTitle').textContent = 'Editar Robo de Analise';
+  document.getElementById('modalBtn').textContent = 'Salvar';
+  document.getElementById('fEditId').value = id;
+  document.getElementById('fName').value = bot.name || '';
+  document.getElementById('fGame').value = bot.game || 'wheel';
+  document.getElementById('fAnaliseHist').checked = (bot.analises || []).includes('historico');
+  document.getElementById('fAnaliseEst').checked = (bot.analises || []).includes('estatistica');
+  document.getElementById('fAnalisePad').checked = (bot.analises || []).includes('padroes');
+  document.getElementById('fAnalisePre').checked = (bot.analises || []).includes('previsao');
+  document.getElementById('fAnaliseTmp').checked = (bot.analises || []).includes('temporal');
+  document.getElementById('fAnaliseProb').checked = (bot.analises || []).includes('probabilidade');
+  document.getElementById('fAnaliseTend').checked = (bot.analises || []).includes('tendencia');
+  document.getElementById('fAnaliseSeq').checked = (bot.analises || []).includes('sequencia');
+  document.getElementById('fAnalisePred').checked = (bot.analises || []).includes('predAvancada');
+  document.getElementById('fAnaliseAnom').checked = (bot.analises || []).includes('anomalias');
+  document.getElementById('fAnaliseConf').checked = (bot.analises || []).includes('confluenciaIA');
+  document.getElementById('fAnaliseMat').checked = (bot.analises || []).includes('matrizTransicao');
+  document.getElementById('fAnaliseEnt').checked = (bot.analises || []).includes('entropia');
+  document.getElementById('fAnaliseGen').checked = (bot.analises || []).includes('algoritmoGenetico');
+  document.getElementById('fAnaliseMulti').checked = (bot.analises || []).includes('multidimensional');
+  document.getElementById('fHistorico').value = bot.historico || 100;
+  document.getElementById('fIntervalo').value = bot.intervalo || 60;
+  document.getElementById('fTgEnabled').checked = !!bot.telegramEnabled;
+  const channels = getChannels();
+  const sel = document.getElementById('fTgChannel');
+  sel.innerHTML = '<option value="">Selecionar canal...</option>' + channels.map(c => '<option value="'+c.id+'">'+escapeHtml(c.name)+' ('+c.id+')</option>').join('');
+  document.getElementById('fTgChannel').value = bot.telegramChannel || '';
+  document.getElementById('modal').style.display = 'flex';
+  renderOrderList(bot.analiseOrder || bot.analises);
+}
+
+function createAnaliseBot() {
+  const editId = document.getElementById('fEditId').value;
+  const name = document.getElementById('fName').value || 'Novo Analise';
+  const game = document.getElementById('fGame').value;
+  const analises = [];
+  if (document.getElementById('fAnaliseHist').checked) analises.push('historico');
+  if (document.getElementById('fAnaliseEst').checked) analises.push('estatistica');
+  if (document.getElementById('fAnalisePad').checked) analises.push('padroes');
+  if (document.getElementById('fAnalisePre').checked) analises.push('previsao');
+  if (document.getElementById('fAnaliseTmp').checked) analises.push('temporal');
+  if (document.getElementById('fAnaliseProb').checked) analises.push('probabilidade');
+  if (document.getElementById('fAnaliseTend').checked) analises.push('tendencia');
+  if (document.getElementById('fAnaliseSeq').checked) analises.push('sequencia');
+  if (document.getElementById('fAnalisePred').checked) analises.push('predAvancada');
+  if (document.getElementById('fAnaliseAnom').checked) analises.push('anomalias');
+  if (document.getElementById('fAnaliseConf').checked) analises.push('confluenciaIA');
+  if (document.getElementById('fAnaliseMat').checked) analises.push('matrizTransicao');
+  if (document.getElementById('fAnaliseEnt').checked) analises.push('entropia');
+  if (document.getElementById('fAnaliseGen').checked) analises.push('algoritmoGenetico');
+  if (document.getElementById('fAnaliseMulti').checked) analises.push('multidimensional');
+  const historico = parseInt(document.getElementById('fHistorico').value) || 100;
+  const intervalo = parseInt(document.getElementById('fIntervalo').value) || 60;
+  const tgEnabled = document.getElementById('fTgEnabled').checked;
+  const tgChannel = document.getElementById('fTgChannel').value;
+
+  if (analises.length === 0) {
+    alert('Selecione pelo menos um tipo de analise');
+    return;
+  }
+
+  const analiseOrder = currentOrder.filter(id => analises.includes(id));
+  analises.forEach(id => { if (!analiseOrder.includes(id)) analiseOrder.push(id); });
+
+  if (editId) {
+    console.log('[Analise] Editando bot:', editId);
+    AnaliseEngine.updateBot(editId, {
+      name, game, analises, analiseOrder, historico, intervalo,
+      telegramEnabled: tgEnabled, telegramChannel: tgChannel
+    });
+  } else {
+    console.log('[Analise] Criando bot:', name);
+    AnaliseEngine.createBot({
+      name, game, analises, analiseOrder, historico, intervalo,
+      telegramEnabled: tgEnabled, telegramChannel: tgChannel
+    });
+  }
+
+  document.getElementById('modal').style.display = 'none';
+  loadBots();
+}
+
+function renderStats() {
+  const bots = AnaliseEngine.getAllBots();
+  const total = bots.length;
+  const online = bots.filter(b => b.status === 'online').length;
+  const offline = bots.filter(b => b.status === 'offline').length;
+  document.getElementById('stats').innerHTML =
+    '<div class="stat-card blue"><div class="stat-icon" style="background:rgba(168,85,247,.15)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--purple,#a855f7)" stroke-width="2.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div><div class="stat-value" style="color:var(--purple,#a855f7)">'+total+'</div><div class="stat-label">Total</div></div>' +
+    '<div class="stat-card green"><div class="stat-icon" style="background:rgba(41,217,120,.15)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div class="stat-value" style="color:var(--green)">'+online+'</div><div class="stat-label">Ativos</div></div>' +
+    '<div class="stat-card red"><div class="stat-icon" style="background:rgba(255,68,68,.15)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></div><div class="stat-value" style="color:var(--red)">'+offline+'</div><div class="stat-label">Inativos</div></div>';
+}
+
+function loadBots() {
+  const bots = AnaliseEngine.getAllBots();
+  renderStats();
+
+  const analiseLabels = {
+    historico: '<span class="analise-tag hist">Historico</span>',
+    estatistica: '<span class="analise-tag est">Estatisticas</span>',
+    padroes: '<span class="analise-tag pad">Padroes</span>',
+    previsao: '<span class="analise-tag pre">Previsao</span>',
+    temporal: '<span class="analise-tag tmp">Temporal</span>',
+    probabilidade: '<span class="analise-tag prob">Probabilidade</span>',
+    tendencia: '<span class="analise-tag tend">Tendencia</span>',
+    sequencia: '<span class="analise-tag seq">Sequencias</span>',
+    predAvancada: '<span class="analise-tag pred">Predição</span>',
+    anomalias: '<span class="analise-tag anom">Anomalias</span>',
+    confluenciaIA: '<span class="analise-tag conf">Confluência</span>',
+    matrizTransicao: '<span class="analise-tag mat">Matriz</span>',
+    entropia: '<span class="analise-tag ent">Entropia</span>',
+    algoritmoGenetico: '<span class="analise-tag gen">Genético</span>',
+    multidimensional: '<span class="analise-tag multi">Multi</span>'
+  };
+
+  document.getElementById('analiseTable').innerHTML = bots.map(b => {
+    const order = b.analiseOrder || b.analises || [];
+    const analisesHtml = order.map((a, i) => {
+      const lbl = analiseLabels[a] || '';
+      if (!lbl) return '';
+      return '<span class="analise-tag-drag" draggable="true" data-bot="' + b.id + '" data-id="' + a + '" data-idx="' + i + '" title="Arrastar para reordenar">' + lbl + '</span>';
+    }).join('');
+    const lastReport = b.lastReport;
+    let lastReportStr = '<span style="color:var(--text3);font-size:11px">-</span>';
+    if (lastReport && lastReport.timestamp) {
+      const time = new Date(lastReport.timestamp).toLocaleTimeString('pt-BR');
+      const score = lastReport.combinada ? lastReport.combinada.score : '-';
+      lastReportStr = '<div style="font-size:11px"><span style="color:var(--text3)">'+time+'</span><br><strong style="color:'+(score >= 75 ? 'var(--green)' : score >= 50 ? 'var(--yellow)' : 'var(--red)')+'">'+score+'/100</strong></div>';
+    }
+
+    return '<tr>' +
+      '<td><div style="display:flex;align-items:center;gap:8px"><span class="live-dot '+(b.status==='online'?'on':'off')+'"></span><div><strong style="font-size:12px">'+escapeHtml(b.name)+'</strong><div style="font-size:10px;color:var(--text3)">'+b.game+' &bull; '+b.id+'</div></div></div></td>' +
+      '<td style="font-size:11px;text-transform:capitalize">'+b.game+'</td>' +
+      '<td>'+analisesHtml+'</td>' +
+      '<td>'+(b.status==='online'?'<span style="color:var(--green);font-size:11px;font-weight:700">● Ativo</span>':'<span style="color:var(--red);font-size:11px">● Inativo</span>')+'</td>' +
+      '<td style="font-size:11px;color:var(--text3)">'+b.intervalo+'s</td>' +
+      '<td style="font-size:11px;color:var(--text3)">'+b.historico+'</td>' +
+      '<td>'+lastReportStr+'</td>' +
+      '<td style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">' +
+        '<button class="btn btn-sm btn-cyan" onclick="openConfig(\''+b.id+'\')" title="Configurar Analises">⚙</button>' +
+        '<button class="btn btn-sm btn-blue" onclick="previewMessage(\''+b.id+'\')" title="Preview Telegram">Preview</button>' +
+        '<button class="btn btn-sm btn-yellow" onclick="showEdit(\''+b.id+'\')" title="Editar">Editar</button>' +
+        (b.status==='offline'
+          ? '<button class="btn btn-sm btn-green" onclick="startBot(\''+b.id+'\')" title="Iniciar">Play</button>'
+          : '<button class="btn btn-sm btn-red" onclick="stopBot(\''+b.id+'\')" title="Parar">Stop</button>') +
+        '<button class="btn btn-sm btn-purple" onclick="duplicateBot(\''+b.id+'\')" title="Duplicar">Copy</button>' +
+        '<button class="btn btn-sm btn-ghost" onclick="resetStats(\''+b.id+'\')" title="Resetar Stats">Reset</button>' +
+        '<button class="btn btn-sm btn-ghost" onclick="exportBot(\''+b.id+'\')" title="Exportar JSON">Export</button>' +
+        '<button class="btn btn-sm btn-red" onclick="deleteBot(\''+b.id+'\')" title="Excluir">Del</button>' +
+      '</td></tr>';
+  }).join('') || '<tr><td colspan="8" style="color:var(--text3);text-align:center;padding:20px">Nenhum robo de analise criado</td></tr>';
+}
+
+function startBot(id) {
+  AnaliseEngine.startBot(id);
+  loadBots();
+}
+
+function stopBot(id) {
+  AnaliseEngine.stopBot(id);
+  loadBots();
+}
+
+function deleteBot(id) {
+  if (!confirm('Excluir este robo de analise?')) return;
+  AnaliseEngine.deleteBot(id);
+  loadBots();
+}
+
+let currentPreviewBotId = null;
+
+function openConfig(id) {
+  window.open('analise-config.html?bot=' + encodeURIComponent(id), '_blank');
+}
+
+function previewMessage(id) {
+  const bot = AnaliseEngine.getBot(id);
+  if (!bot) return;
+  currentPreviewBotId = id;
+
+  const storageKey = 'historico-' + bot.game + '-v1';
+  const allResults = JSON.parse(localStorage.getItem(storageKey) || '[]');
+  const results = allResults.slice(0, bot.historico);
+
+  if (results.length < 10) {
+    alert('Historico insuficiente (minimo 10 resultados). Conecte o WebSocket primeiro.');
+    return;
+  }
+
+  const relatorio = AnaliseEngine.gerarRelatorio(id, results);
+  if (!relatorio) return;
+
+  const msg = AnaliseTelegramService.formatarRelatorio(relatorio, bot.analises, bot.config, bot.analiseOrder);
+  document.getElementById('previewContent').textContent = msg;
+  document.getElementById('previewTitle').textContent = 'Preview: ' + bot.name;
+  document.getElementById('previewModal').style.display = 'flex';
+}
+
+function sendTestMessage() {
+  if (!currentPreviewBotId) return;
+  const bot = AnaliseEngine.getBot(currentPreviewBotId);
+  if (!bot) return;
+
+  if (!bot.telegramChannel) {
+    alert('Configure um canal Telegram antes de enviar teste.');
+    return;
+  }
+
+  const tk = AnaliseTelegramService.getToken();
+  if (!tk) {
+    alert('Token do bot nao configurado! Va em Config > Telegram.');
+    return;
+  }
+
+  const storageKey = 'historico-' + bot.game + '-v1';
+  const allResults = JSON.parse(localStorage.getItem(storageKey) || '[]');
+  const results = allResults.slice(0, bot.historico);
+
+  if (results.length < 10) {
+    alert('Historico insuficiente (minimo 10 resultados).');
+    return;
+  }
+
+  const relatorio = AnaliseEngine.gerarRelatorio(currentPreviewBotId, results);
+  if (!relatorio) return;
+
+  AnaliseTelegramService.enviarRelatorio(currentPreviewBotId, relatorio)
+    .then(() => alert('Mensagem enviada com sucesso!'))
+    .catch(e => alert('Erro ao enviar: ' + e.message));
+}
+
+function duplicateBot(id) {
+  const bot = AnaliseEngine.getBot(id);
+  if (!bot) return;
+  AnaliseEngine.createBot({
+    name: bot.name + ' (Copia)',
+    game: bot.game,
+    analises: [...(bot.analises || [])],
+    historico: bot.historico,
+    intervalo: bot.intervalo,
+    telegramEnabled: false,
+    telegramChannel: null
+  });
+  loadBots();
+}
+
+function resetStats(id) {
+  if (!confirm('Resetar estatisticas deste robo?')) return;
+  const bot = AnaliseEngine.getBot(id);
+  if (!bot) return;
+  bot.lastReport = null;
+  bot.messageId = null;
+  AnaliseEngine.updateBot(id, { lastReport: null, messageId: null });
+  loadBots();
+}
+
+function exportBot(id) {
+  const bot = AnaliseEngine.getBot(id);
+  if (!bot) return;
+  const data = JSON.stringify(bot, null, 2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'analise-' + bot.id + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function testTelegramConnection() {
+  try {
+    const result = await AnaliseTelegramService.testConnection();
+    if (result.ok) {
+      alert('Conexao OK! Bot: ' + result.result.first_name + ' (@' + result.result.username + ')');
+    } else {
+      alert('Erro na conexao: ' + (result.description || 'Verifique o token'));
+    }
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  }
+}
+
+loadBots();
+EventBus.on('analisebot:created', loadBots);
+EventBus.on('analisebot:deleted', loadBots);
+EventBus.on('analisebot:started', loadBots);
+EventBus.on('analisebot:stopped', loadBots);
+EventBus.on('analisebot:updated', loadBots);
+
+const DOUBLE_KEY = 'historico-double-v1';
+const WHEEL_KEY = 'historico-wheel-v1';
+const MAX_RESULTS = 500;
+const DUPLICATE_WINDOW_MS = 15000;
+
+(function migrateWheelGreyToBlack() {
+  try {
+    const data = JSON.parse(localStorage.getItem(WHEEL_KEY) || '[]');
+    if (!Array.isArray(data)) return;
+    let changed = false;
+    data.forEach(item => {
+      const c = (item.cellColor || item.color || '').toLowerCase();
+      if (c === 'grey' || c === 'gray') {
+        item.cellColor = 'black';
+        if (item.color) item.color = 'black';
+        changed = true;
+      }
+    });
+    if (changed) localStorage.setItem(WHEEL_KEY, JSON.stringify(data));
+  } catch {}
+})();
+
+function loadDoubleHistory() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(DOUBLE_KEY) || 'null');
+    if (!Array.isArray(saved) || !saved.length) return [];
+    return saved;
+  } catch {}
+  return [];
+}
+
+function loadWheelHistory() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(WHEEL_KEY) || 'null');
+    if (!Array.isArray(saved) || !saved.length) return [];
+    const cleaned = removeImmediateDuplicates(saved);
+    if (cleaned.length !== saved.length) {
+      localStorage.setItem(WHEEL_KEY, JSON.stringify(cleaned.slice(0, MAX_RESULTS)));
+    }
+    return cleaned;
+  } catch {}
+  return [];
+}
+
+function removeImmediateDuplicates(history) {
+  const cleaned = [];
+  for (const item of history) {
+    if (!isImmediateDuplicate(cleaned[cleaned.length - 1], item)) {
+      cleaned.push(item);
+    }
+  }
+  return cleaned;
+}
+
+function isImmediateDuplicate(previous, item) {
+  if (!previous || !item) return false;
+  const previousRound = getRoundKey(previous);
+  const itemRound = getRoundKey(item);
+  if (previousRound && itemRound) return previousRound === itemRound;
+  if (resultSignature(previous) !== resultSignature(item)) return false;
+  const previousTime = getResultTime(previous);
+  const itemTime = getResultTime(item);
+  if (!previousTime || !itemTime) return true;
+  return Math.abs(previousTime - itemTime) <= DUPLICATE_WINDOW_MS;
+}
+
+function getRoundKey(result) {
+  const roundId = result.roundId ?? result.roundID ?? result.roundUuid ?? result.roundUUID ?? result.gameId ?? result.gameID ?? result.id ?? result.uuid;
+  return roundId !== undefined && roundId !== null ? String(roundId) : '';
+}
+
+function resultSignature(result) {
+  return [getNumber(result), getColor(result), result.multiplier || ''].join(':');
+}
+
+function getResultTime(result) {
+  return Number(result.time || result.timestamp || 0);
+}
+
+function getDoubleColor(r) {
+  const num = r.number ?? r.cellIndex;
+  if (num === 0) return 'green';
+  if (num >= 1 && num <= 7) return 'red';
+  if (num >= 8 && num <= 14) return 'black';
+  const c = String(r.color ?? r.cellColor ?? '').toLowerCase();
+  if (c === 'red') return 'red';
+  if (c === 'green') return 'green';
+  if (c === 'white') return 'white';
+  return 'black';
+}
+
+function getWheelColor(r) {
+  const c = String(r.cellColor ?? r.color ?? '').toLowerCase();
+  if (c === 'red') return 'red';
+  if (c === 'green') return 'green';
+  if (c === 'white') return 'white';
+  if (c === 'blue') return 'blue';
+  if (c === 'grey' || c === 'gray') return 'black';
+  return 'black';
+}
+
+function getColor(r) {
+  return getDoubleColor(r);
+}
+
+function getNumber(r) {
+  return r.number ?? r.cellIndex ?? '';
+}
+
+function renderDouble() {
+  const history = loadDoubleHistory().slice(0, MAX_RESULTS);
+  document.getElementById('doubleCount').textContent = history.length + ' resultados';
+  document.getElementById('resultsDouble').innerHTML = history.map(r => {
+    const num = getNumber(r);
+    const color = getDoubleColor(r);
+    return '<div class="result ' + color + '">' + (num !== '' ? num : '?') + '</div>';
+  }).join('');
+}
+
+function renderWheel() {
+  const history = loadWheelHistory().slice(0, MAX_RESULTS);
+  document.getElementById('wheelCount').textContent = history.length + ' resultados';
+  document.getElementById('resultsWheel').innerHTML = history.map(r => {
+    const num = getNumber(r);
+    const color = getWheelColor(r);
+    const multiplier = r.multiplier ? '<span class="multiplier">' + r.multiplier + 'X</span>' : '';
+    return '<div class="result ' + color + '"><span>' + String(num) + '</span>' + multiplier + '</div>';
+  }).join('');
+}
+
+function renderDoubleConnection() {
+  const status = App.getSourceStatus('double');
+  document.getElementById('doubleDot').className = 'dot' + (status.connected ? '' : ' off');
+  document.getElementById('doubleConnText').textContent = status.connected ? 'Online' : 'Offline';
+}
+
+function renderWheelConnection() {
+  const status = App.getSourceStatus('wheel');
+  document.getElementById('wheelDot').className = 'dot' + (status.connected ? '' : ' off');
+  document.getElementById('wheelConnText').textContent = status.connected ? 'Online' : 'Offline';
+}
+
+EventBus.on('ws-status', (d) => {
+  if (d.label === 'double') {
+    document.getElementById('doubleDot').className = 'dot' + (d.connected ? '' : ' off');
+    document.getElementById('doubleConnText').textContent = d.connected ? 'Online' : 'Offline';
+  }
+  if (d.label === 'wheel') {
+    document.getElementById('wheelDot').className = 'dot' + (d.connected ? '' : ' off');
+    document.getElementById('wheelConnText').textContent = d.connected ? 'Online' : 'Offline';
+  }
+});
+
+EventBus.on('result:new', (d) => {
+  if (d.label === 'double') renderDouble();
+  if (d.label === 'wheel') renderWheel();
+});
+
+EventBus.on('results:history', (d) => {
+  if (d.label === 'double') renderDouble();
+  if (d.label === 'wheel') renderWheel();
+});
+
+window.addEventListener('storage', (e) => {
+  if (e.key === DOUBLE_KEY) renderDouble();
+  if (e.key === WHEEL_KEY) renderWheel();
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    renderDouble();
+    renderWheel();
+    renderDoubleConnection();
+    renderWheelConnection();
+  }
+});
+
+renderDouble();
+renderWheel();
+renderDoubleConnection();
+renderWheelConnection();
+setInterval(renderDouble, 3000);
+setInterval(renderWheel, 3000);
+setInterval(renderDoubleConnection, 2000);
+setInterval(renderWheelConnection, 2000);
+</script>
+</body>
+</html>

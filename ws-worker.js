@@ -187,10 +187,10 @@ function normalizeWheel(item){
   ).toLowerCase();
   cellColor = cellColor.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   const aliases = {
-    black: "grey",
-    gray: "grey",
-    grey: "grey",
-    preto: "grey",
+    black: "black",
+    gray: "black",
+    grey: "black",
+    preto: "black",
     red: "red",
     vermelho: "red",
     blue: "blue",
@@ -200,8 +200,8 @@ function normalizeWheel(item){
   };
   cellColor = aliases[cellColor] || cellColor;
   if(!Number.isFinite(cellIndex)) return null;
-  if(!["red","blue","green","grey"].includes(cellColor)){
-    if(multiplier === 2) cellColor = "grey";
+  if(!["red","blue","green","black"].includes(cellColor)){
+    if(multiplier === 2) cellColor = "black";
     else if(multiplier === 3) cellColor = "red";
     else if(multiplier === 5) cellColor = "blue";
     else if(multiplier === 50) cellColor = "green";
@@ -1283,10 +1283,10 @@ function robotWheelPatternEmoji(text){
 
 function robotWheelGatherSignals(history){
   if(history.length<5)return{signals:[],seq:[]};
-  const seq=history.map(r=>r.cellColor).filter(c=>["grey","red","blue","green"].includes(c));
+  const seq=history.map(r=>r.cellColor).filter(c=>["black","red","blue","green"].includes(c));
   if(seq.length<5)return{signals:[],seq};
   const signals=[];
-  const T="grey";
+  const T="black";
   const nums=history.map(r=>r.cellIndex).filter(n=>Number.isFinite(n));
 
   function addSignal(name,conf,weight){
@@ -1362,12 +1362,12 @@ function robotWheelDetectPattern(history, options){
   for(const s of signals){
     let conf=s.conf;
 
-    if(recentLossColor==="grey"&&recentLossCount>=sameColorLimit){
+    if(recentLossColor==="black"&&recentLossCount>=sameColorLimit){
       conf=conf*0.65;
     }
 
     const last3=seq.slice(0,3).filter(c=>c!=="green");
-    const blackCount=last3.filter(c=>c==="grey").length;
+    const blackCount=last3.filter(c=>c==="black").length;
     if(blackCount>=2)conf=conf*0.85;
 
     const finalConf=Math.min(95,Math.max(20,Math.round(conf)));
@@ -1382,7 +1382,7 @@ function robotWheelDetectPattern(history, options){
   const avgConf=Math.round(totalConf/totalWeight);
   const patternName=usedNames.slice(0,2).join(" + ");
 
-  return{targetColor:"grey",patternName,confidence:Math.min(95,avgConf),signalCount:totalSignals,allSignals:signals};
+  return{targetColor:"black",patternName,confidence:Math.min(95,avgConf),signalCount:totalSignals,allSignals:signals};
 }
 
 function robotWheelBuildMessage(pattern, history, cfg){
