@@ -232,22 +232,20 @@ class WSSource {
     }
 
     const resultKeys = ['cellResult', 'result', 'roundResult', 'gameResult', 'lastResult', 'currentResult', 'winnerCell', 'winningCell', 'winner'];
-    if (this.isFinalLike(eventName, value)) {
-      for (const key of resultKeys) {
-        if (!value[key] || typeof value[key] !== 'object') continue;
-        const result = this.normalizeResult(value[key]);
-        if (result.color) {
-          this.emitResult(result);
-          emitted = true;
-        }
+    for (const key of resultKeys) {
+      if (!value[key] || typeof value[key] !== 'object') continue;
+      const result = this.normalizeResult(value[key]);
+      if (result.color) {
+        this.emitResult(result);
+        emitted = true;
       }
+    }
 
-      if (this.looksLikeResult(value)) {
-        const result = this.normalizeResult(value);
-        if (result.color) {
-          this.emitResult(result);
-          emitted = true;
-        }
+    if (this.looksLikeResult(value)) {
+      const result = this.normalizeResult(value);
+      if (result.color) {
+        this.emitResult(result);
+        emitted = true;
       }
     }
 

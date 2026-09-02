@@ -1718,7 +1718,7 @@ const AnaliseEngine = (() => {
       saveToStorage();
 
       EventBus.emit('analisebot:updated', { botId: id, relatorio });
-    }, 500);
+    }, 200);
   }
 
   function createBot(config) {
