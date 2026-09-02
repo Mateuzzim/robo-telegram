@@ -356,6 +356,7 @@ function loadRobots(){
           ? `<button class="btn btn-sm btn-green" onclick="start('${r.id}')">Play</button>`
           : `<button class="btn btn-sm btn-red" onclick="stop('${r.id}')">Stop</button>`}
         <button class="btn btn-sm btn-red" onclick="deleteRobot('${r.id}')">Del</button>
+        <button class="btn btn-sm btn-purple" onclick="resetTelegramMessages('${r.id}')" title="Resetar mensagens do Telegram">Reset TG</button>
       </td>
     </tr>`;
   }).join('') || '<tr><td colspan="10" style="color:var(--text3);text-align:center;padding:20px">Nenhum robo criado</td></tr>';
@@ -369,6 +370,54 @@ function changeRobotPatternSize(id, size) {
 function start(id){ RobotEngine.startRobot(id); loadRobots(); }
 function stop(id){ RobotEngine.stopRobot(id); loadRobots(); }
 function deleteRobot(id){ if(!confirm('Excluir este robo?')) return; RobotEngine.deleteRobot(id); loadRobots(); }
+async function resetTelegramMessages(id) {
+  if (!confirm('Resetar todas as mensagens do Telegram deste robo? Isso vai deletar as mensagens de live e entrada do chat.')) return;
+  const robot = RobotEngine.getRobot(id);
+  if (!robot) { alert('Robo nao encontrado.'); return; }
+  const token = localStorage.getItem('telegram-bot-token') || '';
+  const chatId = robot.telegram?.channelId || '';
+  if (!token || !chatId) { alert('Token do bot ou canal nao configurado.'); return; }
+  let deletedCount = 0;
+  try {
+    const liveRaw = JSON.parse(localStorage.getItem('telegram-live-messages-v1') || '{}');
+    for (const [key, msg] of Object.entries(liveRaw)) {
+      if (key.startsWith(id + ':') && msg.messageId) {
+        await fetch('https://api.telegram.org/bot' + token + '/deleteMessage', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: chatId, message_id: msg.messageId })
+        }).catch(() => {});
+        delete liveRaw[key];
+        deletedCount++;
+      }
+    }
+    localStorage.setItem('telegram-live-messages-v1', JSON.stringify(liveRaw));
+  } catch {}
+  try {
+    const entryRaw = JSON.parse(localStorage.getItem('telegram-entry-messages-v1') || '{}');
+    for (const [key, msg] of Object.entries(entryRaw)) {
+      if (key.startsWith(id + ':') && msg.messageId) {
+        await fetch('https://api.telegram.org/bot' + token + '/deleteMessage', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: chatId, message_id: msg.messageId })
+        }).catch(() => {});
+        delete entryRaw[key];
+        deletedCount++;
+      }
+    }
+    localStorage.setItem('telegram-entry-messages-v1', JSON.stringify(entryRaw));
+  } catch {}
+  try {
+    const events = JSON.parse(localStorage.getItem('telegram-entry-events-v1') || '{}');
+    for (const key of Object.keys(events)) {
+      if (key.startsWith(id + ':')) delete events[key];
+    }
+    localStorage.setItem('telegram-entry-events-v1', JSON.stringify(events));
+  } catch {}
+  alert('Mensagens resetadas! ' + deletedCount + ' mensagem(ns) deletada(s) do Telegram.');
+  loadRobots();
+}
 loadRobots();
 EventBus.on('robots:synced', loadRobots);
 </script>

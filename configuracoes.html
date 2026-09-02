@@ -386,7 +386,7 @@ function saveRobotLinks() {
   robots.forEach(r => {
     const enabled = document.getElementById('tgEnabled_' + r.id)?.checked || false;
     const channelId = document.getElementById('tgChannel_' + r.id)?.value || '';
-    r.telegram = { enabled, channelId };
+    r.telegram = { ...r.telegram, enabled, channelId };
   });
   RobotEngine.save();
   renderRobotLinks();
