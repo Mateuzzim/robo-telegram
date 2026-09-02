@@ -1274,8 +1274,9 @@ const AnaliseEngine = (() => {
 
     const bestRule = population[0];
     const ruleStr = bestRule.conditions.map((c, i) => {
-      const sign = bestRule.weights[i] > 0 ? '+' : '';
-      return `${COLOR_LABELS[c] || c}${sign}${bestRule.weights[i].toFixed(1)}`;
+      const w = bestRule.weights[i];
+      const sign = w > 0 ? '+' : '';
+      return `${COLOR_LABELS[c] || c}${sign}${(w != null ? Number(w) : 0).toFixed(1)}`;
     }).join(' ');
 
     const confianca = bestRule.fitness > 60 ? 'Alta' : bestRule.fitness > 45 ? 'Média' : 'Baixa';
