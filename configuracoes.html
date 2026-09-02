@@ -6,10 +6,16 @@
 <title>Configuracoes</title>
 <link rel="stylesheet" href="style.css">
 <style>
-.ch-list{display:flex;flex-direction:column;gap:8px;margin-top:12px}
-.ch-item{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px}
-.ch-item span{font-size:13px;color:var(--text)}
-.ch-item .ch-id{font-size:11px;color:var(--text3);font-family:monospace}
+.cfg-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:16px 20px}
+.cfg-col{display:flex;flex-direction:column;gap:16px}
+.ch-list{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-top:12px}
+.ch-item{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:12px}
+.ch-item span{font-size:12px;color:var(--text)}
+.ch-item .ch-id{font-size:10px;color:var(--text3);font-family:monospace}
+.ch-used{font-size:10px;color:var(--green);margin-top:2px}
+.ch-history{font-size:10px;color:var(--text3);margin-top:2px;font-style:italic}
+.ch-item .btn{font-size:11px;padding:4px 8px}
+@media(max-width:768px){.ch-list{grid-template-columns:1fr}}
 .robot-link{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)}
 .robot-link:last-child{border-bottom:none}
 .robot-link select{padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px}
@@ -17,6 +23,12 @@
 .test-result{margin-top:8px;padding:8px 12px;border-radius:6px;font-size:12px;font-weight:600;display:none}
 .test-ok{display:block;background:rgba(41,217,120,.12);color:var(--green)}
 .test-err{display:block;background:rgba(255,74,85,.12);color:var(--red)}
+.bulk-textarea{width:100%;min-height:80px;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-family:monospace;resize:vertical}
+.history-list{max-height:150px;overflow-y:auto;margin-top:8px}
+.history-item{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px}
+.history-item:last-child{border-bottom:none}
+@media(max-width:1024px){.cfg-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:768px){.cfg-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -29,60 +41,131 @@
   </div>
   <div class="nav-status"><a href="ws-background.html" target="_blank" style="font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text3)">BG</a></div>
 </nav>
-<div class="container" style="max-width:700px">
+<div class="cfg-grid">
 
-  <div class="card" style="margin-bottom:16px">
-    <div class="card-header"><span class="card-title">WebSocket</span></div>
-    <div class="form-group"><label>URL Wheel</label><input id="cfgWheel" placeholder="wss://..."></div>
-    <div class="form-group"><label>URL Double</label><input id="cfgDouble" placeholder="wss://..."></div>
-    <div><button class="btn btn-green btn-sm" onclick="saveWsConfig()">Salvar WS</button></div>
-  </div>
-
-  <div class="card" style="margin-bottom:16px">
-    <div class="card-header"><span class="card-title">Telegram Bot</span></div>
-    <div class="form-group"><label>Token do Bot</label><input id="tgToken" placeholder="123456:ABC-DEF..." type="password"></div>
-    <div class="form-group"><label>Dono Oficial</label><input id="tgOwner" placeholder="@usuario ou nome"></div>
-    <div style="display:flex;gap:8px;align-items:center">
-      <button class="btn btn-green btn-sm" onclick="saveToken()">Salvar Telegram</button>
-      <button class="btn btn-ghost btn-sm" onclick="testToken()">Testar Conexao</button>
-      <button class="btn btn-ghost btn-sm" onclick="clearTelegramMessages()">Resetar Mensagens</button>
+  <div class="cfg-col">
+    <div class="card">
+      <div class="card-header"><span class="card-title">WebSocket</span></div>
+      <div class="form-group"><label>URL Wheel</label><input id="cfgWheel" placeholder="wss://..."></div>
+      <div class="form-group"><label>URL Double</label><input id="cfgDouble" placeholder="wss://..."></div>
+      <div><button class="btn btn-green btn-sm" onclick="saveWsConfig()">Salvar WS</button></div>
     </div>
-    <div id="testResult" class="test-result"></div>
-  </div>
 
-  <div class="card" style="margin-bottom:16px">
-    <div class="card-header">
-      <span class="card-title">Canais / Grupos</span>
-      <button class="btn btn-green btn-sm" onclick="showAddChannel()">+ Adicionar</button>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Status</span></div>
+      <div id="statusInfo" style="font-size:13px"></div>
     </div>
-    <div id="addChannelForm" style="display:none;margin-bottom:12px">
-      <div style="display:flex;gap:8px">
-        <input id="chName" placeholder="Nome (ex: Sinais VIP)" style="flex:1;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
-        <input id="chId" placeholder="Chat ID (-100...)" style="flex:1;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
-        <button class="btn btn-green btn-sm" onclick="addChannel()">Add</button>
-        <button class="btn btn-ghost btn-sm" onclick="hideAddChannel()">Cancelar</button>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Historico de Envios</span>
+        <button class="btn btn-ghost btn-sm" onclick="clearSendHistory()">Limpar</button>
       </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:6px">Para descobrir o Chat ID: envie uma mensagem no grupo e acesse <code>https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code></div>
+      <div id="sendHistory" class="history-list"></div>
     </div>
-    <div id="channelsList" class="ch-list"></div>
   </div>
 
-  <div class="card" style="margin-bottom:16px">
-    <div class="card-header"><span class="card-title">Dados para GitHub</span></div>
-    <div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:12px">Gera o conteudo de <code>saved-data.js</code> com robos, canais, vinculos, URLs e modelos de mensagem. O token do bot nao entra nesse arquivo.</div>
-    <button class="btn btn-blue btn-sm" onclick="exportProjectData()">Exportar saved-data.js</button>
-    <div id="exportResult" class="test-result"></div>
+  <div class="cfg-col">
+    <div class="card">
+      <div class="card-header"><span class="card-title">Telegram Bot</span></div>
+      <div class="form-group"><label>Token do Bot</label><input id="tgToken" placeholder="123456:ABC-DEF..." type="password"></div>
+      <div class="form-group"><label>Dono Oficial</label><input id="tgOwner" placeholder="@usuario ou nome"></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-green btn-sm" onclick="saveToken()">Salvar Telegram</button>
+        <button class="btn btn-ghost btn-sm" onclick="testToken()">Testar Conexao</button>
+        <button class="btn btn-ghost btn-sm" onclick="clearTelegramMessages()">Resetar Mensagens</button>
+      </div>
+      <div id="testResult" class="test-result"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span class="card-title">Dados para GitHub</span></div>
+      <div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:12px">Gera o conteudo de <code>saved-data.js</code> com robos, canais, vinculos, URLs e modelos de mensagem. O token do bot nao entra nesse arquivo.</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-blue btn-sm" onclick="exportProjectData()">Exportar saved-data.js</button>
+        <button class="btn btn-ghost btn-sm" onclick="showImportData()">Importar saved-data.js</button>
+      </div>
+      <div id="exportResult" class="test-result"></div>
+      <div id="importDataForm" style="display:none;margin-top:12px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px">Importar Dados</div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:6px">Selecione um arquivo <code>saved-data.js</code> para restaurar configuracoes</div>
+        <input type="file" id="importFile" accept=".js" style="font-size:12px;color:var(--text)">
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn btn-green btn-sm" onclick="importData()">Importar</button>
+          <button class="btn btn-ghost btn-sm" onclick="hideImportData()">Cancelar</button>
+        </div>
+        <div id="importResult" class="test-result"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span class="card-title">Robos e Analise</span></div>
+      <div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:12px">Exporte ou importe seus robos e configuracoes de analise.</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-blue btn-sm" onclick="exportRobots()">Exportar Robos</button>
+        <button class="btn btn-ghost btn-sm" onclick="showImportRobots()">Importar Robos</button>
+      </div>
+      <div id="exportRobotsResult" class="test-result"></div>
+      <div id="importRobotsForm" style="display:none;margin-top:12px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px">Importar Robos</div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:6px">Selecione um arquivo <code>.json</code> para restaurar robos e analises</div>
+        <input type="file" id="importRobotsFile" accept=".json" style="font-size:12px;color:var(--text)">
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn btn-green btn-sm" onclick="importRobots()">Importar</button>
+          <button class="btn btn-ghost btn-sm" onclick="hideImportRobots()">Cancelar</button>
+        </div>
+        <div id="importRobotsResult" class="test-result"></div>
+      </div>
+    </div>
   </div>
 
-  <div class="card">
-    <div class="card-header"><span class="card-title">Vincular Robos aos Canais</span></div>
-    <div id="robotLinks"></div>
-    <div style="margin-top:12px"><button class="btn btn-green btn-sm" onclick="saveRobotLinks()">Salvar Vinculos</button></div>
-  </div>
+  <div class="cfg-col">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Canais / Grupos</span>
+        <button class="btn btn-green btn-sm" onclick="showAddChannel()">+ Adicionar</button>
+      </div>
+      <div id="addChannelForm" style="display:none;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px" id="channelFormTitle">Adicionar Canal</div>
+        <div style="display:flex;gap:8px">
+          <input id="chName" placeholder="Nome (ex: Sinais VIP)" style="flex:1;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
+          <input id="chId" placeholder="Chat ID (-100...)" style="flex:1;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
+          <button class="btn btn-green btn-sm" id="channelFormBtn" onclick="addChannel()">Add</button>
+          <button class="btn btn-ghost btn-sm" onclick="hideAddChannel()">Cancelar</button>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:6px">Para descobrir o Chat ID: envie uma mensagem no grupo e acesse <code>https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code></div>
+      </div>
+      <div id="channelsList" class="ch-list"></div>
+      <div style="margin-top:12px;display:flex;gap:8px">
+        <button class="btn btn-ghost btn-sm" onclick="showBulkImport()">+ Importar em Lote</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportBulkChannels()">Exportar em Lote</button>
+      </div>
+      <div id="bulkImportForm" style="display:none;margin-top:12px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px">Importar Canais em Lote</div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:6px">Cole uma lista no formato: <code>Nome, Chat ID</code> (um por linha)</div>
+        <textarea id="bulkChannels" class="bulk-textarea" placeholder="Sinais VIP, -1001234567890&#10;Grupo Free, -1009876543210&#10;Alertas, -1005555555555"></textarea>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn btn-green btn-sm" onclick="importBulkChannels()">Importar</button>
+          <button class="btn btn-ghost btn-sm" onclick="hideBulkImport()">Cancelar</button>
+        </div>
+        <div id="bulkResult" class="test-result"></div>
+      </div>
+      <div id="bulkExportForm" style="display:none;margin-top:12px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px">Exportar Canais em Lote</div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:6px">Formato: <code>Nome, Chat ID</code> (um por linha) - Copie e use para importar em outro sistema</div>
+        <textarea id="bulkExportChannels" class="bulk-textarea" readonly></textarea>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn btn-green btn-sm" onclick="copyBulkExport()">Copiar</button>
+          <button class="btn btn-ghost btn-sm" onclick="hideBulkExport()">Fechar</button>
+        </div>
+      </div>
+    </div>
 
-  <div class="card" style="margin-top:16px">
-    <div class="card-header"><span class="card-title">Status</span></div>
-    <div id="statusInfo" style="font-size:13px"></div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Vincular Robos aos Canais</span></div>
+      <div id="robotLinks"></div>
+      <div style="margin-top:12px"><button class="btn btn-green btn-sm" onclick="saveRobotLinks()">Salvar Vinculos</button></div>
+    </div>
   </div>
 
 </div>
@@ -175,8 +258,37 @@ async function testToken() {
   }
 }
 
-function showAddChannel() { document.getElementById('addChannelForm').style.display = 'block'; }
-function hideAddChannel() { document.getElementById('addChannelForm').style.display = 'none'; document.getElementById('chName').value = ''; document.getElementById('chId').value = ''; }
+let editingChannelId = null;
+
+function showAddChannel() {
+  editingChannelId = null;
+  document.getElementById('channelFormTitle').textContent = 'Adicionar Canal';
+  document.getElementById('channelFormBtn').textContent = 'Add';
+  document.getElementById('channelFormBtn').onclick = addChannel;
+  document.getElementById('chName').value = '';
+  document.getElementById('chId').value = '';
+  document.getElementById('addChannelForm').style.display = 'block';
+}
+
+function hideAddChannel() {
+  document.getElementById('addChannelForm').style.display = 'none';
+  document.getElementById('chName').value = '';
+  document.getElementById('chId').value = '';
+  editingChannelId = null;
+}
+
+function showEditChannel(id) {
+  const channels = getChannels();
+  const ch = channels.find(c => c.id === id);
+  if (!ch) return;
+  editingChannelId = id;
+  document.getElementById('channelFormTitle').textContent = 'Editar Canal';
+  document.getElementById('channelFormBtn').textContent = 'Salvar';
+  document.getElementById('channelFormBtn').onclick = updateChannel;
+  document.getElementById('chName').value = ch.name;
+  document.getElementById('chId').value = ch.id;
+  document.getElementById('addChannelForm').style.display = 'block';
+}
 
 function addChannel() {
   const name = document.getElementById('chName').value.trim();
@@ -185,6 +297,23 @@ function addChannel() {
   const channels = getChannels();
   if (channels.find(c => c.id === id)) { alert('Este Chat ID ja existe.'); return; }
   channels.push({ name, id });
+  saveChannels(channels);
+  hideAddChannel();
+  renderChannels();
+  renderRobotLinks();
+  renderStatus();
+}
+
+function updateChannel() {
+  if (!editingChannelId) return;
+  const name = document.getElementById('chName').value.trim();
+  const id = document.getElementById('chId').value.trim();
+  if (!name || !id) { alert('Preencha nome e Chat ID.'); return; }
+  const channels = getChannels();
+  if (id !== editingChannelId && channels.find(c => c.id === id)) { alert('Este Chat ID ja existe.'); return; }
+  const idx = channels.findIndex(c => c.id === editingChannelId);
+  if (idx === -1) return;
+  channels[idx] = { name, id };
   saveChannels(channels);
   hideAddChannel();
   renderChannels();
@@ -202,13 +331,28 @@ function removeChannel(id) {
 
 function renderChannels() {
   const channels = getChannels();
+  const robots = RobotEngine.getAllStates();
   const el = document.getElementById('channelsList');
   if (!channels.length) { el.innerHTML = '<div style="font-size:13px;color:var(--text3);padding:8px 0">Nenhum canal adicionado.</div>'; return; }
-  el.innerHTML = channels.map(c => `
+  el.innerHTML = channels.map(c => {
+    const linkedRobots = robots.filter(r => r.telegram?.channelId === c.id).map(r => r.name);
+    const usedBy = linkedRobots.length ? `<div class="ch-used">Usado por: ${linkedRobots.join(', ')}</div>` : '';
+    const history = getSendHistory(c.id);
+    const lastSend = history.length ? `<div class="ch-history">Ultimo envio: ${formatTime(history[0].time)}</div>` : '';
+    return `
     <div class="ch-item">
-      <div><span>${escapeHtml(c.name)}</span><div class="ch-id">${c.id}</div></div>
-      <button class="btn btn-sm btn-ghost" onclick="removeChannel('${c.id}')">Remover</button>
-    </div>`).join('');
+      <div>
+        <span>${escapeHtml(c.name)}</span>
+        <div class="ch-id">${c.id}</div>
+        ${usedBy}
+        ${lastSend}
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm btn-ghost" onclick="showEditChannel('${c.id}')">Editar</button>
+        <button class="btn btn-sm btn-ghost" onclick="removeChannel('${c.id}')">Remover</button>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function renderRobotLinks() {
@@ -296,6 +440,102 @@ function exportProjectData() {
   el.textContent = 'Arquivo gerado. Substitua o saved-data.js do projeto por este arquivo antes de subir para o GitHub.';
 }
 
+function exportRobots() {
+  const el = document.getElementById('exportRobotsResult');
+  const robots = RobotEngine.getAllRobots().map(r => {
+    const data = r.toJSON();
+    delete data.history;
+    delete data.logs;
+    delete data.lastResult;
+    delete data.lastSignal;
+    delete data.currentSignal;
+    delete data.diagnostic;
+    delete data.signalFlow;
+    delete data.stats;
+    data.galeCount = 0;
+    data.lastSignalTime = 0;
+    return data;
+  });
+  
+  let analysisData = [];
+  try {
+    analysisData = JSON.parse(localStorage.getItem('analise-bots-v1') || '[]');
+  } catch {}
+  
+  const exportData = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    robots: robots,
+    analysis: analysisData
+  };
+  
+  const content = JSON.stringify(exportData, null, 2);
+  const blob = new Blob([content], { type: 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'robos-analise-' + new Date().toISOString().slice(0, 10) + '.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  
+  el.className = 'test-result test-ok';
+  el.textContent = `Exportados: ${robots.length} robos, ${analysisData.length} analises.`;
+}
+
+function showImportRobots() { document.getElementById('importRobotsForm').style.display = 'block'; }
+function hideImportRobots() { document.getElementById('importRobotsForm').style.display = 'none'; document.getElementById('importRobotsFile').value = ''; document.getElementById('importRobotsResult').className = 'test-result'; }
+
+function importRobots() {
+  const file = document.getElementById('importRobotsFile').files[0];
+  const el = document.getElementById('importRobotsResult');
+  if (!file) { el.className = 'test-result test-err'; el.textContent = 'Selecione um arquivo.'; return; }
+  
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      
+      if (data.robots && Array.isArray(data.robots)) {
+        let imported = 0;
+        data.robots.forEach(robotData => {
+          const existing = RobotEngine.getRobot(robotData.id);
+          if (!existing) {
+            RobotEngine.createRobot(robotData);
+            imported++;
+          }
+        });
+        el.className = 'test-result test-ok';
+        el.textContent = `Importados: ${imported} robos novos de ${data.robots.length} total.`;
+      }
+      
+      if (data.analysis && Array.isArray(data.analysis)) {
+        let existingAnalysis = [];
+        try {
+          existingAnalysis = JSON.parse(localStorage.getItem('analise-bots-v1') || '[]');
+        } catch {}
+        
+        let importedAnalysis = 0;
+        data.analysis.forEach(bot => {
+          if (!existingAnalysis.find(b => b.id === bot.id)) {
+            existingAnalysis.push(bot);
+            importedAnalysis++;
+          }
+        });
+        
+        localStorage.setItem('analise-bots-v1', JSON.stringify(existingAnalysis));
+        el.textContent += ` Importadas: ${importedAnalysis} analises novas.`;
+      }
+      
+    } catch (err) {
+      el.className = 'test-result test-err';
+      el.textContent = 'Erro ao processar: ' + err.message;
+    }
+  };
+  reader.readAsText(file);
+}
+
 function renderStatus() {
   const robots = RobotEngine.getAllStates();
   const online = robots.filter(r => r.status === 'online').length;
@@ -312,9 +552,148 @@ function renderStatus() {
     <div>Fonte Double: <strong style="color:${doubleStatus.connected ? 'var(--green)' : 'var(--red)'}">${doubleStatus.connected ? 'Online' : 'Offline'}</strong></div>`;
 }
 
+function showBulkImport() { document.getElementById('bulkImportForm').style.display = 'block'; }
+function hideBulkImport() { document.getElementById('bulkImportForm').style.display = 'none'; document.getElementById('bulkChannels').value = ''; document.getElementById('bulkResult').className = 'test-result'; }
+
+function importBulkChannels() {
+  const text = document.getElementById('bulkChannels').value.trim();
+  const el = document.getElementById('bulkResult');
+  if (!text) { el.className = 'test-result test-err'; el.textContent = 'Cole a lista de canais.'; return; }
+  const lines = text.split('\n').filter(l => l.trim());
+  const channels = getChannels();
+  let added = 0, skipped = 0;
+  lines.forEach(line => {
+    const parts = line.split(',').map(s => s.trim());
+    if (parts.length < 2) { skipped++; return; }
+    const name = parts[0];
+    const id = parts[1];
+    if (!name || !id || channels.find(c => c.id === id)) { skipped++; return; }
+    channels.push({ name, id });
+    added++;
+  });
+  saveChannels(channels);
+  el.className = added > 0 ? 'test-result test-ok' : 'test-result test-err';
+  el.textContent = `Importados: ${added} | Pulados: ${skipped}`;
+  renderChannels();
+  renderRobotLinks();
+  renderStatus();
+}
+
+function showBulkExport() { document.getElementById('bulkExportForm').style.display = 'block'; }
+function hideBulkExport() { document.getElementById('bulkExportForm').style.display = 'none'; }
+
+function exportBulkChannels() {
+  const channels = getChannels();
+  if (!channels.length) { alert('Nenhum canal para exportar.'); return; }
+  const text = channels.map(c => `${c.name}, ${c.id}`).join('\n');
+  document.getElementById('bulkExportChannels').value = text;
+  showBulkExport();
+}
+
+function copyBulkExport() {
+  const textarea = document.getElementById('bulkExportChannels');
+  textarea.select();
+  document.execCommand('copy');
+  alert('Copiado para a area de transferencia!');
+}
+
+function showImportData() { document.getElementById('importDataForm').style.display = 'block'; }
+function hideImportData() { document.getElementById('importDataForm').style.display = 'none'; document.getElementById('importFile').value = ''; document.getElementById('importResult').className = 'test-result'; }
+
+function importData() {
+  const file = document.getElementById('importFile').files[0];
+  const el = document.getElementById('importResult');
+  if (!file) { el.className = 'test-result test-err'; el.textContent = 'Selecione um arquivo.'; return; }
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const content = e.target.result;
+      const match = content.match(/window\.SAVED_PROJECT_DATA\s*=\s*(\{[\s\S]*\})\s*;/);
+      if (!match) { el.className = 'test-result test-err'; el.textContent = 'Formato invalido. Esperado: window.SAVED_PROJECT_DATA = {...};'; return; }
+      const data = JSON.parse(match[1]);
+      if (data.wsConfig) {
+        localStorage.setItem('ws-config-v1', JSON.stringify(data.wsConfig));
+      }
+      if (data.telegram) {
+        if (data.telegram.owner) localStorage.setItem(OWNER_KEY, data.telegram.owner);
+        if (data.telegram.channels) saveChannels(data.telegram.channels);
+      }
+      if (data.robots) {
+        const existing = RobotEngine.getAllRobots();
+        data.robots.forEach(robotData => {
+          const exists = existing.find(r => r.id === robotData.id);
+          if (!exists) {
+            RobotEngine.createRobot(robotData);
+          }
+        });
+      }
+      if (data.messageTemplates) {
+        Store.set('telegram-message-templates-v1', data.messageTemplates);
+      }
+      el.className = 'test-result test-ok';
+      el.textContent = `Importado: ${data.robots?.length || 0} robos, ${data.telegram?.channels?.length || 0} canais.`;
+      renderChannels();
+      renderRobotLinks();
+      renderStatus();
+    } catch (err) {
+      el.className = 'test-result test-err';
+      el.textContent = 'Erro ao processar: ' + err.message;
+    }
+  };
+  reader.readAsText(file);
+}
+
+function getSendHistory(channelId) {
+  try {
+    const history = JSON.parse(localStorage.getItem('telegram-send-history-v1') || '{}');
+    return (history[channelId] || []).sort((a, b) => b.time - a.time);
+  } catch { return []; }
+}
+
+function recordSend(channelId, robotName) {
+  try {
+    const history = JSON.parse(localStorage.getItem('telegram-send-history-v1') || '{}');
+    if (!history[channelId]) history[channelId] = [];
+    history[channelId].unshift({ time: Date.now(), robot: robotName });
+    if (history[channelId].length > 50) history[channelId] = history[channelId].slice(0, 50);
+    localStorage.setItem('telegram-send-history-v1', JSON.stringify(history));
+  } catch {}
+}
+
+function clearSendHistory() {
+  if (!confirm('Limpar historico de envios?')) return;
+  localStorage.removeItem('telegram-send-history-v1');
+  renderChannels();
+  renderSendHistory();
+}
+
+function formatTime(ts) {
+  const d = new Date(ts);
+  return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
+function renderSendHistory() {
+  const el = document.getElementById('sendHistory');
+  const channels = getChannels();
+  const allHistory = [];
+  channels.forEach(c => {
+    const history = getSendHistory(c.id);
+    history.forEach(h => allHistory.push({ ...h, channelName: c.name }));
+  });
+  allHistory.sort((a, b) => b.time - a.time);
+  if (!allHistory.length) { el.innerHTML = '<div style="font-size:13px;color:var(--text3);padding:8px 0">Nenhum envio registrado.</div>'; return; }
+  el.innerHTML = allHistory.slice(0, 30).map(h => `
+    <div class="history-item">
+      <span>${escapeHtml(h.channelName)}</span>
+      <span style="color:var(--text3)">${h.robot || 'N/A'}</span>
+      <span style="color:var(--text3)">${formatTime(h.time)}</span>
+    </div>`).join('');
+}
+
 renderChannels();
 renderRobotLinks();
 renderStatus();
+renderSendHistory();
 EventBus.on('robots:synced', renderStatus);
 EventBus.on('robots:synced', renderRobotLinks);
 window.addEventListener('storage', (e) => {

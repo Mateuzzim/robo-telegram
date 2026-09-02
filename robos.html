@@ -28,6 +28,13 @@
   .live-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
   .live-dot.on{background:var(--green);box-shadow:0 0 8px var(--green)}
   .live-dot.off{background:var(--red)}
+  .strategy-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;max-height:250px;overflow-y:auto;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px}
+  .strategy-item{display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:all .2s}
+  .strategy-item:hover{border-color:var(--green);background:var(--bg3)}
+  .strategy-item input:checked + span{color:var(--green);font-weight:600}
+  .strategy-item label{display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;width:100%}
+  .strategy-item .strat-tag{font-size:9px;padding:2px 5px;border-radius:4px;background:var(--bg);color:var(--text3);margin-left:auto}
+  @media(max-width:768px){.strategy-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -67,13 +74,38 @@
 </div>
 
 <div class="modal-overlay" id="modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
-  <div class="modal" style="max-width:500px">
+  <div class="modal" style="max-width:700px;max-height:90vh;overflow-y:auto">
     <div class="modal-title" id="modalTitle">Novo Robo</div>
     <input type="hidden" id="fEditId">
     <div class="form-group"><label>Nome</label><input id="fName" placeholder="Ex: Wheel Alpha"></div>
     <div class="form-group"><label>Jogo</label><select id="fGame" onchange="updateTargets()"><option value="wheel">Wheel</option><option value="double">Double</option></select></div>
     <div class="form-group"><label>Alvo (Cor / Multiplier)</label><select id="fTarget"></select></div>
-    <div class="form-group"><label>Estrategia</label><select id="fStrategy" onchange="togglePatternSize()"><option value="todas">Todas (Analise Completa)</option><option value="alternancia">Alternancia</option><option value="repeticao">Repeticao</option><option value="frequencia">Frequencia</option><option value="tendencia">Tendencia</option><option value="espelhamento">Espelhamento</option><option value="diagonal">Diagonal</option><option value="padroesCores">Padroes Cores</option></select></div>
+    <div class="form-group"><label>Estrategias (selecione as que deseja usar)</label>
+      <div class="strategy-grid" id="fStrategies">
+        <div class="strategy-item"><label><input type="checkbox" value="todas" checked onchange="togglePatternSize()"><span>Todas (Analise Completa)</span></label><span class="strat-tag">GERAL</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="alternancia" onchange="togglePatternSize()"><span>Alternancia</span></label><span class="strat-tag">GERAL</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="repeticao" onchange="togglePatternSize()"><span>Repeticao</span></label><span class="strat-tag">GERAL</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="frequencia" onchange="togglePatternSize()"><span>Frequencia</span></label><span class="strat-tag">GERAL</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="tendencia" onchange="togglePatternSize()"><span>Tendencia</span></label><span class="strat-tag">GERAL</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="espelhamento" onchange="togglePatternSize()"><span>Espelhamento</span></label><span class="strat-tag">GERAL</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="diagonal" onchange="togglePatternSize()"><span>Diagonal</span></label><span class="strat-tag">GERAL</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="padroesCores" onchange="togglePatternSize()"><span>Padroes Cores</span></label><span class="strat-tag">GERAL</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="cicloVerde" onchange="togglePatternSize()"><span>Ciclo Verde</span></label><span class="strat-tag">WHEEL 50x</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="convergencia" onchange="togglePatternSize()"><span>Convergencia</span></label><span class="strat-tag">WHEEL 50x</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="cicloZero" onchange="togglePatternSize()"><span>Ciclo Zero</span></label><span class="strat-tag">DOUBLE 14x</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="padraoNumerico" onchange="togglePatternSize()"><span>Padrao Numerico</span></label><span class="strat-tag">DOUBLE 14x</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="sequenciaNegra" onchange="togglePatternSize()"><span>Sequencia Negra</span></label><span class="strat-tag">DOUBLE</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="momentumPreto" onchange="togglePatternSize()"><span>Momentum Preto</span></label><span class="strat-tag">DOUBLE</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="sequenciaVermelha" onchange="togglePatternSize()"><span>Sequencia Vermelha</span></label><span class="strat-tag">DOUBLE</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="momentumVermelho" onchange="togglePatternSize()"><span>Momentum Vermelho</span></label><span class="strat-tag">DOUBLE</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="cicloPreto" onchange="togglePatternSize()"><span>Ciclo Preto</span></label><span class="strat-tag">WHEEL 2x</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="reacaoPreto" onchange="togglePatternSize()"><span>Reacao Preto</span></label><span class="strat-tag">WHEEL 2x</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="cicloVermelho" onchange="togglePatternSize()"><span>Ciclo Vermelho</span></label><span class="strat-tag">WHEEL 3x</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="convergenciaVermelha" onchange="togglePatternSize()"><span>Convergencia Vermelha</span></label><span class="strat-tag">WHEEL 3x</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="cicloAzul" onchange="togglePatternSize()"><span>Ciclo Azul</span></label><span class="strat-tag">WHEEL 5x</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="sequenciaAzul" onchange="togglePatternSize()"><span>Sequencia Azul</span></label><span class="strat-tag">WHEEL 5x</span></div>
+      </div>
+    </div>
     <div class="form-group" id="patternSizeGroup" style="display:none"><label>Tamanho do Padrao</label><select id="fPatternSize"><option value="1">1 cor</option><option value="2">2 cores</option><option value="3" selected>3 cores</option><option value="4">4 cores</option><option value="5">5 cores</option><option value="6">6 cores</option></select></div>
     <div class="form-group"><label>Resultados para Analisar</label><input id="fResults" type="number" value="40"></div>
     <div class="form-group"><label>Confianca Minima (%)</label><input id="fConf" type="number" value="80"></div>
@@ -111,8 +143,8 @@
 <script>
 App.init();
 function togglePatternSize() {
-  const strategy = document.getElementById('fStrategy').value;
-  document.getElementById('patternSizeGroup').style.display = strategy === 'padroesCores' ? 'block' : 'none';
+  const strategies = getSelectedStrategies();
+  document.getElementById('patternSizeGroup').style.display = strategies.includes('padroesCores') ? 'block' : 'none';
 }
 function getChannels() { try { return JSON.parse(localStorage.getItem('telegram-channels') || '[]'); } catch { return []; } }
 function getTargetLabel(r) {
@@ -148,6 +180,7 @@ function showCreate(){
   document.getElementById('modalBtn').textContent = 'Criar';
   document.getElementById('fEditId').value = '';
   updateTargets();
+  setSelectedStrategies(['todas']);
   const channels = getChannels();
   const sel = document.getElementById('fTgChannel');
   sel.innerHTML = '<option value="">Selecionar canal...</option>' + channels.map(c => `<option value="${c.id}">${escapeHtml(c.name)} (${c.id})</option>`).join('');
@@ -163,8 +196,8 @@ function showEdit(id){
   document.getElementById('fGame').value = robot.game || 'wheel';
   updateTargets();
   document.getElementById('fTarget').value = robot.target?.color || 'any';
-  document.getElementById('fStrategy').value = robot.strategy || 'alternancia';
-  togglePatternSize();
+  const strategies = robot.strategies || [robot.strategy || 'alternancia'];
+  setSelectedStrategies(strategies);
   document.getElementById('fResults').value = robot.resultsToAnalyze || 40;
   document.getElementById('fConf').value = robot.minimumConfidence || 80;
   document.getElementById('fMinScore').value = robot.minScore || 52;
@@ -172,7 +205,7 @@ function showEdit(id){
   document.getElementById('fGale').value = robot.gale?.max || 0;
   document.getElementById('fMode').value = robot.mode || 'monitoramento';
   document.getElementById('fFilterMode').value = robot.filterMode || 'moderado';
-  if (robot.strategy === 'padroesCores') {
+  if (strategies.includes('padroesCores')) {
     document.getElementById('fPatternSize').value = robot.patternSize || 3;
   }
   const channels = getChannels();
@@ -184,11 +217,24 @@ function showEdit(id){
   document.getElementById('fTgMsgType').value = tg.msgType || 'both';
   document.getElementById('modal').style.display='flex';
 }
+function getSelectedStrategies() {
+  const checkboxes = document.querySelectorAll('#fStrategies input[type="checkbox"]:checked');
+  return Array.from(checkboxes).map(cb => cb.value);
+}
+
+function setSelectedStrategies(strategies) {
+  const checkboxes = document.querySelectorAll('#fStrategies input[type="checkbox"]');
+  checkboxes.forEach(cb => {
+    cb.checked = strategies.includes(cb.value);
+  });
+}
+
 function createRobot(){
   const editId = document.getElementById('fEditId').value;
   const name = document.getElementById('fName').value || 'Novo Robo';
   const game = document.getElementById('fGame').value;
-  const strategy = document.getElementById('fStrategy').value;
+  const strategies = getSelectedStrategies();
+  const strategy = strategies.length === 1 ? strategies[0] : 'multi';
   const results = parseInt(document.getElementById('fResults').value) || 40;
   const minConf = parseInt(document.getElementById('fConf').value) || 80;
   const interval = parseInt(document.getElementById('fInterval').value) || 60;
@@ -200,7 +246,7 @@ function createRobot(){
   const tgEnabled = document.getElementById('fTgEnabled').checked;
   const tgChannel = document.getElementById('fTgChannel').value;
   const tgMsgType = document.getElementById('fTgMsgType').value;
-  const patternSize = strategy === 'padroesCores' ? parseInt(document.getElementById('fPatternSize').value) || 3 : 3;
+  const patternSize = strategies.includes('padroesCores') ? parseInt(document.getElementById('fPatternSize').value) || 3 : 3;
   const minScore = parseInt(document.getElementById('fMinScore').value) || 52;
 
   if (editId) {
@@ -209,6 +255,7 @@ function createRobot(){
       robot.name = name;
       robot.game = game;
       robot.strategy = strategy;
+      robot.strategies = strategies;
       robot.resultsToAnalyze = results;
       robot.minimumConfidence = minConf;
       robot.minScore = minScore;
@@ -225,7 +272,7 @@ function createRobot(){
   } else {
     const id = game + '-' + name.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'');
     RobotEngine.createRobot({
-      id, name, game, strategy, filterMode,
+      id, name, game, strategy, strategies, filterMode,
       target: { color: targetColor, multiplier: targetMult ? parseInt(targetMult) : null },
       resultsToAnalyze: results,
       minimumConfidence: minConf,
@@ -253,22 +300,33 @@ function renderStats(){
 function loadRobots(){
   const robots = RobotEngine.getAllStates();
   renderStats();
-  const stratOpts = ['todas','alternancia','repeticao','frequencia','tendencia','espelhamento','diagonal','padroesCores'];
-  const stratSVG = {
-    todas:'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',
-    alternancia:'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>',
-    repeticao:'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--yellow)" stroke-width="2.5"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>',
-    frequencia:'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2.5"><rect x="3" y="12" width="4" height="8"/><rect x="10" y="8" width="4" height="12"/><rect x="17" y="4" width="4" height="16"/></svg>',
-    tendencia:'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--purple,#a855f7)" stroke-width="2.5"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>',
-    espelhamento:'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--cyan,#06b6d4)" stroke-width="2.5"><path d="M12 3v18"/><path d="M8 7l-4 5 4 5"/><path d="M16 7l4 5-4 5"/></svg>',
-    diagonal:'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--orange,#f97316)" stroke-width="2.5"><path d="M4 20L20 4"/></svg>',
-    padroesCores:'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/></svg>'
+  const stratLabels = {
+    todas:'Todas', alternancia:'Alternancia', repeticao:'Repeticao', frequencia:'Frequencia',
+    tendencia:'Tendencia', espelhamento:'Espelhamento', diagonal:'Diagonal', padroesCores:'Padroes',
+    cicloVerde:'Ciclo Verde', convergencia:'Convergencia', cicloZero:'Ciclo Zero', padraoNumerico:'Padrao Num.',
+    sequenciaNegra:'Seq. Negra', momentumPreto:'Mom. Preto', sequenciaVermelha:'Seq. Vermelha', momentumVermelho:'Mom. Vermelho',
+    cicloPreto:'Ciclo Preto', reacaoPreto:'Reacao Preto', cicloVermelho:'Ciclo Vermelho', convergenciaVermelha:'Conv. Vermelha',
+    cicloAzul:'Ciclo Azul', sequenciaAzul:'Seq. Azul'
   };
+  const stratColors = {
+    todas:'var(--blue)', alternancia:'var(--green)', repeticao:'var(--yellow)', frequencia:'var(--blue)',
+    tendencia:'var(--purple,#a855f7)', espelhamento:'var(--cyan,#06b6d4)', diagonal:'var(--orange,#f97316)', padroesCores:'var(--red)',
+    cicloVerde:'var(--green)', convergencia:'var(--green)', cicloZero:'var(--green)', padraoNumerico:'var(--green)',
+    sequenciaNegra:'#666', momentumPreto:'#666', sequenciaVermelha:'var(--red)', momentumVermelho:'var(--red)',
+    cicloPreto:'#666', reacaoPreto:'#666', cicloVermelho:'var(--red)', convergenciaVermelha:'var(--red)',
+    cicloAzul:'var(--blue)', sequenciaAzul:'var(--blue)'
+  };
+  
   document.getElementById('robotsTable').innerHTML = robots.map(r => {
     const conf = r.diagnostic?.confidence || 0;
     const confColor = conf >= 80 ? 'var(--green)' : conf >= 60 ? 'var(--yellow)' : 'var(--red)';
     const wins = r.stats?.wins || 0;
     const losses = r.stats?.losses || 0;
+    const robotStrategies = r.strategies || [r.strategy || 'todas'];
+    const strategyTags = robotStrategies.map(s => 
+      `<span style="display:inline-block;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700;background:${stratColors[s] || 'var(--bg)'}22;color:${stratColors[s] || 'var(--text3)'};border:1px solid ${stratColors[s] || 'var(--border)'}44">${stratLabels[s] || s}</span>`
+    ).join(' ');
+    
     return `<tr>
       <td>
         <div style="display:flex;align-items:center;gap:8px">
@@ -280,10 +338,8 @@ function loadRobots(){
         </div>
       </td>
       <td>
-        <div style="display:flex;align-items:center;gap:4px">
-          ${stratSVG[r.strategy]||''}
-          <select style="padding:4px 8px;background:var(--bg);border:1px solid var(--blue);border-radius:4px;color:var(--blue);font-size:11px;font-weight:700;min-width:110px;cursor:pointer" onchange="changeRobotStrategy('${r.id}',this.value)">${stratOpts.map(s => `<option value="${s}" ${r.strategy===s?'selected':''}>${s}</option>`).join('')}</select>
-          ${r.strategy==='padroesCores' ? `<select style="padding:3px 4px;background:var(--bg);border:1px solid var(--border);border-radius:3px;color:var(--text);font-size:10px;cursor:pointer" onchange="changeRobotPatternSize('${r.id}',+this.value)">${[1,2,3,4,5,6].map(n => `<option value="${n}" ${(r.patternSize||3)===n?'selected':''}>${n}</option>`).join('')}</select>` : ''}
+        <div style="display:flex;flex-wrap:wrap;gap:3px;max-width:200px">
+          ${strategyTags}
         </div>
       </td>
       <td>${createBadge(r.status)}</td>
@@ -303,13 +359,6 @@ function loadRobots(){
       </td>
     </tr>`;
   }).join('') || '<tr><td colspan="10" style="color:var(--text3);text-align:center;padding:20px">Nenhum robo criado</td></tr>';
-}
-function changeRobotStrategy(id, strategy) {
-  const robot = RobotEngine.getRobot(id);
-  if (!robot) return;
-  robot.strategy = strategy;
-  RobotEngine.save();
-  loadRobots();
 }
 function changeRobotPatternSize(id, size) {
   const robot = RobotEngine.getRobot(id);

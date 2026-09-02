@@ -358,7 +358,10 @@ const AnaliseTelegramService = (() => {
 
     if (bot.messageId) {
       const result = await editMessage(chatId, bot.messageId, text);
-      if (result.ok) return;
+      if (result.ok) {
+        if (typeof recordSend === 'function') recordSend(chatId, bot.name);
+        return;
+      }
       if (result.description && result.description.includes('message is not modified')) return;
       if (result.description && (result.description.includes('message to edit not found') || result.description.includes('MESSAGE_TO_EDIT_NOT_FOUND'))) {
         bot.messageId = null;
@@ -374,6 +377,7 @@ const AnaliseTelegramService = (() => {
       saveMessageId(botId, bot.messageId);
       storage[botId] = { messageId: bot.messageId, chatId };
       setStorage(storage);
+      if (typeof recordSend === 'function') recordSend(chatId, bot.name);
     } else {
       console.error('[AnaliseTelegram] Erro ao enviar:', result.description, result.parameters);
     }

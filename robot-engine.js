@@ -267,6 +267,1085 @@ const RobotEngine = {
         confluences,
         lastAnalysis: now
       };
+    },
+
+    cicloVerde(history, _target, _patternSize) {
+      if (history.length < 20) return { matched: false, confidence: 0, reason: 'Historico insuficiente (min 20)' };
+      
+      const colors = history.map(r => r.color);
+      const greenPositions = [];
+      for (let i = 0; i < colors.length; i++) {
+        if (colors[i] === 'GREEN') greenPositions.push(i);
+      }
+      
+      if (greenPositions.length < 2) {
+        return { matched: false, target: 'GREEN', confidence: 0, reason: `Apenas ${greenPositions.length} verde(s) encontrado(s)` };
+      }
+      
+      const intervals = [];
+      for (let i = 1; i < greenPositions.length; i++) {
+        intervals.push(greenPositions[i] - greenPositions[i - 1]);
+      }
+      
+      const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+      const lastGreenPos = greenPositions[0];
+      const currentDelay = lastGreenPos;
+      
+      const expectedNext = avgInterval - currentDelay;
+      const delayRatio = currentDelay / avgInterval;
+      
+      let confidence = 0;
+      let reason = '';
+      
+      if (delayRatio >= 1.2) {
+        confidence = Math.min(85, Math.round(50 + (delayRatio - 1) * 40));
+        reason = `Verde atrasado: ${Math.round(currentDelay)} vs media ${Math.round(avgInterval)} (${Math.round(delayRatio * 100)}%)`;
+      } else if (delayRatio >= 0.8) {
+        confidence = Math.round(40 + (delayRatio - 0.5) * 30);
+        reason = `Proximo do ciclo: ${Math.round(currentDelay)} vs media ${Math.round(avgInterval)}`;
+      } else {
+        confidence = Math.round(20 + delayRatio * 20);
+        reason = `Ciclo recente: ${Math.round(currentDelay)} vs media ${Math.round(avgInterval)}`;
+      }
+      
+      const stdDev = Math.sqrt(intervals.reduce((sum, i) => sum + Math.pow(i - avgInterval, 2), 0) / intervals.length);
+      const consistency = Math.max(0, 100 - (stdDev / avgInterval) * 100);
+      confidence = Math.round(confidence * (consistency / 100) * 0.3 + confidence * 0.7);
+      
+      return {
+        matched: confidence >= 55,
+        target: 'GREEN',
+        confidence,
+        pattern: greenPositions.slice(0, 5),
+        reason,
+        analyses: [
+          { type: 'ciclo', score: confidence, detail: `Media: ${Math.round(avgInterval)} | Atual: ${Math.round(currentDelay)} | Ratio: ${Math.round(delayRatio * 100)}%` }
+        ],
+        confluences: confidence >= 60 ? 1 : 0,
+        lastAnalysis: Date.now()
+      };
+    },
+
+    convergencia(history, _target, _patternSize) {
+      if (history.length < 30) return { matched: false, confidence: 0, reason: 'Historico insuficiente (min 30)' };
+      
+      const colors = history.map(r => r.color);
+      const analyses = [];
+      
+      let streak = 1;
+      for (let i = 1; i < Math.min(20, colors.length); i++) {
+        if (colors[i] === colors[0]) streak++; else break;
+      }
+      if (streak >= 3) {
+        const score = Math.min(80, 40 + streak * 10);
+        analyses.push({ type: 'streak', score, detail: `Streak ${colors[0]} x${streak}`, target: colors[0] === 'RED' ? 'BLACK' : 'RED' });
+      }
+      
+      const freq = {};
+      for (let i = 0; i < Math.min(50, colors.length); i++) freq[colors[i]] = (freq[colors[i]] || 0) + 1;
+      const sorted = Object.entries(freq).sort((a, b) => a[1] - b[1]);
+      if (sorted.length > 0) {
+        const [rare, rareCount] = sorted[0];
+        const total = colors.length;
+        const expected = total / Object.keys(freq).length;
+        const deviation = Math.round(((expected - rareCount) / expected) * 100);
+        if (deviation >= 40) {
+          analyses.push({ type: 'atraso', score: Math.min(85, 50 + deviation), detail: `${rare} atrasado (${rareCount}x/${total})`, target: rare });
+        }
+      }
+      
+      let alternations = 0;
+      for (let i = 0; i < Math.min(15, colors.length - 1); i++) {
+        if (colors[i] !== colors[i + 1]) alternations++;
+      }
+      const altRate = alternations / Math.min(14, colors.length - 1);
+      if (altRate >= 0.7) {
+        analyses.push({ type: 'alternancia', score: Math.round(altRate * 100), detail: `Alternancia ${Math.round(altRate * 100)}%`, target: colors[0] === 'RED' ? 'BLACK' : 'RED' });
+      }
+      
+      const greenPositions = [];
+      for (let i = 0; i < Math.min(100, colors.length); i++) {
+        if (colors[i] === 'GREEN') greenPositions.push(i);
+      }
+      if (greenPositions.length >= 2) {
+        const intervals = [];
+        for (let i = 1; i < greenPositions.length; i++) {
+          intervals.push(greenPositions[i] - greenPositions[i - 1]);
+        }
+        const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+        const currentDelay = greenPositions[0];
+        const delayRatio = currentDelay / avgInterval;
+        if (delayRatio >= 1.3) {
+          analyses.push({ type: 'cicloVerde', score: Math.min(80, 50 + (delayRatio - 1) * 30), detail: `Verde atrasado ${Math.round(delayRatio * 100)}%`, target: 'GREEN' });
+        }
+      }
+      
+      const valid = analyses.filter(a => a.score >= 50);
+      if (valid.length === 0) {
+        return { matched: false, target: 'RED', confidence: 0, reason: 'Nenhuma convergencia detectada' };
+      }
+      
+      valid.sort((a, b) => b.score - a.score);
+      const best = valid[0];
+      const confluences = valid.filter(a => a.score >= 60).length;
+      
+      return {
+        matched: best.score >= 55,
+        target: best.target || 'RED',
+        confidence: Math.min(90, Math.round(best.score * (1 + confluences * 0.1))),
+        pattern: colors.slice(0, 5),
+        reason: `${best.type.toUpperCase()}: ${best.detail}${confluences > 1 ? ` (${confluences} convergencias)` : ''}`,
+        analyses: valid.slice(0, 5),
+        confluences,
+        lastAnalysis: Date.now()
+      };
+    },
+
+    cicloZero(history, _target, _patternSize) {
+      if (history.length < 20) return { matched: false, confidence: 0, reason: 'Historico insuficiente (min 20)' };
+      
+      const numbers = history.map(r => r.number ?? r.cellIndex ?? -1);
+      const zeroPositions = [];
+      for (let i = 0; i < numbers.length; i++) {
+        if (numbers[i] === 0) zeroPositions.push(i);
+      }
+      
+      if (zeroPositions.length < 2) {
+        return { matched: false, target: 'GREEN', confidence: 0, reason: `Apenas ${zeroPositions.length} zero(s) encontrado(s)` };
+      }
+      
+      const intervals = [];
+      for (let i = 1; i < zeroPositions.length; i++) {
+        intervals.push(zeroPositions[i] - zeroPositions[i - 1]);
+      }
+      
+      const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+      const lastZeroPos = zeroPositions[0];
+      const currentDelay = lastZeroPos;
+      
+      const delayRatio = currentDelay / avgInterval;
+      
+      let confidence = 0;
+      let reason = '';
+      
+      if (delayRatio >= 1.2) {
+        confidence = Math.min(85, Math.round(50 + (delayRatio - 1) * 40));
+        reason = `Zero atrasado: ${Math.round(currentDelay)} vs media ${Math.round(avgInterval)} (${Math.round(delayRatio * 100)}%)`;
+      } else if (delayRatio >= 0.8) {
+        confidence = Math.round(40 + (delayRatio - 0.5) * 30);
+        reason = `Proximo do ciclo: ${Math.round(currentDelay)} vs media ${Math.round(avgInterval)}`;
+      } else {
+        confidence = Math.round(20 + delayRatio * 20);
+        reason = `Ciclo recente: ${Math.round(currentDelay)} vs media ${Math.round(avgInterval)}`;
+      }
+      
+      const stdDev = Math.sqrt(intervals.reduce((sum, i) => sum + Math.pow(i - avgInterval, 2), 0) / intervals.length);
+      const consistency = Math.max(0, 100 - (stdDev / avgInterval) * 100);
+      confidence = Math.round(confidence * (consistency / 100) * 0.3 + confidence * 0.7);
+      
+      return {
+        matched: confidence >= 55,
+        target: 'GREEN',
+        confidence,
+        pattern: zeroPositions.slice(0, 5),
+        reason,
+        analyses: [
+          { type: 'ciclo', score: confidence, detail: `Media: ${Math.round(avgInterval)} | Atual: ${Math.round(currentDelay)} | Ratio: ${Math.round(delayRatio * 100)}%` }
+        ],
+        confluences: confidence >= 60 ? 1 : 0,
+        lastAnalysis: Date.now()
+      };
+    },
+
+    padraoNumerico(history, _target, _patternSize) {
+      if (history.length < 15) return { matched: false, confidence: 0, reason: 'Historico insuficiente (min 15)' };
+      
+      const numbers = history.map(r => r.number ?? r.cellIndex ?? -1);
+      const zeroPositions = [];
+      for (let i = 0; i < numbers.length; i++) {
+        if (numbers[i] === 0) zeroPositions.push(i);
+      }
+      
+      if (zeroPositions.length < 2) {
+        return { matched: false, target: 'GREEN', confidence: 0, reason: `Apenas ${zeroPositions.length} zero(s) encontrado(s)` };
+      }
+      
+      const beforeZeros = [];
+      for (const pos of zeroPositions) {
+        if (pos >= 3) {
+          beforeZeros.push([numbers[pos - 1], numbers[pos - 2], numbers[pos - 3]]);
+        }
+      }
+      
+      if (beforeZeros.length < 2) {
+        return { matched: false, target: 'GREEN', confidence: 0, reason: 'Dados insuficientes antes dos zeros' };
+      }
+      
+      const currentSequence = numbers.slice(0, 3);
+      
+      let matchCount = 0;
+      for (const seq of beforeZeros) {
+        if (seq[0] === currentSequence[0] && seq[1] === currentSequence[1]) matchCount++;
+      }
+      
+      let confidence = 0;
+      let reason = '';
+      
+      if (matchCount >= 2) {
+        confidence = Math.min(85, Math.round(50 + matchCount * 15));
+        reason = `Padrao numerico detectado: ${currentSequence.join(',')} - ${matchCount} ocorrencia(s) antes de zero`;
+      } else {
+        const highLowMatch = beforeZeros.filter(seq => {
+          const isHigh = seq[0] >= 8;
+          return isHigh === (currentSequence[0] >= 8);
+        }).length;
+        
+        if (highLowMatch >= Math.ceil(beforeZeros.length * 0.7)) {
+          confidence = Math.round(40 + highLowMatch * 5);
+          reason = `Zeros apos numeros ${currentSequence[0] >= 8 ? 'altos (8-14)' : 'baixos (1-7)'}: ${highLowMatch}x/${beforeZeros.length}`;
+        } else {
+          confidence = Math.round(20 + (matchCount * 10));
+          reason = `Padrao fraco: ${matchCount} matches diretos`;
+        }
+      }
+      
+      const consecutiveHigh = numbers.slice(0, 5).filter(n => n >= 8).length;
+      const consecutiveLow = numbers.slice(0, 5).filter(n => n >= 1 && n <= 7).length;
+      
+      if (consecutiveHigh >= 4 && currentSequence[0] >= 8) {
+        confidence = Math.min(80, confidence + 15);
+        reason += ` | Sequencia alta x${consecutiveHigh}`;
+      } else if (consecutiveLow >= 4 && currentSequence[0] <= 7) {
+        confidence = Math.min(80, confidence + 15);
+        reason += ` | Sequencia baixa x${consecutiveLow}`;
+      }
+      
+      return {
+        matched: confidence >= 55,
+        target: 'GREEN',
+        confidence,
+        pattern: currentSequence,
+        reason,
+        analyses: [
+          { type: 'numerico', score: confidence, detail: `Seq atual: ${currentSequence.join(',')} | Matches: ${matchCount}/${beforeZeros.length}` }
+        ],
+        confluences: confidence >= 60 ? 1 : 0,
+        lastAnalysis: Date.now()
+      };
+    },
+
+    sequenciaNegra(history, _target, _patternSize) {
+      if (history.length < 20) return { matched: false, confidence: 0, reason: 'Historico insuficiente (min 20)' };
+      
+      const colors = history.map(r => r.color);
+      const numbers = history.map(r => r.number ?? r.cellIndex ?? -1);
+      
+      const isBlack = (c) => c === 'BLACK';
+      const isRed = (c) => c === 'RED';
+      const isGreen = (c) => c === 'GREEN';
+      
+      const analyses = [];
+      
+      let redStreak = 0;
+      for (let i = 0; i < Math.min(20, colors.length); i++) {
+        if (isRed(colors[i])) redStreak++;
+        else break;
+      }
+      if (redStreak >= 2) {
+        const score = Math.min(85, 45 + redStreak * 12);
+        analyses.push({ type: 'reacaoVermelho', score, detail: `${redStreak} vermelhos seguidos - preto reativo`, target: 'BLACK' });
+      }
+      
+      if (colors[0] === 'GREEN' || (numbers[0] === 0)) {
+        const greenFollowedByBlack = [];
+        for (let i = 0; i < Math.min(100, colors.length - 1); i++) {
+          if (isGreen(colors[i]) && i + 1 < colors.length) {
+            greenFollowedByBlack.push(isBlack(colors[i + 1]));
+          }
+        }
+        if (greenFollowedByBlack.length >= 2) {
+          const blackRate = greenFollowedByBlack.filter(Boolean).length / greenFollowedByBlack.length;
+          if (blackRate >= 0.5) {
+            const score = Math.round(50 + blackRate * 30);
+            analyses.push({ type: 'aposVerde', score, detail: `Apos verde: ${Math.round(blackRate * 100)}% preto (${greenFollowedByBlack.filter(Boolean).length}x/${greenFollowedByBlack.length})`, target: 'BLACK' });
+          }
+        }
+      }
+      
+      let blackStreak = 0;
+      for (let i = 0; i < Math.min(10, colors.length); i++) {
+        if (isBlack(colors[i])) blackStreak++;
+        else break;
+      }
+      if (blackStreak >= 3) {
+        const score = Math.min(75, 40 + blackStreak * 10);
+        analyses.push({ type: 'momentoForte', score, detail: `Sequencia preta ativa x${blackStreak}`, target: 'BLACK' });
+      }
+      
+      const last5Colors = colors.slice(0, 5);
+      const last5Numbers = numbers.slice(0, 5);
+      const highInLast5 = last5Numbers.filter(n => n >= 8).length;
+      const lowInLast5 = last5Numbers.filter(n => n >= 1 && n <= 7).length;
+      
+      if (highInLast5 >= 3 && lowInLast5 <= 1) {
+        const score = Math.round(55 + highInLast5 * 5);
+        analyses.push({ type: 'zonaAlta', score, detail: `Zona alta dominante: ${highInLast5}/5 numeros altos (8-14)`, target: 'BLACK' });
+      }
+      
+      const transitions = {};
+      for (let i = 0; i < Math.min(50, colors.length - 1); i++) {
+        const from = colors[i];
+        const to = colors[i + 1];
+        const key = `${from}->${to}`;
+        transitions[key] = (transitions[key] || 0) + 1;
+      }
+      
+      const redToBlack = transitions['RED->BLACK'] || 0;
+      const redToAny = Object.entries(transitions).filter(([k]) => k.startsWith('RED->')).reduce((sum, [, v]) => sum + v, 0);
+      if (redToAny >= 5) {
+        const rate = redToBlack / redToAny;
+        if (rate >= 0.4) {
+          const score = Math.round(50 + rate * 35);
+          analyses.push({ type: 'transicao', score, detail: `Transicao RED->BLACK: ${Math.round(rate * 100)}% (${redToBlack}x/${redToAny})`, target: 'BLACK' });
+        }
+      }
+      
+      const valid = analyses.filter(a => a.score >= 50);
+      if (valid.length === 0) {
+        return { matched: false, target: 'BLACK', confidence: 0, reason: 'Nenhum padrao preto detectado' };
+      }
+      
+      valid.sort((a, b) => b.score - a.score);
+      const best = valid[0];
+      const confluences = valid.filter(a => a.score >= 60).length;
+      
+      return {
+        matched: best.score >= 55,
+        target: 'BLACK',
+        confidence: Math.min(90, Math.round(best.score * (1 + confluences * 0.08))),
+        pattern: colors.slice(0, 5),
+        reason: `${best.type.toUpperCase()}: ${best.detail}${confluences > 1 ? ` (${confluences} sinais)` : ''}`,
+        analyses: valid.slice(0, 5),
+        confluences,
+        lastAnalysis: Date.now()
+      };
+    },
+
+    momentumPreto(history, _target, _patternSize) {
+      if (history.length < 30) return { matched: false, confidence: 0, reason: 'Historico insuficiente (min 30)' };
+      
+      const colors = history.map(r => r.color);
+      const numbers = history.map(r => r.number ?? r.cellIndex ?? -1);
+      
+      const isBlack = (c) => c === 'BLACK';
+      
+      const analyses = [];
+      
+      const expectedBlackRate = 7 / 15;
+      
+      const windows = [10, 15, 20, 30];
+      for (const w of windows) {
+        const windowColors = colors.slice(0, w);
+        const blackCount = windowColors.filter(isBlack).length;
+        const actualRate = blackCount / w;
+        const deviation = (expectedBlackRate - actualRate) / expectedBlackRate;
+        
+        if (deviation >= 0.3) {
+          const score = Math.min(85, Math.round(50 + deviation * 40));
+          analyses.push({ type: 'frequencia', score, detail: `Preto frio: ${blackCount}/${w} (${Math.round(actualRate * 100)}%) vs ${Math.round(expectedBlackRate * 100)}%`, target: 'BLACK', window: w });
+        }
+      }
+      
+      let consecutiveNonBlack = 0;
+      for (let i = 0; i < Math.min(30, colors.length); i++) {
+        if (!isBlack(colors[i])) consecutiveNonBlack++;
+        else break;
+      }
+      
+      if (consecutiveNonBlack >= 3) {
+        const expectedInRow = Math.pow(1 - expectedBlackRate, consecutiveNonBlack);
+        const probability = 1 - expectedInRow;
+        const score = Math.min(80, Math.round(probability * 100));
+        analyses.push({ type: 'ausencia', score, detail: `${consecutiveNonBlack} resultados sem preto - probabilidade ${Math.round(probability * 100)}%`, target: 'BLACK' });
+      }
+      
+      const segments = [];
+      const segSize = 5;
+      for (let i = 0; i < Math.min(50, colors.length); i += segSize) {
+        const seg = colors.slice(i, i + segSize);
+        const blackInSeg = seg.filter(isBlack).length;
+        segments.push(blackInSeg);
+      }
+      
+      if (segments.length >= 3) {
+        const trend = segments[0] - segments[segments.length - 1];
+        if (trend >= 2) {
+          const score = Math.round(55 + trend * 8);
+          analyses.push({ type: 'tendencia', score, detail: `Tendencia de alta: ${segments[0]}->${segments[segments.length - 1]} preto por bloco`, target: 'BLACK' });
+        } else if (trend <= -2) {
+          const score = Math.round(55 + Math.abs(trend) * 8);
+          analyses.push({ type: 'reversao', score, detail: `Reversao iminente: ${segments[0]}->${segments[segments.length - 1]} - preto voltando`, target: 'BLACK' });
+        }
+      }
+      
+      const last10Numbers = numbers.slice(0, 10);
+      const last10Colors = colors.slice(0, 10);
+      const highNumbers = last10Numbers.filter(n => n >= 10);
+      const veryHighNumbers = last10Numbers.filter(n => n >= 12);
+      
+      if (highNumbers.length >= 4 && veryHighNumbers.length >= 2) {
+        const score = Math.round(60 + highNumbers.length * 3);
+        analyses.push({ type: 'zonaCritica', score, detail: `Zona critica: ${highNumbers.length}/10 altos, ${veryHighNumbers.length}/10 muito altos`, target: 'BLACK' });
+      }
+      
+      let blackStreak = 0;
+      for (let i = 0; i < Math.min(5, colors.length); i++) {
+        if (isBlack(colors[i])) blackStreak++;
+        else break;
+      }
+      
+      if (blackStreak >= 2) {
+        const score = Math.round(55 + blackStreak * 8);
+        analyses.push({ type: 'continuidade', score, detail: `Momentum preto ativo x${blackStreak}`, target: 'BLACK' });
+      }
+      
+      const valid = analyses.filter(a => a.score >= 50);
+      if (valid.length === 0) {
+        return { matched: false, target: 'BLACK', confidence: 0, reason: 'Momentum preto fraco' };
+      }
+      
+      valid.sort((a, b) => b.score - a.score);
+      const best = valid[0];
+      const confluences = valid.filter(a => a.score >= 60).length;
+      
+      let finalConfidence = Math.min(92, Math.round(best.score * (1 + confluences * 0.1)));
+      
+      if (confluences >= 3) {
+        finalConfidence = Math.min(95, finalConfidence + 10);
+      }
+      
+      return {
+        matched: best.score >= 55,
+        target: 'BLACK',
+        confidence: finalConfidence,
+        pattern: colors.slice(0, 5),
+        reason: `${best.type.toUpperCase()}: ${best.detail}${confluences > 1 ? ` (${confluences} convergencias)` : ''}`,
+        analyses: valid.slice(0, 5),
+        confluences,
+        lastAnalysis: Date.now()
+      };
+    },
+
+    sequenciaVermelha(history, _target, _patternSize) {
+      if (history.length < 20) return { matched: false, confidence: 0, reason: 'Historico insuficiente (min 20)' };
+      
+      const colors = history.map(r => r.color);
+      const numbers = history.map(r => r.number ?? r.cellIndex ?? -1);
+      
+      const isBlack = (c) => c === 'BLACK';
+      const isRed = (c) => c === 'RED';
+      const isGreen = (c) => c === 'GREEN';
+      
+      const analyses = [];
+      
+      let blackStreak = 0;
+      for (let i = 0; i < Math.min(20, colors.length); i++) {
+        if (isBlack(colors[i])) blackStreak++;
+        else break;
+      }
+      if (blackStreak >= 2) {
+        const score = Math.min(85, 45 + blackStreak * 12);
+        analyses.push({ type: 'reacaoPreto', score, detail: `${blackStreak} pretos seguidos - vermelho reativo`, target: 'RED' });
+      }
+      
+      if (colors[0] === 'GREEN' || (numbers[0] === 0)) {
+        const greenFollowedByRed = [];
+        for (let i = 0; i < Math.min(100, colors.length - 1); i++) {
+          if (isGreen(colors[i]) && i + 1 < colors.length) {
+            greenFollowedByRed.push(isRed(colors[i + 1]));
+          }
+        }
+        if (greenFollowedByRed.length >= 2) {
+          const redRate = greenFollowedByRed.filter(Boolean).length / greenFollowedByRed.length;
+          if (redRate >= 0.5) {
+            const score = Math.round(50 + redRate * 30);
+            analyses.push({ type: 'aposVerde', score, detail: `Apos verde: ${Math.round(redRate * 100)}% vermelho (${greenFollowedByRed.filter(Boolean).length}x/${greenFollowedByRed.length})`, target: 'RED' });
+          }
+        }
+      }
+      
+      let redStreak = 0;
+      for (let i = 0; i < Math.min(10, colors.length); i++) {
+        if (isRed(colors[i])) redStreak++;
+        else break;
+      }
+      if (redStreak >= 3) {
+        const score = Math.min(75, 40 + redStreak * 10);
+        analyses.push({ type: 'momentoForte', score, detail: `Sequencia vermelha ativa x${redStreak}`, target: 'RED' });
+      }
+      
+      const last5Colors = colors.slice(0, 5);
+      const last5Numbers = numbers.slice(0, 5);
+      const lowInLast5 = last5Numbers.filter(n => n >= 1 && n <= 7).length;
+      const highInLast5 = last5Numbers.filter(n => n >= 8).length;
+      
+      if (lowInLast5 >= 3 && highInLast5 <= 1) {
+        const score = Math.round(55 + lowInLast5 * 5);
+        analyses.push({ type: 'zonaBaixa', score, detail: `Zona baixa dominante: ${lowInLast5}/5 numeros baixos (1-7)`, target: 'RED' });
+      }
+      
+      const transitions = {};
+      for (let i = 0; i < Math.min(50, colors.length - 1); i++) {
+        const from = colors[i];
+        const to = colors[i + 1];
+        const key = `${from}->${to}`;
+        transitions[key] = (transitions[key] || 0) + 1;
+      }
+      
+      const blackToRed = transitions['BLACK->RED'] || 0;
+      const blackToAny = Object.entries(transitions).filter(([k]) => k.startsWith('BLACK->')).reduce((sum, [, v]) => sum + v, 0);
+      if (blackToAny >= 5) {
+        const rate = blackToRed / blackToAny;
+        if (rate >= 0.4) {
+          const score = Math.round(50 + rate * 35);
+          analyses.push({ type: 'transicao', score, detail: `Transicao BLACK->RED: ${Math.round(rate * 100)}% (${blackToRed}x/${blackToAny})`, target: 'RED' });
+        }
+      }
+      
+      const valid = analyses.filter(a => a.score >= 50);
+      if (valid.length === 0) {
+        return { matched: false, target: 'RED', confidence: 0, reason: 'Nenhum padrao vermelho detectado' };
+      }
+      
+      valid.sort((a, b) => b.score - a.score);
+      const best = valid[0];
+      const confluences = valid.filter(a => a.score >= 60).length;
+      
+      return {
+        matched: best.score >= 55,
+        target: 'RED',
+        confidence: Math.min(90, Math.round(best.score * (1 + confluences * 0.08))),
+        pattern: colors.slice(0, 5),
+        reason: `${best.type.toUpperCase()}: ${best.detail}${confluences > 1 ? ` (${confluences} sinais)` : ''}`,
+        analyses: valid.slice(0, 5),
+        confluences,
+        lastAnalysis: Date.now()
+      };
+    },
+
+    momentumVermelho(history, _target, _patternSize) {
+      if (history.length < 30) return { matched: false, confidence: 0, reason: 'Historico insuficiente (min 30)' };
+      
+      const colors = history.map(r => r.color);
+      const numbers = history.map(r => r.number ?? r.cellIndex ?? -1);
+      
+      const isRed = (c) => c === 'RED';
+      
+      const analyses = [];
+      
+      const expectedRedRate = 7 / 15;
+      
+      const windows = [10, 15, 20, 30];
+      for (const w of windows) {
+        const windowColors = colors.slice(0, w);
+        const redCount = windowColors.filter(isRed).length;
+        const actualRate = redCount / w;
+        const deviation = (expectedRedRate - actualRate) / expectedRedRate;
+        
+        if (deviation >= 0.3) {
+          const score = Math.min(85, Math.round(50 + deviation * 40));
+          analyses.push({ type: 'frequencia', score, detail: `Vermelho frio: ${redCount}/${w} (${Math.round(actualRate * 100)}%) vs ${Math.round(expectedRedRate * 100)}%`, target: 'RED', window: w });
+        }
+      }
+      
+      let consecutiveNonRed = 0;
+      for (let i = 0; i < Math.min(30, colors.length); i++) {
+        if (!isRed(colors[i])) consecutiveNonRed++;
+        else break;
+      }
+      
+      if (consecutiveNonRed >= 3) {
+        const expectedInRow = Math.pow(1 - expectedRedRate, consecutiveNonRed);
+        const probability = 1 - expectedInRow;
+        const score = Math.min(80, Math.round(probability * 100));
+        analyses.push({ type: 'ausencia', score, detail: `${consecutiveNonRed} resultados sem vermelho - probabilidade ${Math.round(probability * 100)}%`, target: 'RED' });
+      }
+      
+      const segments = [];
+      const segSize = 5;
+      for (let i = 0; i < Math.min(50, colors.length); i += segSize) {
+        const seg = colors.slice(i, i + segSize);
+        const redInSeg = seg.filter(isRed).length;
+        segments.push(redInSeg);
+      }
+      
+      if (segments.length >= 3) {
+        const trend = segments[0] - segments[segments.length - 1];
+        if (trend >= 2) {
+          const score = Math.round(55 + trend * 8);
+          analyses.push({ type: 'tendencia', score, detail: `Tendencia de alta: ${segments[0]}->${segments[segments.length - 1]} vermelho por bloco`, target: 'RED' });
+        } else if (trend <= -2) {
+          const score = Math.round(55 + Math.abs(trend) * 8);
+          analyses.push({ type: 'reversao', score, detail: `Reversao iminente: ${segments[0]}->${segments[segments.length - 1]} - vermelho voltando`, target: 'RED' });
+        }
+      }
+      
+      const last10Numbers = numbers.slice(0, 10);
+      const lowNumbers = last10Numbers.filter(n => n >= 1 && n <= 4);
+      const veryLowNumbers = last10Numbers.filter(n => n >= 1 && n <= 2);
+      
+      if (lowNumbers.length >= 4 && veryLowNumbers.length >= 2) {
+        const score = Math.round(60 + lowNumbers.length * 3);
+        analyses.push({ type: 'zonaCritica', score, detail: `Zona critica: ${lowNumbers.length}/10 baixos, ${veryLowNumbers.length}/10 muito baixos`, target: 'RED' });
+      }
+      
+      let redStreak = 0;
+      for (let i = 0; i < Math.min(5, colors.length); i++) {
+        if (isRed(colors[i])) redStreak++;
+        else break;
+      }
+      
+      if (redStreak >= 2) {
+        const score = Math.round(55 + redStreak * 8);
+        analyses.push({ type: 'continuidade', score, detail: `Momentum vermelho ativo x${redStreak}`, target: 'RED' });
+      }
+      
+      const valid = analyses.filter(a => a.score >= 50);
+      if (valid.length === 0) {
+        return { matched: false, target: 'RED', confidence: 0, reason: 'Momentum vermelho fraco' };
+      }
+      
+      valid.sort((a, b) => b.score - a.score);
+      const best = valid[0];
+      const confluences = valid.filter(a => a.score >= 60).length;
+      
+      let finalConfidence = Math.min(92, Math.round(best.score * (1 + confluences * 0.1)));
+      
+      if (confluences >= 3) {
+        finalConfidence = Math.min(95, finalConfidence + 10);
+      }
+      
+      return {
+        matched: best.score >= 55,
+        target: 'RED',
+        confidence: finalConfidence,
+        pattern: colors.slice(0, 5),
+        reason: `${best.type.toUpperCase()}: ${best.detail}${confluences > 1 ? ` (${confluences} convergencias)` : ''}`,
+        analyses: valid.slice(0, 5),
+        confluences,
+        lastAnalysis: Date.now()
+      };
+    },
+
+    cicloPreto(history, _target, _patternSize) {
+      if (history.length < 20) return { matched: false, confidence: 0, reason: 'Historico insuficiente (min 20)' };
+      
+      const colors = history.map(r => r.color);
+      const isBlack = (c) => c === 'BLACK' || c === 'GREY';
+      
+      const blackPositions = [];
+      for (let i = 0; i < colors.length; i++) {
+        if (isBlack(colors[i])) blackPositions.push(i);
+      }
+      
+      if (blackPositions.length < 3) {
+        return { matched: false, target: 'BLACK', confidence: 0, reason: `Apenas ${blackPositions.length} preto(s) encontrado(s)` };
+      }
+      
+      const intervals = [];
+      for (let i = 1; i < blackPositions.length; i++) {
+        intervals.push(blackPositions[i] - blackPositions[i - 1]);
+      }
+      
+      const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+      const currentDelay = blackPositions[0];
+      const delayRatio = currentDelay / avgInterval;
+      
+      let confidence = 0;
+      let reason = '';
+      
+      if (delayRatio >= 1.3) {
+        confidence = Math.min(85, Math.round(55 + (delayRatio - 1) * 35));
+        reason = `Preto atrasado: ${Math.round(currentDelay)} vs media ${Math.round(avgInterval)} (${Math.round(delayRatio * 100)}%)`;
+      } else if (delayRatio >= 0.9) {
+        confidence = Math.round(45 + (delayRatio - 0.5) * 25);
+        reason = `Proximo do ciclo: ${Math.round(currentDelay)} vs media ${Math.round(avgInterval)}`;
+      } else {
+        confidence = Math.round(25 + delayRatio * 20);
+        reason = `Ciclo recente: ${Math.round(currentDelay)} vs media ${Math.round(avgInterval)}`;
+      }
+      
+      const stdDev = Math.sqrt(intervals.reduce((sum, i) => sum + Math.pow(i - avgInterval, 2), 0) / intervals.length);
+      const consistency = Math.max(0, 100 - (stdDev / avgInterval) * 100);
+      confidence = Math.round(confidence * (consistency / 100) * 0.3 + confidence * 0.7);
+      
+      return {
+        matched: confidence >= 55,
+        target: 'BLACK',
+        confidence,
+        pattern: blackPositions.slice(0, 5),
+        reason,
+        analyses: [
+          { type: 'ciclo', score: confidence, detail: `Media: ${Math.round(avgInterval)} | Atual: ${Math.round(currentDelay)} | Ratio: ${Math.round(delayRatio * 100)}%` }
+        ],
+        confluences: confidence >= 60 ? 1 : 0,
+        lastAnalysis: Date.now()
+      };
+    },
+
+    reacaoPreto(history, _target, _patternSize) {
+      if (history.length < 20) return { matched: false, confidence: 0, reason: 'Historico insuficiente (min 20)' };
+      
+      const colors = history.map(r => r.color);
+      const isBlack = (c) => c === 'BLACK' || c === 'GREY';
+      const isRed = (c) => c === 'RED';
+      const isBlue = (c) => c === 'BLUE';
+      const isGreen = (c) => c === 'GREEN';
+      
+      const analyses = [];
+      
+      let redStreak = 0;
+      for (let i = 0; i < Math.min(15, colors.length); i++) {
+        if (isRed(colors[i])) redStreak++;
+        else break;
+      }
+      if (redStreak >= 2) {
+        const score = Math.min(80, 45 + redStreak * 12);
+        analyses.push({ type: 'reacaoVermelho', score, detail: `${redStreak} vermelhos seguidos - preto reativo`, target: 'BLACK' });
+      }
+      
+      let blueStreak = 0;
+      for (let i = 0; i < Math.min(10, colors.length); i++) {
+        if (isBlue(colors[i])) blueStreak++;
+        else break;
+      }
+      if (blueStreak >= 1) {
+        const score = Math.min(75, 50 + blueStreak * 15);
+        analyses.push({ type: 'reacaoAzul', score, detail: `${blueStreak} azul(es) - preto reativo`, target: 'BLACK' });
+      }
+      
+      if (isGreen(colors[0])) {
+        const greenFollowedByBlack = [];
+        for (let i = 0; i < Math.min(100, colors.length - 1); i++) {
+          if (isGreen(colors[i]) && i + 1 < colors.length) {
+            greenFollowedByBlack.push(isBlack(colors[i + 1]));
+          }
+        }
+        if (greenFollowedByBlack.length >= 2) {
+          const blackRate = greenFollowedByBlack.filter(Boolean).length / greenFollowedByBlack.length;
+          if (blackRate >= 0.5) {
+            const score = Math.round(50 + blackRate * 30);
+            analyses.push({ type: 'aposVerde', score, detail: `Apos verde: ${Math.round(blackRate * 100)}% preto`, target: 'BLACK' });
+          }
+        }
+      }
+      
+      const last5Colors = colors.slice(0, 5);
+      const nonBlackInLast5 = last5Colors.filter(c => !isBlack(c)).length;
+      if (nonBlackInLast5 >= 3) {
+        const score = Math.round(55 + nonBlackInLast5 * 5);
+        analyses.push({ type: 'ausencia', score, detail: `${nonBlackInLast5}/5 nao-preto - revertendo`, target: 'BLACK' });
+      }
+      
+      const valid = analyses.filter(a => a.score >= 50);
+      if (valid.length === 0) {
+        return { matched: false, target: 'BLACK', confidence: 0, reason: 'Nenhum padrao preto detectado' };
+      }
+      
+      valid.sort((a, b) => b.score - a.score);
+      const best = valid[0];
+      const confluences = valid.filter(a => a.score >= 60).length;
+      
+      return {
+        matched: best.score >= 55,
+        target: 'BLACK',
+        confidence: Math.min(90, Math.round(best.score * (1 + confluences * 0.08))),
+        pattern: colors.slice(0, 5),
+        reason: `${best.type.toUpperCase()}: ${best.detail}${confluences > 1 ? ` (${confluences} sinais)` : ''}`,
+        analyses: valid.slice(0, 5),
+        confluences,
+        lastAnalysis: Date.now()
+      };
+    },
+
+    cicloVermelho(history, _target, _patternSize) {
+      if (history.length < 20) return { matched: false, confidence: 0, reason: 'Historico insuficiente (min 20)' };
+      
+      const colors = history.map(r => r.color);
+      const isRed = (c) => c === 'RED';
+      
+      const redPositions = [];
+      for (let i = 0; i < colors.length; i++) {
+        if (isRed(colors[i])) redPositions.push(i);
+      }
+      
+      if (redPositions.length < 3) {
+        return { matched: false, target: 'RED', confidence: 0, reason: `Apenas ${redPositions.length} vermelho(s) encontrado(s)` };
+      }
+      
+      const intervals = [];
+      for (let i = 1; i < redPositions.length; i++) {
+        intervals.push(redPositions[i] - redPositions[i - 1]);
+      }
+      
+      const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+      const currentDelay = redPositions[0];
+      const delayRatio = currentDelay / avgInterval;
+      
+      let confidence = 0;
+      let reason = '';
+      
+      if (delayRatio >= 1.3) {
+        confidence = Math.min(85, Math.round(55 + (delayRatio - 1) * 35));
+        reason = `Vermelho atrasado: ${Math.round(currentDelay)} vs media ${Math.round(avgInterval)} (${Math.round(delayRatio * 100)}%)`;
+      } else if (delayRatio >= 0.9) {
+        confidence = Math.round(45 + (delayRatio - 0.5) * 25);
+        reason = `Proximo do ciclo: ${Math.round(currentDelay)} vs media ${Math.round(avgInterval)}`;
+      } else {
+        confidence = Math.round(25 + delayRatio * 20);
+        reason = `Ciclo recente: ${Math.round(currentDelay)} vs media ${Math.round(avgInterval)}`;
+      }
+      
+      const stdDev = Math.sqrt(intervals.reduce((sum, i) => sum + Math.pow(i - avgInterval, 2), 0) / intervals.length);
+      const consistency = Math.max(0, 100 - (stdDev / avgInterval) * 100);
+      confidence = Math.round(confidence * (consistency / 100) * 0.3 + confidence * 0.7);
+      
+      return {
+        matched: confidence >= 55,
+        target: 'RED',
+        confidence,
+        pattern: redPositions.slice(0, 5),
+        reason,
+        analyses: [
+          { type: 'ciclo', score: confidence, detail: `Media: ${Math.round(avgInterval)} | Atual: ${Math.round(currentDelay)} | Ratio: ${Math.round(delayRatio * 100)}%` }
+        ],
+        confluences: confidence >= 60 ? 1 : 0,
+        lastAnalysis: Date.now()
+      };
+    },
+
+    convergenciaVermelha(history, _target, _patternSize) {
+      if (history.length < 25) return { matched: false, confidence: 0, reason: 'Historico insuficiente (min 25)' };
+      
+      const colors = history.map(r => r.color);
+      const isRed = (c) => c === 'RED';
+      const isBlack = (c) => c === 'BLACK' || c === 'GREY';
+      
+      const analyses = [];
+      
+      let blackStreak = 0;
+      for (let i = 0; i < Math.min(15, colors.length); i++) {
+        if (isBlack(colors[i])) blackStreak++;
+        else break;
+      }
+      if (blackStreak >= 2) {
+        const score = Math.min(80, 45 + blackStreak * 10);
+        analyses.push({ type: 'reacaoPreto', score, detail: `${blackStreak} pretos seguidos - vermelho reativo`, target: 'RED' });
+      }
+      
+      const freq = {};
+      for (let i = 0; i < Math.min(50, colors.length); i++) freq[colors[i]] = (freq[colors[i]] || 0) + 1;
+      const sorted = Object.entries(freq).sort((a, b) => a[1] - b[1]);
+      const redCount = freq['RED'] || 0;
+      const total = Math.min(50, colors.length);
+      const expected = total / Object.keys(freq).length;
+      const deviation = ((expected - redCount) / expected) * 100;
+      
+      if (deviation >= 30) {
+        const score = Math.min(85, 50 + deviation);
+        analyses.push({ type: 'atraso', score, detail: `Vermelho atrasado: ${redCount}x/${total} (${Math.round(deviation)}% abaixo)`, target: 'RED' });
+      }
+      
+      let alternations = 0;
+      for (let i = 0; i < Math.min(15, colors.length - 1); i++) {
+        if (colors[i] !== colors[i + 1]) alternations++;
+      }
+      const altRate = alternations / Math.min(14, colors.length - 1);
+      if (altRate >= 0.65) {
+        analyses.push({ type: 'alternancia', score: Math.round(altRate * 100), detail: `Alternancia ${Math.round(altRate * 100)}%`, target: 'RED' });
+      }
+      
+      const transitions = {};
+      for (let i = 0; i < Math.min(40, colors.length - 1); i++) {
+        const key = `${colors[i]}->RED`;
+        transitions[key] = (transitions[key] || 0) + 1;
+      }
+      const blackToRed = transitions['BLACK->RED'] || 0;
+      const blueToRed = transitions['BLUE->RED'] || 0;
+      if (blackToRed >= 3 || blueToRed >= 2) {
+        const score = Math.round(55 + (blackToRed + blueToRed) * 3);
+        analyses.push({ type: 'transicao', score, detail: `Transicoes para vermelho: ${blackToRed}B->R, ${blueToRed}U->R`, target: 'RED' });
+      }
+      
+      const valid = analyses.filter(a => a.score >= 50);
+      if (valid.length === 0) {
+        return { matched: false, target: 'RED', confidence: 0, reason: 'Nenhuma convergencia vermelha' };
+      }
+      
+      valid.sort((a, b) => b.score - a.score);
+      const best = valid[0];
+      const confluences = valid.filter(a => a.score >= 60).length;
+      
+      return {
+        matched: best.score >= 55,
+        target: 'RED',
+        confidence: Math.min(90, Math.round(best.score * (1 + confluences * 0.08))),
+        pattern: colors.slice(0, 5),
+        reason: `${best.type.toUpperCase()}: ${best.detail}${confluences > 1 ? ` (${confluences} convergencias)` : ''}`,
+        analyses: valid.slice(0, 5),
+        confluences,
+        lastAnalysis: Date.now()
+      };
+    },
+
+    cicloAzul(history, _target, _patternSize) {
+      if (history.length < 25) return { matched: false, confidence: 0, reason: 'Historico insuficiente (min 25)' };
+      
+      const colors = history.map(r => r.color);
+      const isBlue = (c) => c === 'BLUE';
+      
+      const bluePositions = [];
+      for (let i = 0; i < colors.length; i++) {
+        if (isBlue(colors[i])) bluePositions.push(i);
+      }
+      
+      if (bluePositions.length < 2) {
+        return { matched: false, target: 'BLUE', confidence: 0, reason: `Apenas ${bluePositions.length} azul(es) encontrado(s)` };
+      }
+      
+      const intervals = [];
+      for (let i = 1; i < bluePositions.length; i++) {
+        intervals.push(bluePositions[i] - bluePositions[i - 1]);
+      }
+      
+      const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+      const currentDelay = bluePositions[0];
+      const delayRatio = currentDelay / avgInterval;
+      
+      let confidence = 0;
+      let reason = '';
+      
+      if (delayRatio >= 1.4) {
+        confidence = Math.min(85, Math.round(55 + (delayRatio - 1) * 30));
+        reason = `Azul atrasado: ${Math.round(currentDelay)} vs media ${Math.round(avgInterval)} (${Math.round(delayRatio * 100)}%)`;
+      } else if (delayRatio >= 1.0) {
+        confidence = Math.round(45 + (delayRatio - 0.7) * 25);
+        reason = `Proximo do ciclo: ${Math.round(currentDelay)} vs media ${Math.round(avgInterval)}`;
+      } else {
+        confidence = Math.round(20 + delayRatio * 20);
+        reason = `Ciclo recente: ${Math.round(currentDelay)} vs media ${Math.round(avgInterval)}`;
+      }
+      
+      const stdDev = Math.sqrt(intervals.reduce((sum, i) => sum + Math.pow(i - avgInterval, 2), 0) / intervals.length);
+      const consistency = Math.max(0, 100 - (stdDev / avgInterval) * 100);
+      confidence = Math.round(confidence * (consistency / 100) * 0.3 + confidence * 0.7);
+      
+      return {
+        matched: confidence >= 55,
+        target: 'BLUE',
+        confidence,
+        pattern: bluePositions.slice(0, 5),
+        reason,
+        analyses: [
+          { type: 'ciclo', score: confidence, detail: `Media: ${Math.round(avgInterval)} | Atual: ${Math.round(currentDelay)} | Ratio: ${Math.round(delayRatio * 100)}%` }
+        ],
+        confluences: confidence >= 60 ? 1 : 0,
+        lastAnalysis: Date.now()
+      };
+    },
+
+    sequenciaAzul(history, _target, _patternSize) {
+      if (history.length < 25) return { matched: false, confidence: 0, reason: 'Historico insuficiente (min 25)' };
+      
+      const colors = history.map(r => r.color);
+      const numbers = history.map(r => r.number ?? r.cellIndex ?? -1);
+      const isBlue = (c) => c === 'BLUE';
+      const isGreen = (c) => c === 'GREEN';
+      
+      const analyses = [];
+      
+      const bluePositions = [];
+      for (let i = 0; i < colors.length; i++) {
+        if (isBlue(colors[i])) bluePositions.push(i);
+      }
+      
+      if (bluePositions.length >= 2) {
+        const beforeBlues = [];
+        for (const pos of bluePositions) {
+          if (pos >= 2) {
+            beforeBlues.push([colors[pos - 1], colors[pos - 2]]);
+          }
+        }
+        
+        if (beforeBlues.length >= 2) {
+          const currentPattern = colors.slice(0, 2);
+          let matchCount = 0;
+          for (const pattern of beforeBlues) {
+            if (pattern[0] === currentPattern[0] && pattern[1] === currentPattern[1]) matchCount++;
+          }
+          
+          if (matchCount >= 2) {
+            const score = Math.min(80, 50 + matchCount * 12);
+            analyses.push({ type: 'padrao', score, detail: `Padrao ${currentPattern.join('-')} precede azul: ${matchCount}x`, target: 'BLUE' });
+          }
+        }
+      }
+      
+      if (isGreen(colors[0])) {
+        const greenFollowedByBlue = [];
+        for (let i = 0; i < Math.min(100, colors.length - 1); i++) {
+          if (isGreen(colors[i]) && i + 1 < colors.length) {
+            greenFollowedByBlue.push(isBlue(colors[i + 1]));
+          }
+        }
+        if (greenFollowedByBlue.length >= 2) {
+          const blueRate = greenFollowedByBlue.filter(Boolean).length / greenFollowedByBlue.length;
+          if (blueRate >= 0.3) {
+            const score = Math.round(50 + blueRate * 40);
+            analyses.push({ type: 'aposVerde', score, detail: `Apos verde: ${Math.round(blueRate * 100)}% azul`, target: 'BLUE' });
+          }
+        }
+      }
+      
+      const last10Numbers = numbers.slice(0, 10);
+      const highNumbers = last10Numbers.filter(n => n >= 12);
+      if (highNumbers.length >= 3) {
+        const score = Math.round(55 + highNumbers.length * 5);
+        analyses.push({ type: 'zonaAlta', score, detail: `Zona alta: ${highNumbers.length}/10 numeros altos (12+)`, target: 'BLUE' });
+      }
+      
+      let consecutiveNonBlue = 0;
+      for (let i = 0; i < Math.min(40, colors.length); i++) {
+        if (!isBlue(colors[i])) consecutiveNonBlue++;
+        else break;
+      }
+      
+      if (consecutiveNonBlue >= 8) {
+        const expectedInRow = Math.pow(1 - (2 / 14), consecutiveNonBlue);
+        const probability = 1 - expectedInRow;
+        const score = Math.min(75, Math.round(probability * 100));
+        analyses.push({ type: 'ausencia', score, detail: `${consecutiveNonBlue} sem azul - probabilidade ${Math.round(probability * 100)}%`, target: 'BLUE' });
+      }
+      
+      const valid = analyses.filter(a => a.score >= 50);
+      if (valid.length === 0) {
+        return { matched: false, target: 'BLUE', confidence: 0, reason: 'Nenhum padrao azul detectado' };
+      }
+      
+      valid.sort((a, b) => b.score - a.score);
+      const best = valid[0];
+      const confluences = valid.filter(a => a.score >= 60).length;
+      
+      return {
+        matched: best.score >= 55,
+        target: 'BLUE',
+        confidence: Math.min(90, Math.round(best.score * (1 + confluences * 0.08))),
+        pattern: colors.slice(0, 5),
+        reason: `${best.type.toUpperCase()}: ${best.detail}${confluences > 1 ? ` (${confluences} sinais)` : ''}`,
+        analyses: valid.slice(0, 5),
+        confluences,
+        lastAnalysis: Date.now()
+      };
     }
   },
 
