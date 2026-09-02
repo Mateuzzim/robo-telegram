@@ -11,7 +11,7 @@
 <body>
 <nav class="nav">
   <span class="nav-brand">ROBOS</span>
-  <div class="nav-links"><a href="index.html">Dashboard</a><a href="monitoramento.html">Monitoramento</a><a href="robos.html">Robos</a><a href="analise.html">Analise</a></div>
+  <div class="nav-links"><a href="index.html">Dashboard</a><a href="monitoramento.html">Monitoramento</a><a href="robos.html">Robos</a><a href="robos-action.html">Em Acao</a><a href="central.html">Central</a><a href="analise.html">Analise</a></div>
   <div class="nav-status"><a href="ws-background.html" target="_blank" style="font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text3);margin-right:8px">BG</a><div class="dot" id="connDot"></div></div>
 </nav>
 <div class="container">
@@ -23,6 +23,7 @@
       <div class="robo-section" style="margin-top:16px"><div class="robo-section-title">Estrategias da IA</div><div id="estrategiasIA" style="max-height:none;overflow:visible"></div></div>
       <div class="robo-section" style="margin-top:16px;display:none" id="analisesSection"><div class="robo-section-title">Analises Padroes Cores</div><div id="analisesContent" style="max-height:300px;overflow-y:auto"></div></div>
       <div class="robo-section" style="margin-top:16px"><div class="robo-section-title">Filtro de Sinal</div><div id="filtro"></div></div>
+      <div class="robo-section" style="margin-top:16px;display:none" id="filtersStatusSection"><div class="robo-section-title" style="display:flex;align-items:center;justify-content:space-between"><span>Filtros de Qualidade</span><span id="filtersSummary" style="font-size:10px;color:var(--text3)"></span></div><div id="filtersStatus"></div></div>
       <div class="robo-section" style="margin-top:16px"><div class="robo-section-title">Placar e Estatisticas</div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px" id="placar"></div></div>
     </div>
     <div>
@@ -54,6 +55,7 @@
 <script src="utils.js"></script>
 <script src="ws-source.js"></script>
 <script src="robot.js"></script>
+<script src="robot-filters.js"></script>
 <script src="robot-engine.js"></script>
 <script src="telegram.js"></script>
 <script src="app.js"></script>
@@ -115,6 +117,7 @@ function renderAll() {
   renderAnalises();
   renderEstrategias();
   renderLogs();
+  renderFiltersStatus();
 
   const targetColorLabel = { any: 'QUALQUER', red: 'VERMELHO', black: 'PRETO', green: 'VERDE', blue: 'AZUL', grey: 'PRETO', gray: 'PRETO', white: 'BRANCO' };
   const formatColorLabel = color => targetColorLabel[String(color || '').toLowerCase()] || String(color || '--').toUpperCase();
@@ -275,7 +278,7 @@ function renderAll() {
   }
   renderTelegramMessagePreview(r);
   document.getElementById('historyGrid').innerHTML = histData.length
-    ? `<div class="history-grid">${histData.map(h => {
+    ? `<div style="font-size:10px;color:var(--text3);margin-bottom:6px">${histData.length} resultados &bull; 13 por linha</div><div class="history-grid" style="grid-template-columns:repeat(13,1fr)">${histData.map(h => {
         const color = isDbl ? h.color : h.cellColor;
         const num = isDbl ? h.number : h.cellIndex;
         const mult = !isDbl && h.multiplier ? h.multiplier + 'X' : '';
@@ -422,6 +425,43 @@ function clearTelegramMessages() {
   const entry = document.getElementById('tgMessageEntry');
   if (live) live.value = '';
   if (entry) entry.value = '';
+}
+
+function renderFiltersStatus() {
+  const section = document.getElementById('filtersStatusSection');
+  const content = document.getElementById('filtersStatus');
+  const summary = document.getElementById('filtersSummary');
+  if (!robotData || !robotData.filters || robotData.filters.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+  section.style.display = 'block';
+  const d = robotData.diagnostic || {};
+  const filterOutput = d.filterOutput || {};
+  const results = filterOutput.results || {};
+  const enabled = robotData.filters;
+  const passedCount = filterOutput.passedCount || 0;
+  const totalFilters = enabled.length;
+  const avgScore = filterOutput.avgScore || 0;
+  summary.textContent = `${passedCount}/${totalFilters} passaram | Score: ${avgScore}`;
+
+  const allFilterLabels = typeof RobotFilters !== 'undefined' ? RobotFilters.ALL_FILTERS : {};
+  const html = enabled.map(key => {
+    const r = results[key];
+    const info = allFilterLabels[key];
+    const label = info?.label || key;
+    const passed = r?.passed !== false;
+    const score = r?.score || 0;
+    const reason = r?.reason || 'Aguardando dados';
+    const scoreColor = score >= 70 ? 'var(--green)' : score >= 40 ? 'var(--yellow)' : 'var(--red)';
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;margin-bottom:4px;background:${passed ? 'rgba(41,217,120,.05)' : 'rgba(255,68,68,.05)'};border:1px solid ${passed ? 'rgba(41,217,120,.2)' : 'rgba(255,68,68,.2)'};border-radius:6px">
+      <span style="font-size:14px;font-weight:800;color:${passed ? 'var(--green)' : 'var(--red)'}">${passed ? '&#10003;' : '&#10007;'}</span>
+      <span style="font-size:11px;font-weight:600;color:${passed ? 'var(--text)' : 'var(--red)'};min-width:120px">${label}</span>
+      <span style="flex:1;font-size:10px;color:var(--text3)">${reason}</span>
+      <span style="font-size:11px;font-weight:700;color:${scoreColor};min-width:30px;text-align:right">${score}</span>
+    </div>`;
+  }).join('');
+  content.innerHTML = `<div style="max-height:300px;overflow-y:auto">${html}</div>`;
 }
 
 function loadRobot() {

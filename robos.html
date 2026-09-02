@@ -35,6 +35,18 @@
   .strategy-item label{display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;width:100%}
   .strategy-item .strat-tag{font-size:9px;padding:2px 5px;border-radius:4px;background:var(--bg);color:var(--text3);margin-left:auto}
   @media(max-width:768px){.strategy-grid{grid-template-columns:1fr}}
+  .filter-group{margin-bottom:10px}
+  .filter-group-title{font-size:11px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px}
+  .filter-group-title::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--blue)}
+  .filter-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:5px;max-height:300px;overflow-y:auto;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px}
+  .filter-item{display:flex;align-items:center;gap:6px;padding:5px 7px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:all .2s}
+  .filter-item:hover{border-color:var(--green);background:var(--bg3)}
+  .filter-item input:checked + span{color:var(--green);font-weight:600}
+  .filter-item label{display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer;width:100%}
+  .filter-item .f-tag{font-size:8px;padding:1px 4px;border-radius:3px;background:var(--bg);color:var(--text3);margin-left:auto;white-space:nowrap}
+  @media(max-width:768px){.filter-grid{grid-template-columns:1fr}}
+  .filter-actions{display:flex;gap:6px;margin-top:6px}
+  .filter-actions button{font-size:10px;padding:3px 8px}
 </style>
 </head>
 <body>
@@ -44,6 +56,8 @@
     <a href="index.html">Dashboard</a>
     <a href="monitoramento.html">Monitoramento</a>
     <a href="robos.html" class="active">Robos</a>
+    <a href="robos-action.html">Em Acao</a>
+    <a href="central.html">Central</a>
     <a href="analise.html">Analise</a>
     <a href="configuracoes.html">Config</a>
     <a href="estatisticas.html">Estatisticas</a>
@@ -68,7 +82,7 @@
   </div>
 
   <div class="card"><div class="table-wrap"><table>
-    <thead><tr><th>Robo</th><th>Estrategia</th><th>Status</th><th>Alvo</th><th>Conf</th><th>W/L</th><th>Modo</th><th>Intervalo</th><th>Gale</th><th>Acoes</th></tr></thead>
+    <thead><tr><th>Robo</th><th>Estrategia</th><th>Filtros</th><th>Status</th><th>Alvo</th><th>Conf</th><th>W/L</th><th>Modo</th><th>Intervalo</th><th>Gale</th><th>Acoes</th></tr></thead>
     <tbody id="robotsTable"></tbody>
   </table></div></div>
 </div>
@@ -114,6 +128,15 @@
     <div class="form-group"><label>Gale Maximo</label><input id="fGale" type="number" value="2"></div>
     <div class="form-group"><label>Modo</label><select id="fMode"><option value="monitoramento">Monitoramento</option><option value="telegram">Telegram</option></select></div>
     <div class="form-group"><label>Filtro de Sinal</label><select id="fFilterMode"><option value="desligado">Desligado</option><option value="conservador">Conservador (Conf>=80 | Conflu>=3 | Score>=75)</option><option value="moderado" selected>Moderado (Conf>=65 | Conflu>=2 | Score>=55)</option><option value="agressivo">Agressivo (Conf>=45 | Conflu>=1 | Score>=30)</option></select></div>
+    <div class="form-group"><label>Filtros de Qualidade</label>
+      <div class="filter-actions">
+        <button class="btn btn-sm btn-blue" onclick="autoSelectFilters()" title="Analisa historico e seleciona os melhores filtros para o jogo/alvo">Auto-Selecionar</button>
+        <button class="btn btn-sm btn-green" onclick="selectAllFilters()">Selecionar Todos</button>
+        <button class="btn btn-sm btn-red" onclick="deselectAllFilters()">Limpar Todos</button>
+        <span style="font-size:10px;color:var(--text3);margin-left:auto;align-self:center" id="filterCount">0 selecionados</span>
+      </div>
+      <div class="filter-grid" id="fFilters"></div>
+    </div>
     <div style="border-top:1px solid var(--border);margin:12px 0;padding-top:12px">
       <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:10px;cursor:pointer">
         <input type="checkbox" id="fTgEnabled"> Enviar sinais para Telegram
@@ -137,6 +160,7 @@
 <script src="utils.js"></script>
 <script src="ws-source.js"></script>
 <script src="robot.js"></script>
+<script src="robot-filters.js"></script>
 <script src="robot-engine.js"></script>
 <script src="telegram.js"></script>
 <script src="app.js"></script>
@@ -181,6 +205,8 @@ function showCreate(){
   document.getElementById('fEditId').value = '';
   updateTargets();
   setSelectedStrategies(['todas']);
+  _currentFilterSelection = RobotFilters.getDefaultFilters();
+  renderFilters();
   const channels = getChannels();
   const sel = document.getElementById('fTgChannel');
   sel.innerHTML = '<option value="">Selecionar canal...</option>' + channels.map(c => `<option value="${c.id}">${escapeHtml(c.name)} (${c.id})</option>`).join('');
@@ -205,6 +231,8 @@ function showEdit(id){
   document.getElementById('fGale').value = robot.gale?.max || 0;
   document.getElementById('fMode').value = robot.mode || 'monitoramento';
   document.getElementById('fFilterMode').value = robot.filterMode || 'moderado';
+  _currentFilterSelection = (robot.filters && robot.filters.length > 0) ? robot.filters : RobotFilters.getDefaultFilters();
+  renderFilters();
   if (strategies.includes('padroesCores')) {
     document.getElementById('fPatternSize').value = robot.patternSize || 3;
   }
@@ -229,6 +257,160 @@ function setSelectedStrategies(strategies) {
   });
 }
 
+let _currentFilterSelection = null;
+
+function renderFilters(preset) {
+  const container = document.getElementById('fFilters');
+  if (!container || typeof RobotFilters === 'undefined') return;
+  const groups = RobotFilters.getFilterGroups();
+  const groupLabels = {
+    estatistico: 'Estatistico', temporal: 'Temporal', comparativo: 'Comparativo',
+    tendencia: 'Tendencia', padrao: 'Padrao', distribuicao: 'Distribuicao',
+    markov: 'Markov', complexidade: 'Complexidade', qualidade: 'Qualidade',
+    sinal: 'Sinal', operacional: 'Operacional', robustez: 'Robustez'
+  };
+  const activeFilters = preset || _currentFilterSelection || RobotFilters.getDefaultFilters();
+  container.innerHTML = Object.entries(groups).map(([group, filters]) => {
+    return `<div class="filter-group">
+      <div class="filter-group-title">${groupLabels[group] || group}</div>
+      ${filters.map(f => `<div class="filter-item"><label><input type="checkbox" value="${f.key}" onchange="updateFilterCount()" ${activeFilters.includes(f.key) ? 'checked' : ''}><span>${f.label}</span></label><span class="f-tag" title="${f.desc}">${f.desc.substring(0, 20)}...</span></div>`).join('')}
+    </div>`;
+  }).join('');
+  updateFilterCount();
+}
+
+function getSelectedFilters() {
+  const checkboxes = document.querySelectorAll('#fFilters input[type="checkbox"]:checked');
+  return Array.from(checkboxes).map(cb => cb.value);
+}
+
+function setSelectedFilters(filters) {
+  _currentFilterSelection = filters;
+  const checkboxes = document.querySelectorAll('#fFilters input[type="checkbox"]');
+  checkboxes.forEach(cb => {
+    cb.checked = filters.includes(cb.value);
+  });
+  updateFilterCount();
+}
+
+function selectAllFilters() {
+  document.querySelectorAll('#fFilters input[type="checkbox"]').forEach(cb => cb.checked = true);
+  updateFilterCount();
+}
+
+function deselectAllFilters() {
+  document.querySelectorAll('#fFilters input[type="checkbox"]').forEach(cb => cb.checked = false);
+  updateFilterCount();
+}
+
+function updateFilterCount() {
+  const count = document.querySelectorAll('#fFilters input[type="checkbox"]:checked').length;
+  const el = document.getElementById('filterCount');
+  if (el) el.textContent = count + ' selecionados';
+}
+
+function autoSelectFilters() {
+  const game = document.getElementById('fGame').value;
+  const target = document.getElementById('fTarget').value;
+  const histKey = game === 'double' ? 'historico-double-v1' : 'historico-wheel-v1';
+  let history = [];
+  try { history = JSON.parse(localStorage.getItem(histKey) || '[]'); } catch {}
+  if (!Array.isArray(history)) history = [];
+  const n = Math.min(history.length, 100);
+  if (n < 10) { alert('Historico insuficiente (' + n + ' resultados). Minimo 10.'); return; }
+
+  const colors = history.slice(0, n).map(r => String(r.cellColor || r.color || '').toLowerCase());
+  const targetNorm = String(target || '').toLowerCase();
+  const isDouble = game === 'double';
+  const isGreen = targetNorm === 'green';
+  const isAny = !targetNorm || targetNorm === 'any';
+
+  const counts = {};
+  colors.forEach(c => counts[c] = (counts[c] || 0) + 1);
+  const targetCount = counts[targetNorm] || 0;
+  const targetPct = Math.round((targetCount / n) * 100);
+
+  let streak = 0;
+  for (const c of colors) { if (c === targetNorm) streak++; else break; }
+
+  let lastSeen = n;
+  for (let i = 0; i < n; i++) { if (colors[i] === targetNorm) { lastSeen = i; break; } }
+
+  let maxRun = 0, curRun = 0, lastC = '';
+  for (const c of colors) { if (c === lastC) curRun++; else curRun = 1; lastC = c; if (curRun > maxRun) maxRun = curRun; }
+
+  let altCount = 0;
+  for (let i = 1; i < Math.min(n, 15); i++) { if (colors[i] !== colors[i - 1]) altCount++; }
+  const altRatio = altCount / Math.max(Math.min(n, 15) - 1, 1);
+
+  const half = Math.floor(n / 2);
+  const firstHalf = colors.slice(half);
+  const secondHalf = colors.slice(0, half);
+  const fPct = firstHalf.filter(c => c === targetNorm).length / (firstHalf.length || 1);
+  const sPct = secondHalf.filter(c => c === targetNorm).length / (secondHalf.length || 1);
+  const trend = sPct > fPct && (sPct - fPct) > 0.1;
+
+  const unique = Object.keys(counts).length;
+
+  const entropy = (() => {
+    let h = 0;
+    for (const v of Object.values(counts)) { const p = v / n; if (p > 0) h -= p * Math.log2(p); }
+    return Math.round((h / Math.log2(Object.keys(counts).length || 1)) * 100);
+  })();
+
+  let selected = [];
+
+  if (isGreen) {
+    selected = ['qualidadeAmostra', 'antiOverfitting', 'multiCriterios', 'scoreMinimo', 'confiancaMinima', 'diferencaCandidatos', 'consenso', 'divergencia', 'entropia', 'cooldown', 'lossConsecutivo', 'atraso', 'recencia', 'distanciaOcorrencias', 'janelaCurtaLonga', 'probabilidadeCond', 'matrizTransicao', 'transicao'];
+  } else if (isAny) {
+    selected = ['frequencia', 'qualidadeAmostra', 'tendencia', 'quebraTendencia', 'consenso', 'scoreMinimo', 'confiancaMinima', 'cooldown', 'multiCriterios', 'entropia', 'atraso', 'recencia'];
+  } else {
+    selected = ['frequencia', 'qualidadeAmostra'];
+
+    if (streak >= 3) selected.push('repeticaoExcessiva');
+    if (maxRun >= 5) selected.push('sequenciaEsticada');
+    if (lastSeen >= Math.floor(n * 0.4)) selected.push('atraso', 'recencia');
+    if (altRatio >= 0.6) selected.push('alternancia');
+    if (trend) selected.push('tendencia');
+    if (entropy > 70) selected.push('entropia', 'dispersao');
+    if (entropy <= 50) selected.push('concentracao');
+    if (unique >= 4) selected.push('dispersao', 'volatilidade');
+    if (targetPct < 20) selected.push('distanciaOcorrencias', 'janelaCurtaLonga');
+    if (targetPct >= 40) selected.push('concentracao', 'repeticaoExcessiva');
+
+    selected.push('transicao', 'matrizTransicao', 'probabilidadeCond', 'padraoRecorrente');
+    selected.push('consenso', 'divergencia', 'scoreMinimo', 'confiancaMinima', 'diferencaCandidatos');
+    selected.push('cooldown', 'posLoss', 'lossConsecutivo');
+    selected.push('multiCriterios');
+  }
+
+  selected = [...new Set(selected)];
+  const allFilters = typeof RobotFilters !== 'undefined' ? Object.keys(RobotFilters.ALL_FILTERS) : [];
+  selected = selected.filter(f => allFilters.includes(f));
+
+  _currentFilterSelection = selected;
+  setSelectedFilters(selected);
+  updateFilterCount();
+
+  const summary = [];
+  if (isGreen) summary.push('GREEN 50x');
+  else if (isAny) summary.push('ANY');
+  else summary.push(targetNorm.toUpperCase());
+  summary.push(n + 'rd analisados');
+  summary.push(selected.length + ' filtros selecionados');
+  if (streak > 0) summary.push('streak ' + streak + 'x');
+  if (lastSeen > 0) summary.push('atraso ' + lastSeen + 'rd');
+  summary.push('entropia ' + entropy);
+
+  const btn = document.querySelector('[onclick="autoSelectFilters()"]');
+  if (btn) {
+    const orig = btn.textContent;
+    btn.textContent = '✓ ' + selected.length + ' selecionados';
+    btn.style.background = 'var(--green)';
+    setTimeout(() => { btn.textContent = orig; btn.style.background = ''; }, 2000);
+  }
+}
+
 function createRobot(){
   const editId = document.getElementById('fEditId').value;
   const name = document.getElementById('fName').value || 'Novo Robo';
@@ -247,6 +429,7 @@ function createRobot(){
   const tgChannel = document.getElementById('fTgChannel').value;
   const tgMsgType = document.getElementById('fTgMsgType').value;
   const patternSize = strategies.includes('padroesCores') ? parseInt(document.getElementById('fPatternSize').value) || 3 : 3;
+  const filters = getSelectedFilters();
   const minScore = parseInt(document.getElementById('fMinScore').value) || 52;
 
   if (editId) {
@@ -267,12 +450,13 @@ function createRobot(){
       robot.filterMode = filterMode;
       robot.telegram = { enabled: tgEnabled, channelId: tgChannel, msgType: tgMsgType, message: robot.telegram?.message || {} };
       robot.patternSize = patternSize;
+      robot.filters = filters;
       RobotEngine.save();
     }
   } else {
     const id = game + '-' + name.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'');
     RobotEngine.createRobot({
-      id, name, game, strategy, strategies, filterMode,
+      id, name, game, strategy, strategies, filters, filterMode,
       target: { color: targetColor, multiplier: targetMult ? parseInt(targetMult) : null },
       resultsToAnalyze: results,
       minimumConfidence: minConf,
@@ -342,6 +526,9 @@ function loadRobots(){
           ${strategyTags}
         </div>
       </td>
+      <td style="text-align:center">
+        <span style="display:inline-block;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;background:var(--purple,#a855f7)22;color:var(--purple,#a855f7);border:1px solid var(--purple,#a855f7)44" title="${(r.filters||[]).length} filtros ativos">${(r.filters||[]).length}F</span>
+      </td>
       <td>${createBadge(r.status)}</td>
       <td style="font-size:11px">${getTargetLabel(r)}</td>
       <td style="font-size:12px;font-weight:700;color:${confColor}">${conf}%</td>
@@ -358,7 +545,7 @@ function loadRobots(){
         <button class="btn btn-sm btn-red" onclick="deleteRobot('${r.id}')">Del</button>
       </td>
     </tr>`;
-  }).join('') || '<tr><td colspan="10" style="color:var(--text3);text-align:center;padding:20px">Nenhum robo criado</td></tr>';
+  }).join('') || '<tr><td colspan="11" style="color:var(--text3);text-align:center;padding:20px">Nenhum robo criado</td></tr>';
 }
 function changeRobotPatternSize(id, size) {
   const robot = RobotEngine.getRobot(id);

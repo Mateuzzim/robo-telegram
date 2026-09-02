@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Robos em Acao</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  html{zoom:0.75}
+  .hero{background:linear-gradient(135deg,rgba(35,104,255,.15),rgba(41,217,120,.1));border:1px solid var(--border);border-radius:16px;padding:20px 24px;margin-bottom:20px;position:relative;overflow:hidden}
+  .hero h1{font-size:22px;font-weight:800;margin-bottom:2px;display:flex;align-items:center;gap:10px}
+  .hero p{color:var(--text3);font-size:12px}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  @keyframes glow{0%,100%{box-shadow:0 0 5px var(--green)}50%{box-shadow:0 0 20px var(--green)}}
+  @keyframes signalPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+  .robot-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:14px}
+  .robot-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden;transition:all .3s}
+  .robot-card:hover{border-color:var(--blue);transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.3)}
+  .robot-card.online{border-color:rgba(41,217,120,.3)}
+  .robot-card.signal-active{animation:signalPulse 2s infinite;border-color:var(--green)}
+  .rc-header{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+  .rc-header-left{display:flex;align-items:center;gap:8px}
+  .rc-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+  .rc-dot.on{background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 2s infinite}
+  .rc-dot.off{background:var(--red)}
+  .rc-dot.paused{background:var(--yellow)}
+  .rc-name{font-size:14px;font-weight:700;color:var(--text)}
+  .rc-game{font-size:10px;color:var(--text3);text-transform:uppercase}
+  .rc-status{font-size:10px;padding:2px 8px;border-radius:10px;font-weight:700}
+  .rc-status.online{background:rgba(41,217,120,.15);color:var(--green)}
+  .rc-status.offline{background:rgba(255,68,68,.15);color:var(--red)}
+  .rc-status.paused{background:rgba(224,197,64,.15);color:var(--yellow)}
+  .rc-body{padding:12px 14px}
+  .rc-info{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px}
+  .rc-info-item{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 8px;text-align:center}
+  .rc-info-label{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.3px}
+  .rc-info-value{font-size:13px;font-weight:700;margin-top:2px}
+  .rc-history{margin-bottom:10px}
+  .rc-history-title{font-size:10px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;letter-spacing:.3px}
+  .rc-history-grid{display:flex;flex-wrap:wrap;gap:3px}
+  .rc-history-cell{width:22px;height:22px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff}
+  .rc-history-cell.red{background:var(--red)}
+  .rc-history-cell.black{background:#374151}
+  .rc-history-cell.grey{background:#374151}
+  .rc-history-cell.green{background:var(--green)}
+  .rc-history-cell.blue{background:var(--blue)}
+  .rc-signal{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:8px}
+  .rc-signal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+  .rc-signal-badge{font-size:9px;padding:2px 6px;border-radius:8px;font-weight:700;text-transform:uppercase}
+  .rc-signal-badge.entry{background:rgba(35,104,255,.15);color:var(--blue)}
+  .rc-signal-badge.gale{background:rgba(224,197,64,.15);color:var(--yellow)}
+  .rc-signal-badge.win{background:rgba(41,217,120,.15);color:var(--green)}
+  .rc-signal-badge.loss{background:rgba(255,68,68,.15);color:var(--red)}
+  .rc-signal-badge.waiting{background:rgba(255,255,255,.05);color:var(--text3)}
+  .rc-signal-target{font-size:16px;font-weight:800}
+  .rc-signal-detail{font-size:10px;color:var(--text3)}
+  .rc-filters{display:flex;flex-wrap:wrap;gap:3px;margin-bottom:8px}
+  .rc-filter-tag{font-size:8px;padding:2px 5px;border-radius:3px;border:1px solid}
+  .rc-filter-tag.pass{background:rgba(41,217,120,.08);border-color:rgba(41,217,120,.2);color:var(--green)}
+  .rc-filter-tag.fail{background:rgba(255,68,68,.08);border-color:rgba(255,68,68,.2);color:var(--red)}
+  .rc-placar{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+  .rc-placar-item{text-align:center;padding:4px;background:var(--bg);border-radius:4px}
+  .rc-placar-value{font-size:14px;font-weight:800}
+  .rc-placar-label{font-size:8px;color:var(--text3);text-transform:uppercase}
+  .rc-flow{display:flex;gap:4px;margin-bottom:8px}
+  .rc-flow-step{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 4px;text-align:center;position:relative}
+  .rc-flow-step.active{border-color:var(--green);background:rgba(41,217,120,.05)}
+  .rc-flow-step.blocked{border-color:var(--red);background:rgba(255,68,68,.05)}
+  .rc-flow-num{width:16px;height:16px;border-radius:50%;background:var(--bg3);color:var(--text3);font-size:8px;font-weight:700;display:flex;align-items:center;justify-content:center;margin:0 auto 3px}
+  .rc-flow-step.active .rc-flow-num{background:var(--green);color:#fff}
+  .rc-flow-step.blocked .rc-flow-num{background:var(--red);color:#fff}
+  .rc-flow-label{font-size:8px;color:var(--text3);line-height:1.2}
+  .rc-flow-step.active .rc-flow-label{color:var(--green);font-weight:600}
+  .empty-state{text-align:center;padding:60px 20px;color:var(--text3)}
+  .empty-state h2{font-size:18px;margin-bottom:8px;color:var(--text)}
+  .empty-state p{font-size:13px}
+  .auto-refresh{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text3);margin-bottom:12px}
+  .auto-refresh .dot-sm{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+  .rc-actions{padding:8px 14px;border-top:1px solid var(--border);display:flex;gap:6px;justify-content:flex-end;align-items:center;flex-wrap:wrap}
+  .rc-tg-modes{display:flex;gap:2px;margin-left:8px}
+  .rc-tg-btn{width:22px;height:22px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text3);font-size:8px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
+  .rc-tg-btn:hover{border-color:var(--blue);color:var(--text)}
+  .rc-tg-btn.active-live{background:rgba(41,217,120,.15);border-color:var(--green);color:var(--green)}
+  .rc-tg-btn.active-signal{background:rgba(255,68,68,.15);border-color:var(--red);color:var(--red)}
+  .rc-tg-btn.active-both{background:rgba(35,104,255,.15);border-color:var(--blue);color:var(--blue)}
+  .rc-tg-btn.active-consolidated{background:rgba(255,193,7,.15);border-color:var(--yellow);color:var(--yellow)}
+  .rc-tg-btn.active-off{background:rgba(255,68,68,.08);border-color:rgba(255,68,68,.3);color:var(--red)}
+</style>
+</head>
+<body>
+<nav class="nav">
+  <span class="nav-brand">ROBOS</span>
+  <div class="nav-links">
+    <a href="index.html">Dashboard</a>
+    <a href="monitoramento.html">Monitoramento</a>
+    <a href="robos.html">Robos</a>
+    <a href="robos-action.html" class="active">Em Acao</a>
+    <a href="central.html">Central</a>
+    <a href="analise.html">Analise</a>
+    <a href="configuracoes.html">Config</a>
+  </div>
+  <div class="nav-status"><a href="ws-background.html" target="_blank" style="font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text3);margin-right:8px">BG</a></div>
+</nav>
+<div class="container">
+  <div class="hero">
+    <h1><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Robos em Acao</h1>
+    <p>Visao geral de todos os robos em tempo real</p>
+  </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:8px;flex-wrap:wrap">
+    <div class="auto-refresh"><div class="dot-sm"></div> Atualizacao automatica a cada 3s</div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <select id="autoSendInterval" style="padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px">
+        <option value="0">Auto-envio: Desligado</option>
+        <option value="30000">A cada 30s</option>
+        <option value="60000">A cada 1min</option>
+        <option value="180000">A cada 3min</option>
+        <option value="300000">A cada 5min</option>
+        <option value="600000">A cada 10min</option>
+      </select>
+      <button class="btn btn-blue" onclick="sendConsolidatedToTelegram()" id="btnSendTg" style="font-size:12px;padding:6px 14px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;vertical-align:-2px"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        Enviar agora
+      </button>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px" id="globalStats"></div>
+  
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        <span style="font-size:14px;font-weight:700;color:var(--text)">Vincular Telegram</span>
+      </div>
+      <span id="tgStatus" style="font-size:10px;color:var(--text3)"></span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr auto auto;gap:8px;align-items:end">
+      <div>
+        <label style="font-size:10px;color:var(--text3);display:block;margin-bottom:3px">Bot Token</label>
+        <input id="tgToken" type="password" placeholder="123456:ABC-DEF..." style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px">
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--text3);display:block;margin-bottom:3px">Canal/Grupo ID</label>
+        <input id="tgChatId" placeholder="-1001234567890" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px">
+      </div>
+      <button class="btn btn-blue" onclick="testTelegram()" id="btnTestTg" style="height:32px">Testar</button>
+      <button class="btn btn-green" onclick="saveTelegramConfig()" style="height:32px">Salvar</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-sm btn-ghost" onclick="detectChatId()" style="font-size:10px">Detectar ID automatico</button>
+      <button class="btn btn-sm btn-green" onclick="applyTelegramToAll()" style="font-size:10px">Aplicar a Todos os Robos</button>
+      <button class="btn btn-sm btn-red" onclick="disableAllIndividualMsgs()" style="font-size:10px">Desligar msgs individuais</button>
+      <span id="tgTestResult" style="font-size:10px"></span>
+      <span style="font-size:9px;color:var(--text3);margin-left:auto">Adicione o bot ao canal/grupo primeiro</span>
+    </div>
+  </div>
+  
+  <div class="robot-grid" id="robotGrid"></div>
+</div>
+<script src="config.js"></script>
+<script src="saved-data.js"></script>
+<script src="store.js"></script>
+<script src="event-bus.js"></script>
+<script src="utils.js"></script>
+<script src="ws-source.js"></script>
+<script src="robot.js"></script>
+<script src="robot-filters.js"></script>
+<script src="robot-engine.js"></script>
+<script src="telegram.js"></script>
+<script src="app.js"></script>
+<script>
+App.init();
+
+const COLOR_LABELS = { red: 'Vermelho', black: 'Preto', grey: 'Preto', green: 'Verde', blue: 'Azul' };
+const COLOR_EMOJI = { red: '&#128308;', black: '&#9899;', grey: '&#9899;', green: '&#128994;', blue: '&#128309;' };
+
+function getHistory(key) { try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch { return []; } }
+function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; }
+
+function renderGlobalStats(robots) {
+  const total = robots.length;
+  const online = robots.filter(r => r.status === 'online').length;
+  const offline = robots.filter(r => r.status === 'offline').length;
+  const signals = robots.filter(r => r.currentSignal && r.currentSignal.status === 'approved').length;
+  const totalWins = robots.reduce((s, r) => s + (r.stats?.wins || 0), 0);
+  const totalLosses = robots.reduce((s, r) => s + (r.stats?.losses || 0), 0);
+  const totalSignals = robots.reduce((s, r) => s + (r.stats?.signals || 0), 0);
+  const rate = totalSignals > 0 ? Math.round((totalWins / totalSignals) * 100) : 0;
+
+  document.getElementById('globalStats').innerHTML = `
+    <div class="stat-card blue"><div class="stat-label">Total</div><div class="stat-value" style="color:var(--blue)">${total}</div></div>
+    <div class="stat-card green"><div class="stat-label">Online</div><div class="stat-value" style="color:var(--green)">${online}</div></div>
+    <div class="stat-card red"><div class="stat-label">Offline</div><div class="stat-value" style="color:var(--red)">${offline}</div></div>
+    <div class="stat-card blue"><div class="stat-label">Sinais Ativos</div><div class="stat-value" style="color:var(--yellow)">${signals}</div></div>
+  `;
+}
+
+function renderRobotCard(r) {
+  const histKey = r.game === 'double' ? 'historico-double-v1' : 'historico-wheel-v1';
+  const hist = getHistory(histKey).slice(0, 30);
+  const isDbl = r.game === 'double';
+  const d = r.diagnostic || {};
+  const s = r.stats || {};
+  const conf = d.confidence || 0;
+  const confColor = conf >= 80 ? 'var(--green)' : conf >= 60 ? 'var(--yellow)' : 'var(--red)';
+  const rate = (s.signals || 0) > 0 ? Math.round(((s.wins || 0) / s.signals) * 100) : 0;
+  const isSignalActive = r.currentSignal && r.currentSignal.status === 'approved';
+  const isGale = r.currentSignal && r.currentSignal.status === 'gale_pending';
+  const signalTarget = r.currentSignal?.target || d.decision?.target || '';
+  const signalConf = r.currentSignal?.confidence || d.confidence || 0;
+  const tgMode = r.telegram?.msgType || 'consolidated';
+
+  const flow = d.signalFlow || {};
+  const steps = [
+    { label: 'Padrao', active: !!d.mainPattern, blocked: false },
+    { label: 'IA', active: conf >= 60, blocked: conf > 0 && conf < 40 },
+    { label: 'Filtro', active: d.decision?.approved === true, blocked: d.decision && !d.decision.approved },
+    { label: 'Sinal', active: isSignalActive || isGale, blocked: false }
+  ];
+
+  let signalBadge = 'waiting';
+  let signalBadgeLabel = 'AGUARDANDO';
+  if (isGale) { signalBadge = 'gale'; signalBadgeLabel = 'GALE ' + (r.currentSignal?.gale || 1); }
+  else if (isSignalActive) { signalBadge = 'entry'; signalBadgeLabel = 'ENTRADA'; }
+  else if (s.lastSignal?.status === 'win') { signalBadge = 'win'; signalBadgeLabel = 'WIN'; }
+  else if (s.lastSignal?.status === 'loss') { signalBadge = 'loss'; signalBadgeLabel = 'LOSS'; }
+
+  const filters = r.filters || [];
+  const filterOutput = d.filterOutput || {};
+  const filterResults = filterOutput.results || {};
+  const filterKeys = Object.keys(filterResults).slice(0, 8);
+
+  return `<div class="robot-card ${r.status === 'online' ? 'online' : ''} ${isSignalActive || isGale ? 'signal-active' : ''}">
+    <div class="rc-header">
+      <div class="rc-header-left">
+        <div class="rc-dot ${r.status}"></div>
+        <div>
+          <div class="rc-name">${escapeHtml(r.name)}</div>
+          <div class="rc-game">${r.game} &bull; ${r.strategy}</div>
+        </div>
+      </div>
+      <span class="rc-status ${r.status}">${r.status}</span>
+    </div>
+    <div class="rc-body">
+      <div class="rc-info">
+        <div class="rc-info-item">
+          <div class="rc-info-label">Confianca</div>
+          <div class="rc-info-value" style="color:${confColor}">${conf}%</div>
+        </div>
+        <div class="rc-info-item">
+          <div class="rc-info-label">Score</div>
+          <div class="rc-info-value">${d.signalScore || 0}</div>
+        </div>
+        <div class="rc-info-item">
+          <div class="rc-info-label">Alvo</div>
+          <div class="rc-info-value" style="color:var(--blue);font-size:11px">${COLOR_LABELS[r.target?.color] || (r.target?.color || 'any').toUpperCase()}</div>
+        </div>
+      </div>
+
+      <div class="rc-history">
+        <div class="rc-history-title">Historico (${hist.length} resultados)</div>
+        <div class="rc-history-grid">
+          ${hist.map(h => {
+            const color = isDbl ? h.color : h.cellColor;
+            const num = isDbl ? h.number : h.cellIndex;
+            const mult = !isDbl && h.multiplier ? h.multiplier + 'X' : '';
+            return `<div class="rc-history-cell ${(color||'').toLowerCase()}">${mult || num || ''}</div>`;
+          }).join('')}
+        </div>
+      </div>
+
+      <div class="rc-signal">
+        <div class="rc-signal-header">
+          <span class="rc-signal-badge ${signalBadge}">${signalBadgeLabel}</span>
+          ${signalTarget ? `<span class="rc-signal-target" style="color:var(--green)">${signalTarget}</span>` : ''}
+        </div>
+        <div class="rc-signal-detail">${d.mainPattern || 'Nenhum padrao detectado'} &bull; ${d.risk || 'BAIXO'} risco</div>
+      </div>
+
+      <div class="rc-flow">
+        ${steps.map((st, i) => `<div class="rc-flow-step ${st.active ? 'active' : ''} ${st.blocked ? 'blocked' : ''}">
+          <div class="rc-flow-num">${i + 1}</div>
+          <div class="rc-flow-label">${st.label}</div>
+        </div>`).join('')}
+      </div>
+
+      ${filterKeys.length > 0 ? `<div class="rc-filters">
+        ${filterKeys.map(k => {
+          const fr = filterResults[k];
+          const labels = { frequencia:'Freq', repeticaoExcessiva:'RepExc', sequenciaEsticada:'SeqEst', recencia:'Rec', distanciaOcorrencias:'Dist', janelaCurtaLonga:'Janela', tendencia:'Tend', quebraTendencia:'Quebra', alternancia:'Alt', concentracao:'Conc', dispersao:'Disp', atraso:'Atraso', padraoRecorrente:'PadRec', transicao:'Trans', matrizTransicao:'Matriz', probabilidadeCond:'ProbCond', entropia:'Ent', volatilidade:'Vol', consenso:'Cons', divergencia:'Diver', scoreMinimo:'Score', confiancaMinima:'ConfMin', diferencaCandidatos:'Diff1-2', multiCriterios:'Multi', cooldown:'CD', posWin:'PW', posLoss:'PL', lossConsecutivo:'LC', qualidadeAmostra:'QA', antiOverfitting:'AOF' };
+          return `<span class="rc-filter-tag ${fr?.passed ? 'pass' : 'fail'}" title="${k}: ${fr?.reason || ''}">${labels[k] || k}</span>`;
+        }).join('')}
+      </div>` : ''}
+
+      <div class="rc-placar">
+        <div class="rc-placar-item"><div class="rc-placar-value" style="color:var(--blue)">${s.signals || 0}</div><div class="rc-placar-label">Sinais</div></div>
+        <div class="rc-placar-item"><div class="rc-placar-value" style="color:var(--green)">${s.wins || 0}</div><div class="rc-placar-label">Wins</div></div>
+        <div class="rc-placar-item"><div class="rc-placar-value" style="color:var(--red)">${s.losses || 0}</div><div class="rc-placar-label">Loss</div></div>
+        <div class="rc-placar-item"><div class="rc-placar-value" style="color:var(--yellow)">${rate}%</div><div class="rc-placar-label">Assert.</div></div>
+      </div>
+    </div>
+    <div class="rc-actions">
+      <a href="robo.html?id=${r.id}" class="btn btn-sm btn-blue">Abrir</a>
+      ${r.status === 'offline'
+        ? `<button class="btn btn-sm btn-green" onclick="toggleRobot('${r.id}','start')">Play</button>`
+        : `<button class="btn btn-sm btn-red" onclick="toggleRobot('${r.id}','stop')">Stop</button>`}
+      <div class="rc-tg-modes">
+        <button class="rc-tg-btn ${tgMode === 'live' ? 'active-live' : ''}" onclick="setRobotTgMode('${r.id}','live')" title="Msg Live">L</button>
+        <button class="rc-tg-btn ${tgMode === 'signal' ? 'active-signal' : ''}" onclick="setRobotTgMode('${r.id}','signal')" title="Msg Sinal">S</button>
+        <button class="rc-tg-btn ${tgMode === 'both' ? 'active-both' : ''}" onclick="setRobotTgMode('${r.id}','both')" title="Live + Sinal">LS</button>
+        <button class="rc-tg-btn ${tgMode === 'consolidated' || !tgMode ? 'active-consolidated' : ''}" onclick="setRobotTgMode('${r.id}','consolidated')" title="Consolidado (painel)">C</button>
+        <button class="rc-tg-btn ${tgMode === 'off' ? 'active-off' : ''}" onclick="setRobotTgMode('${r.id}','off')" title="Desligado">X</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function render() {
+  const robots = RobotEngine.getAllStates();
+  renderGlobalStats(robots);
+  if (robots.length === 0) {
+    document.getElementById('robotGrid').innerHTML = `<div class="empty-state"><h2>Nenhum robo criado</h2><p>Crie robos em <a href="robos.html">Robos</a> para ve-los aqui em acao</p></div>`;
+    return;
+  }
+  document.getElementById('robotGrid').innerHTML = robots.map(renderRobotCard).join('');
+}
+
+function toggleRobot(id, action) {
+  if (action === 'start') RobotEngine.startRobot(id);
+  else RobotEngine.stopRobot(id);
+  render();
+}
+
+function setRobotTgMode(id, mode) {
+  const robot = RobotEngine.getRobot(id);
+  if (!robot) return;
+  robot.telegram = robot.telegram || {};
+  if (mode === 'off') {
+    robot.telegram.enabled = false;
+    robot.telegram.msgType = 'consolidated';
+  } else {
+    robot.telegram.enabled = true;
+    robot.telegram.msgType = mode;
+  }
+  RobotEngine.save();
+  render();
+}
+
+function getChannels() { try { return JSON.parse(localStorage.getItem('telegram-channels') || '[]'); } catch { return []; } }
+function saveChannels(channels) { localStorage.setItem('telegram-channels', JSON.stringify(channels)); }
+function getToken() { return localStorage.getItem('telegram-bot-token') || ''; }
+function setToken(t) { localStorage.setItem('telegram-bot-token', t); }
+
+function loadTelegramConfig() {
+  const token = getToken();
+  const channels = getChannels();
+  const saved = JSON.parse(localStorage.getItem('tg-action-config') || '{}');
+  document.getElementById('tgToken').value = token || '';
+  document.getElementById('tgChatId').value = saved.chatId || '';
+  const statusEl = document.getElementById('tgStatus');
+  if (token && channels.length > 0) {
+    statusEl.innerHTML = '<span style="color:var(--green)">&#10003; Configurado (' + channels.length + ' canais)</span>';
+  } else if (token) {
+    statusEl.innerHTML = '<span style="color:var(--yellow)">Token salvo, sem canais</span>';
+  } else {
+    statusEl.innerHTML = '<span style="color:var(--red)">Nao configurado</span>';
+  }
+}
+
+function saveTelegramConfig() {
+  const token = document.getElementById('tgToken').value.trim();
+  const chatId = document.getElementById('tgChatId').value.trim();
+  if (!token) { alert('Insira o Bot Token'); return; }
+  if (!chatId) { alert('Insira o Chat ID do canal/grupo'); return; }
+  setToken(token);
+  localStorage.setItem('tg-action-config', JSON.stringify({ chatId }));
+  const channels = getChannels();
+  const existing = channels.find(c => c.id === chatId);
+  if (!existing) {
+    channels.push({ id: chatId, name: 'Canal ' + chatId, createdAt: Date.now() });
+    saveChannels(channels);
+  }
+  document.getElementById('tgTestResult').innerHTML = '<span style="color:var(--green)">Configuracao salva!</span>';
+  loadTelegramConfig();
+}
+
+async function testTelegram() {
+  const token = document.getElementById('tgToken').value.trim() || getToken();
+  const chatId = document.getElementById('tgChatId').value.trim();
+  const resultEl = document.getElementById('tgTestResult');
+  const btn = document.getElementById('btnTestTg');
+  if (!token) { resultEl.innerHTML = '<span style="color:var(--red)">Token nao informado</span>'; return; }
+  if (!chatId) { resultEl.innerHTML = '<span style="color:var(--red)">Chat ID nao informado</span>'; return; }
+  btn.disabled = true;
+  btn.textContent = '...';
+  try {
+    const resp = await fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text: '&#129302; Teste de conexao - Robos em Acao\nHorario: ' + new Date().toLocaleTimeString('pt-BR'), parse_mode: 'HTML', disable_web_page_preview: true })
+    });
+    const result = await resp.json();
+    if (result.ok) {
+      resultEl.innerHTML = '<span style="color:var(--green)">&#10003; Conectado! Chat: ' + chatId + '</span>';
+      setToken(token);
+      const channels = getChannels();
+      const existing = channels.find(c => c.id === chatId);
+      if (!existing) {
+        channels.push({ id: chatId, name: 'Canal ' + chatId, createdAt: Date.now() });
+        saveChannels(channels);
+      }
+      loadTelegramConfig();
+    } else {
+      resultEl.innerHTML = '<span style="color:var(--red)">&#10007; ' + (result.description || 'Erro') + '</span>';
+    }
+  } catch (e) {
+    resultEl.innerHTML = '<span style="color:var(--red)">&#10007; ' + e.message + '</span>';
+  }
+  btn.disabled = false;
+  btn.textContent = 'Testar';
+}
+
+async function detectChatId() {
+  const token = document.getElementById('tgToken').value.trim() || getToken();
+  const resultEl = document.getElementById('tgTestResult');
+  if (!token) { resultEl.innerHTML = '<span style="color:var(--red)">Insira o Token primeiro</span>'; return; }
+  resultEl.innerHTML = '<span style="color:var(--yellow)">Buscando updates...</span>';
+  try {
+    const resp = await fetch('https://api.telegram.org/bot' + token + '/getUpdates?limit=5');
+    const result = await resp.json();
+    if (!result.ok) {
+      resultEl.innerHTML = '<span style="color:var(--red)">' + (result.description || 'Erro') + '</span>';
+      return;
+    }
+    const chats = new Map();
+    for (const update of result.result || []) {
+      const msg = update.message || update.my_chat_member;
+      if (msg && msg.chat) {
+        const c = msg.chat;
+        if (c.id && !chats.has(c.id)) {
+          chats.set(c.id, { id: String(c.id), title: c.title || c.first_name || 'Chat ' + c.id, type: c.type || 'unknown' });
+        }
+      }
+    }
+    if (chats.size === 0) {
+      resultEl.innerHTML = '<span style="color:var(--yellow)">Nenhum chat encontrado. Envie uma mensagem ao bot primeiro.</span>';
+      return;
+    }
+    let html = '<div style="margin-top:6px;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:6px">';
+    html += '<div style="font-size:10px;color:var(--text3);margin-bottom:4px">Chats encontrados (clique para selecionar):</div>';
+    for (const [, chat] of chats) {
+      html += '<div onclick="document.getElementById(\'tgChatId\').value=\'' + chat.id + '\'" style="padding:4px 8px;margin:2px 0;background:var(--bg2);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:11px;display:flex;justify-content:space-between">';
+      html += '<span>' + escapeHtml(chat.title) + '</span>';
+      html += '<span style="color:var(--blue)">' + chat.id + ' (' + chat.type + ')</span>';
+      html += '</div>';
+    }
+    html += '</div>';
+    resultEl.innerHTML = html;
+  } catch (e) {
+    resultEl.innerHTML = '<span style="color:var(--red)">' + e.message + '</span>';
+  }
+}
+
+function applyTelegramToAll() {
+  const chatId = document.getElementById('tgChatId').value.trim();
+  if (!chatId) { alert('Insira o Chat ID primeiro'); return; }
+  const robots = RobotEngine.getAllRobots();
+  let count = 0;
+  for (const robot of robots) {
+    robot.telegram = robot.telegram || {};
+    robot.telegram.enabled = true;
+    robot.telegram.channelId = chatId;
+    robot.telegram.msgType = 'consolidated';
+    if (!robot.telegram.message) robot.telegram.message = {};
+    count++;
+  }
+  RobotEngine.save();
+  document.getElementById('tgTestResult').innerHTML = '<span style="color:var(--green)">&#10003; ' + count + ' robo(s) atualizados! Msgs individuais desligadas.</span>';
+}
+
+function disableAllIndividualMsgs() {
+  const robots = RobotEngine.getAllRobots();
+  let count = 0;
+  for (const robot of robots) {
+    if (robot.telegram && robot.telegram.msgType !== 'consolidated') {
+      robot.telegram.msgType = 'consolidated';
+      count++;
+    }
+  }
+  RobotEngine.save();
+  const el = document.getElementById('tgTestResult');
+  if (count > 0) {
+    el.innerHTML = '<span style="color:var(--green)">&#10003; ' + count + ' robo(s) atualizados - msgs live/sinal desligadas</span>';
+  } else {
+    el.innerHTML = '<span style="color:var(--yellow)">Todos os robos ja estao em modo consolidado</span>';
+  }
+}
+
+function getHistory(key) { try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch { return []; } }
+function colorEmoji(c) { return { red: '\u{1F534}', black: '\u26AB', grey: '\u26AB', green: '\u{1F7E2}', blue: '\u{1F535}' }[(c||'').toLowerCase()] || '\u26AA'; }
+function colorLabel(c) { return { red: 'Vermelho', black: 'Preto', grey: 'Preto', green: 'Verde', blue: 'Azul' }[(c||'').toLowerCase()] || c; }
+
+function buildConsolidatedMessage() {
+  const robots = RobotEngine.getAllStates();
+  if (robots.length === 0) return null;
+  const now = new Date().toLocaleTimeString('pt-BR');
+  const sep = '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501';
+  const br = '';
+  const lines = [];
+
+  lines.push('\u{1F916} <b>PAINEL EM ACAO</b> \u{1F552} ' + now);
+  lines.push(sep);
+
+  let totalWins = 0, totalLosses = 0, totalSignals = 0, onlineCount = 0;
+  for (const r of robots) {
+    totalWins += r.stats?.wins || 0;
+    totalLosses += r.stats?.losses || 0;
+    totalSignals += r.stats?.signals || 0;
+    if (r.status === 'online') onlineCount++;
+  }
+  const totalResolved = totalWins + totalLosses;
+  const globalRate = totalResolved > 0 ? Math.round((totalWins / totalResolved) * 100) : 0;
+
+  function bar(pct, len) {
+    len = len || 10;
+    const filled = Math.round((pct / 100) * len);
+    return '<code>' + '\u2588'.repeat(filled) + '\u2591'.repeat(len - filled) + '</code>';
+  }
+  function rateColor(pct) { return pct >= 70 ? '\u{1F7E2}' : pct >= 50 ? '\u{1F7E1}' : '\u{1F534}'; }
+  function confBar(pct, len) {
+    len = len || 8;
+    const filled = Math.round((pct / 100) * len);
+    return '<code>' + '\u2588'.repeat(filled) + '\u2591'.repeat(len - filled) + '</code>';
+  }
+
+  lines.push('\u{1F4CB} <b>RESUMO GLOBAL</b>');
+  lines.push('\u{1F7E2} Online: <b>' + onlineCount + '/' + robots.length + '</b>');
+  lines.push('\u2705' + totalWins + 'W  \u274C' + totalLosses + 'L  \u{1F4CA} ' + totalSignals + ' sinais');
+  lines.push(rateColor(globalRate) + ' ' + bar(globalRate) + ' <b>' + globalRate + '%</b>');
+  lines.push(br);
+
+  for (const r of robots) {
+    const s = r.stats || {};
+    const w = s.wins || 0;
+    const l = s.losses || 0;
+    const resolved = w + l;
+    const rate = resolved > 0 ? Math.round((w / resolved) * 100) : 0;
+    const statusIcon = r.status === 'online' ? '\u2705' : '\u274C';
+    const gameIcon = r.game === 'wheel' ? '\u{1F3B0}' : '\u{1F3B2}';
+    const isSignal = r.currentSignal?.status === 'approved';
+    const isGale = r.currentSignal?.status === 'gale_pending';
+    const d = r.diagnostic || {};
+    const histKey = r.game === 'double' ? 'historico-double-v1' : 'historico-wheel-v1';
+    const hist = getHistory(histKey).slice(0, 30);
+    const histEmojis = hist.slice(0, 13).map(h => colorEmoji(h.color || h.cellColor)).join('');
+    const lastResult = r.lastResult ? colorEmoji(r.lastResult.color) + ' ' + colorLabel(r.lastResult.color) : '--';
+    const targetColor = r.target?.color || 'any';
+    const targetEmoji = targetColor === 'any' ? '\u2B50' : colorEmoji(targetColor);
+    const targetLabel = targetColor === 'any' ? 'QUALQUER' : colorLabel(targetColor).toUpperCase();
+    const conf = d.confidence || 0;
+    const modeLabel = r.mode === 'monitoramento' ? '\u{1F4E1} Monitor' : r.mode === 'telegram' ? '\u{1F4E8} Telegram' : r.mode;
+    const galeMax = r.gale?.max || 0;
+    const streak = s.currentStreak || 0;
+    const streakLabel = streak > 0 ? '+' + streak : streak < 0 ? '' + streak : '0';
+
+    lines.push(sep);
+    lines.push(statusIcon + ' <b>' + escapeHtml(r.name) + '</b> ' + gameIcon + ' ' + r.game.toUpperCase());
+    lines.push(br);
+
+    lines.push('\u2699\uFE0F <b>CONFIG</b>');
+    lines.push(modeLabel + ' | \u{1F3AF} ' + targetEmoji + ' <b>' + targetLabel + '</b>');
+    lines.push('\u{1F50E} ' + (r.strategies || [r.strategy || '--']).join(', '));
+    lines.push(br);
+
+    lines.push('\u{1F9E0} <b>IA</b>');
+    lines.push(rateColor(conf) + ' ' + confBar(conf) + ' <b>' + conf + '%</b>');
+    lines.push('\u2B50 Score: <b>' + (d.totalScore || d.signalScore || 0) + '/100</b>');
+    if (r.diagnostic?.mainPattern) {
+      lines.push('\u{1F50D} Padrao: <code>' + r.diagnostic.mainPattern + '</code>');
+    }
+    lines.push(br);
+
+    lines.push('\u{1F3B0} <b>HISTORICO</b>');
+    lines.push(histEmojis);
+    const freq = {};
+    hist.forEach(h => { const c = (h.color || h.cellColor || '').toLowerCase(); freq[c] = (freq[c] || 0) + 1; });
+    const freqEntries = Object.entries(freq).sort((a, b) => b[1] - a[1]);
+    if (freqEntries.length > 0) {
+      const maxFreq = freqEntries[0][1];
+      const freqLine = freqEntries.slice(0, 4).map(([c, n]) => {
+        const pct = Math.round((n / hist.length) * 100);
+        return colorEmoji(c) + '<code>' + '\u2588'.repeat(Math.max(1, Math.round((n / maxFreq) * 6))) + '</code> ' + n + '(' + pct + '%)';
+      }).join('  ');
+      lines.push(freqLine);
+    }
+    lines.push('\u{1F519} Ultimo: ' + lastResult + ' | Seq: <b>' + streakLabel + '</b>');
+    lines.push(br);
+
+    lines.push('\u{1F3C6} <b>RESULTADO</b>');
+    lines.push(rateColor(rate) + ' ' + bar(rate) + ' <b>' + w + 'W ' + l + 'L (' + rate + '%)</b>');
+    if (s.winSG || s.winG1 || s.winG2) {
+      lines.push('\u{1F3AF} SG:' + (s.winSG || 0) + (s.winG1 || galeMax >= 1 ? ' | G1:' + (s.winG1 || 0) : '') + (s.winG2 || galeMax >= 2 ? ' | G2:' + (s.winG2 || 0) : ''));
+    }
+
+    if (r.diagnostic?.filterOutput) {
+      const fo = r.diagnostic.filterOutput;
+      const foPct = fo.totalFilters > 0 ? Math.round((fo.passedCount / fo.totalFilters) * 100) : 0;
+      lines.push(br);
+      lines.push('\u{1F9EA} <b>FILTROS</b>');
+      lines.push(bar(foPct, 8) + ' ' + fo.passedCount + '/' + fo.totalFilters + ' (score: ' + fo.avgScore + ')');
+    }
+
+    if (isSignal) {
+      lines.push(br);
+      lines.push('\u{1F534} \u{1F6A8} <b>SINAL! ENTRAR NO ' + colorEmoji(r.target?.color) + ' ' + colorLabel(r.target?.color).toUpperCase() + '</b>');
+    } else if (isGale) {
+      lines.push(br);
+      lines.push('\u{1F7E1} \u26A1 <b>GALE ' + (r.currentSignal?.gale || 1) + ' - ' + colorEmoji(r.currentSignal?.target) + ' ' + colorLabel(r.currentSignal?.target).toUpperCase() + '</b>');
+    }
+    lines.push(br);
+  }
+
+  lines.push(sep);
+  lines.push('\u{1F4CA} <b>TOTAL</b>');
+  lines.push('\u2705' + totalWins + 'W  \u274C' + totalLosses + 'L  (' + globalRate + '%)');
+  lines.push('\u{1F4E8} ' + totalSignals + ' sinais enviados');
+  lines.push(br);
+  lines.push('\u{1F553} ' + now);
+  return lines.join('\n');
+}
+
+async function sendConsolidatedToTelegram() {
+  const token = getToken();
+  const config = JSON.parse(localStorage.getItem('tg-action-config') || '{}');
+  const chatId = config.chatId || document.getElementById('tgChatId').value.trim();
+  const btn = document.getElementById('btnSendTg');
+  const resultEl = document.getElementById('tgTestResult');
+  if (!token) { resultEl.innerHTML = '<span style="color:var(--red)">Configure o Bot Token primeiro</span>'; return; }
+  if (!chatId) { resultEl.innerHTML = '<span style="color:var(--red)">Configure o Chat ID primeiro</span>'; return; }
+  const text = buildConsolidatedMessage();
+  if (!text) { resultEl.innerHTML = '<span style="color:var(--red)">Nenhum robo encontrado</span>'; return; }
+  btn.disabled = true;
+  btn.innerHTML = 'Enviando...';
+  resultEl.innerHTML = '<span style="color:var(--yellow)">Enviando para ' + chatId + '...</span>';
+  try {
+    const body = JSON.stringify({ chat_id: chatId, text: text, parse_mode: 'HTML', disable_web_page_preview: true });
+    console.log('[TG-Action] Request body:', body.substring(0, 500));
+    const resp = await fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: body
+    });
+    const result = await resp.json();
+    console.log('[TG-Action] Response:', JSON.stringify(result));
+    if (result.ok) {
+      resultEl.innerHTML = '<span style="color:var(--green)">&#10003; Enviado com sucesso! (msg ' + result.result.message_id + ')</span>';
+      localStorage.setItem('tg-action-last-send', JSON.stringify({ at: Date.now(), msgId: result.result.message_id }));
+      btn.innerHTML = '&#10003; Enviado!';
+      setTimeout(() => { btn.innerHTML = '\u{1F4E4} Enviar agora'; btn.disabled = false; }, 3000);
+    } else {
+      resultEl.innerHTML = '<span style="color:var(--red)">&#10007; Telegram: ' + (result.description || JSON.stringify(result)) + '</span>';
+      btn.innerHTML = '\u{1F4E4} Enviar para Telegram';
+      btn.disabled = false;
+    }
+  } catch (e) {
+    console.error('[TG-Action] Fetch error:', e);
+    resultEl.innerHTML = '<span style="color:var(--red)">&#10007; Erro de rede: ' + e.message + '</span>';
+    btn.innerHTML = '\u{1F4E4} Enviar para Telegram';
+    btn.disabled = false;
+  }
+}
+
+function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; }
+
+let _autoSendTimer = null;
+function setupAutoSend() {
+  const select = document.getElementById('autoSendInterval');
+  if (!select) return;
+  const saved = localStorage.getItem('tg-action-auto-send') || '0';
+  select.value = saved;
+  select.onchange = function() {
+    localStorage.setItem('tg-action-auto-send', this.value);
+    startAutoSend();
+  };
+  startAutoSend();
+}
+function startAutoSend() {
+  if (_autoSendTimer) { clearInterval(_autoSendTimer); _autoSendTimer = null; }
+  const ms = parseInt(document.getElementById('autoSendInterval')?.value || '0');
+  if (ms > 0) {
+    _autoSendTimer = setInterval(() => { sendConsolidatedToTelegram(); }, ms);
+    console.log('[TG-Action] Auto-envio ativo:', ms + 'ms');
+  }
+}
+
+function loadLastSendInfo() {
+  const last = JSON.parse(localStorage.getItem('tg-action-last-send') || 'null');
+  if (last) {
+    const ago = Math.round((Date.now() - last.at) / 1000);
+    const el = document.getElementById('tgTestResult');
+    if (el && ago < 300) {
+      el.innerHTML = '<span style="color:var(--green)">Ultimo envio: ' + ago + 's atras (msg ' + last.msgId + ')</span>';
+    }
+  }
+}
+
+render();
+loadTelegramConfig();
+setupAutoSend();
+loadLastSendInfo();
+EventBus.on('robots:synced', render);
+EventBus.on('robot:state', render);
+setInterval(render, 3000);
+setInterval(loadLastSendInfo, 30000);
+</script>
+</body>
+</html>
