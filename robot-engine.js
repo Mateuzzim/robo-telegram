@@ -1441,31 +1441,6 @@ const RobotEngine = {
       return null;
     }
 
-    if (typeof RobotFilters !== 'undefined' && robot.filters && robot.filters.length > 0) {
-      const filterOutput = RobotFilters.runFilters(robot.filters, robot.history, strategyResult, robot);
-      robot.diagnostic.filterOutput = filterOutput;
-
-      if (filterOutput.blocked) {
-        robot.diagnostic.status = 'FILTERED';
-        robot.diagnostic.decision = { approved: false, reason: filterOutput.blockReason };
-        robot.diagnostic.signalBlocked = true;
-        robot.diagnostic.blockReason = 'FILTRO: ' + filterOutput.blockReason;
-        robot.signalFlow = { step1: 'Padrao: ' + (robot.diagnostic.mainPattern || '--'), step2: 'Bloqueado pelo filtro: ' + filterOutput.blockReason, step3: `Filtros: ${filterOutput.passedCount}/${filterOutput.totalFilters} (${filterOutput.passRate}%)`, step4: 'Placar sera atualizado apos resultado' };
-        robot.stats.signalsRejected++;
-        return null;
-      }
-
-      if (filterOutput.avgScore < 40) {
-        robot.diagnostic.status = 'LOW_FILTER_SCORE';
-        robot.diagnostic.decision = { approved: false, reason: 'Score dos filtros baixo: ' + filterOutput.avgScore };
-        robot.diagnostic.signalBlocked = true;
-        robot.diagnostic.blockReason = 'Score filtros: ' + filterOutput.avgScore + '/100';
-        robot.signalFlow = { step1: 'Padrao: ' + (robot.diagnostic.mainPattern || '--'), step2: 'Score filtros baixo: ' + filterOutput.avgScore + '/100', step3: `Filtros: ${filterOutput.passedCount}/${filterOutput.totalFilters}`, step4: 'Placar sera atualizado apos resultado' };
-        robot.stats.signalsRejected++;
-        return null;
-      }
-    }
-
     robot.diagnostic.signalBlocked = false;
     robot.diagnostic.blockReason = '';
     const sourceResult = robot.history?.[0] || null;
