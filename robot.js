@@ -47,13 +47,13 @@ class Robot {
     this._lastResolvedTime = 0;
     this.greenProtection = config.greenProtection || false;
     this.filters = config.filters || [];
-    this.galeByColor = config.galeByColor || { grey: 1, red: 3, blue: 5 };
+    this.galeByColor = config.galeByColor || { grey: 1, red: 3, blue: 5, green: 10 };
   }
 
   getGaleMaxForTarget(targetColor) {
     if (this.target?.color === 'any' && this.game === 'wheel') {
       const normalizedTarget = String(targetColor || '').toLowerCase();
-      const galeMap = { grey: this.galeByColor.grey, red: this.galeByColor.red, blue: this.galeByColor.blue };
+      const galeMap = { grey: this.galeByColor.grey, red: this.galeByColor.red, blue: this.galeByColor.blue, green: this.galeByColor.green };
       return galeMap[normalizedTarget] ?? this.gale.max;
     }
     return this.gale.max;
