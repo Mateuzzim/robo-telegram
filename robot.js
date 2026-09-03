@@ -415,8 +415,7 @@ class Robot {
       signal.result = { color: rColor, number: normalized.number, multiplier: normalized.multiplier, time: Date.now() };
       this.stats.wins++;
       this.stats.currentStreak = Math.max(1, (this.stats.currentStreak || 0) + 1);
-      this.stats.sequenceWins = Math.max(0, this.stats.currentStreak - 1);
-      this.stats.sequenceLosses = 0;
+      this.stats.sequenceWins = Math.max(this.stats.sequenceWins || 0, this.stats.currentStreak - 1);
       if (resolvedGale === 0) this.stats.winSG = (this.stats.winSG || 0) + 1;
       if (resolvedGale === 1) this.stats.winG1 = (this.stats.winG1 || 0) + 1;
       if (resolvedGale === 2) this.stats.winG2 = (this.stats.winG2 || 0) + 1;
@@ -463,8 +462,7 @@ class Robot {
         signal.result = { color: rColor, number: normalized.number, multiplier: normalized.multiplier, time: Date.now() };
         this.stats.losses++;
         this.stats.currentStreak = Math.min(-1, (this.stats.currentStreak || 0) - 1);
-        this.stats.sequenceLosses = Math.max(0, Math.abs(this.stats.currentStreak) - 1);
-        this.stats.sequenceWins = 0;
+        this.stats.sequenceLosses = Math.max(this.stats.sequenceLosses || 0, Math.abs(this.stats.currentStreak) - 1);
         this.stats.maxLossStreak = Math.max(this.stats.maxLossStreak || 0, Math.abs(this.stats.currentStreak));
         if (this.currentSignal === signal) this.currentSignal = null;
         this._lastResolvedTime = Date.now();

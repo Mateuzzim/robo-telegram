@@ -752,10 +752,14 @@ const TelegramService = {
     if (signal.status === 'gale_pending') {
       const resultEmoji = this.colorEmoji(signal.result?.color);
       const resultLabel = this.colorLabel(signal.result?.color);
+      const target = this.getSignalTarget(robot, signal);
+      const resultMult = this.getMultiplierLabel(signal.result?.color, robot.game);
       return [
         '⚡️ G' + (signal.gale || 1) + ' - TENTANDO NOVAMENTE',
+        '🎯 ENTRAR ' + target.label,
+        '',
         '━━━━━━━━━━━━━━━━━━━',
-        'Resultado: ' + resultEmoji + ' ' + resultLabel,
+        '❌ VEIO: ' + resultLabel + ' ' + resultEmoji + resultMult,
       ].join('\n');
     }
 
@@ -938,11 +942,14 @@ const TelegramService = {
     } else {
       color = String(signal.target || '').toUpperCase();
     }
-    const multiplier = robot.target?.multiplier ? ' ' + robot.target.multiplier + 'X' : '';
+    const multiplier = robot.target?.multiplier ? robot.target.multiplier + 'X' : '';
+    const emoji = this.colorEmoji(color);
+    const colorLabel = this.colorLabel(color);
     return {
       color,
-      emoji: this.colorEmoji(color),
-      label: this.colorLabel(color) + multiplier
+      emoji,
+      label: colorLabel + ' ' + emoji + multiplier,
+      multLabel: multiplier
     };
   },
 
@@ -954,6 +961,21 @@ const TelegramService = {
     if (c === 'BLUE') return 'AZUL';
     if (c === 'WHITE') return 'BRANCO';
     return c || '--';
+  },
+
+  getMultiplierLabel(color, game) {
+    const c = String(color || '').toUpperCase();
+    if (game === 'wheel') {
+      if (c === 'GREY' || c === 'BLACK' || c === 'GRAY') return ' 2X';
+      if (c === 'RED') return ' 3X';
+      if (c === 'BLUE') return ' 5X';
+      if (c === 'GREEN') return ' 50X';
+    }
+    if (game === 'double') {
+      if (c === 'RED' || c === 'BLACK') return ' 2X';
+      if (c === 'GREEN') return ' 14X';
+    }
+    return '';
   },
 
   formatStrategy(strategy) {
