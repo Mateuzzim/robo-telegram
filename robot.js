@@ -47,6 +47,15 @@ class Robot {
     this._lastResolvedTime = 0;
     this.greenProtection = config.greenProtection || false;
     this.filters = config.filters || [];
+    this.galeByColor = config.galeByColor || { grey: 1, red: 3, blue: 5 };
+  }
+
+  getGaleMaxForTarget(targetColor) {
+    if (this.target?.color === 'any' && this.game === 'wheel') {
+      const galeMap = { grey: this.galeByColor.grey, red: this.galeByColor.red, blue: this.galeByColor.blue };
+      return galeMap[targetColor] ?? this.gale.max;
+    }
+    return this.gale.max;
   }
 
   normalizeColor(color) {
@@ -428,7 +437,8 @@ class Robot {
       EventBus.emit('signal:win', { ...signal, robotId: this.id });
     } else {
       this.galeCount++;
-      if (this.galeCount <= this.gale.max) {
+      const maxGale = this.getGaleMaxForTarget(targetColor);
+      if (this.galeCount <= maxGale) {
         signal.status = 'gale_pending';
         signal.gale = this.galeCount;
         signal.waitingAfterResultKey = resultKey;
@@ -442,13 +452,13 @@ class Robot {
           step1: 'LOSS parcial: ' + this.colorLabel(rColor),
           step2: 'Entrar Gale ' + this.galeCount + ' em ' + this.colorLabel(targetColor),
           step3: 'Aguardando proxima cor...',
-          step4: 'Gale: ' + this.galeCount + '/' + this.gale.max
+          step4: 'Gale: ' + this.galeCount + '/' + maxGale
         };
-        this.addLog('LOSS - Gale ' + this.galeCount + '/' + this.gale.max);
+        this.addLog('LOSS - Gale ' + this.galeCount + '/' + maxGale);
         EventBus.emit('signal:gale', { ...signal, robotId: this.id });
       } else {
         signal.status = 'loss';
-        signal.gale = this.gale.max;
+        signal.gale = maxGale;
         signal.result = { color: rColor, number: normalized.number, multiplier: normalized.multiplier, time: Date.now() };
         this.stats.losses++;
         this.stats.currentStreak = Math.min(-1, (this.stats.currentStreak || 0) - 1);
@@ -482,10 +492,10 @@ class Robot {
   }
 
   getState() {
-    return { id: this.id, name: this.name, game: this.game, strategy: this.strategy, status: this.status, mode: this.mode, target: this.target, filterMode: this.filterMode, patternSize: this.patternSize, lastPatternAnalysisTime: this.lastPatternAnalysisTime, telegram: { ...this.telegram, message: { ...(this.telegram.message || {}) } }, lastHeartbeat: this.lastHeartbeat, stats: { ...this.stats }, lastResult: this.lastResult, lastSignal: this.lastSignal, currentSignal: this.currentSignal, diagnostic: { ...this.diagnostic }, signalFlow: { ...this.signalFlow }, logs: [...this.logs], minimumConfidence: this.minimumConfidence, minScore: this.minScore, intervalMin: this.intervalMin, gale: { ...this.gale }, resultsToAnalyze: this.resultsToAnalyze, confirmations: this.confirmations, strategyIndex: this.strategyIndex, usedPatterns: JSON.parse(JSON.stringify(this.usedPatterns)), startedAt: this.startedAt, strategyConfig: JSON.parse(JSON.stringify(this.strategyConfig || {})), greenProtection: this.greenProtection, filters: this.filters };
+    return { id: this.id, name: this.name, game: this.game, strategy: this.strategy, status: this.status, mode: this.mode, target: this.target, filterMode: this.filterMode, patternSize: this.patternSize, lastPatternAnalysisTime: this.lastPatternAnalysisTime, telegram: { ...this.telegram, message: { ...(this.telegram.message || {}) } }, lastHeartbeat: this.lastHeartbeat, stats: { ...this.stats }, lastResult: this.lastResult, lastSignal: this.lastSignal, currentSignal: this.currentSignal, diagnostic: { ...this.diagnostic }, signalFlow: { ...this.signalFlow }, logs: [...this.logs], minimumConfidence: this.minimumConfidence, minScore: this.minScore, intervalMin: this.intervalMin, gale: { ...this.gale }, resultsToAnalyze: this.resultsToAnalyze, confirmations: this.confirmations, strategyIndex: this.strategyIndex, usedPatterns: JSON.parse(JSON.stringify(this.usedPatterns)), startedAt: this.startedAt, strategyConfig: JSON.parse(JSON.stringify(this.strategyConfig || {})), greenProtection: this.greenProtection, filters: this.filters, galeByColor: { ...this.galeByColor } };
   }
 
   toJSON() {
-    return { id: this.id, name: this.name, game: this.game, strategy: this.strategy, strategies: this.strategies, status: this.status, mode: this.mode, target: this.target, filterMode: this.filterMode, patternSize: this.patternSize, lastPatternAnalysisTime: this.lastPatternAnalysisTime, history: this.history.slice(0, 200), resultsToAnalyze: this.resultsToAnalyze, minimumConfidence: this.minimumConfidence, minScore: this.minScore, confirmations: this.confirmations, intervalMin: this.intervalMin, galeMax: this.gale.max, telegram: { ...this.telegram, message: { ...(this.telegram.message || {}) } }, stats: this.stats, lastHeartbeat: this.lastHeartbeat, lastResult: this.lastResult, lastSignal: this.lastSignal, currentSignal: this.currentSignal, galeCount: this.galeCount, lastSignalTime: this.lastSignalTime, diagnostic: this.diagnostic, signalFlow: this.signalFlow, logs: this.logs, strategyIndex: this.strategyIndex, usedPatterns: this.usedPatterns, startedAt: this.startedAt, strategyConfig: this.strategyConfig || {}, greenProtection: this.greenProtection, filters: this.filters };
+    return { id: this.id, name: this.name, game: this.game, strategy: this.strategy, strategies: this.strategies, status: this.status, mode: this.mode, target: this.target, filterMode: this.filterMode, patternSize: this.patternSize, lastPatternAnalysisTime: this.lastPatternAnalysisTime, history: this.history.slice(0, 200), resultsToAnalyze: this.resultsToAnalyze, minimumConfidence: this.minimumConfidence, minScore: this.minScore, confirmations: this.confirmations, intervalMin: this.intervalMin, galeMax: this.gale.max, telegram: { ...this.telegram, message: { ...(this.telegram.message || {}) } }, stats: this.stats, lastHeartbeat: this.lastHeartbeat, lastResult: this.lastResult, lastSignal: this.lastSignal, currentSignal: this.currentSignal, galeCount: this.galeCount, lastSignalTime: this.lastSignalTime, diagnostic: this.diagnostic, signalFlow: this.signalFlow, logs: this.logs, strategyIndex: this.strategyIndex, usedPatterns: this.usedPatterns, startedAt: this.startedAt, strategyConfig: this.strategyConfig || {}, greenProtection: this.greenProtection, filters: this.filters, galeByColor: this.galeByColor };
   }
 }

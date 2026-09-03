@@ -85,7 +85,7 @@
         <div class="form-group"><label>Nome</label><input id="fName" placeholder="Ex: Wheel Alpha"></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <div class="form-group"><label>Jogo</label><select id="fGame" onchange="updateTargets()"><option value="wheel">Wheel</option><option value="double">Double</option></select></div>
-          <div class="form-group"><label>Alvo (Cor / Multiplier)</label><select id="fTarget" onchange="autoSetGale()"></select></div>
+          <div class="form-group"><label>Alvo (Cor / Multiplier)</label><select id="fTarget" onchange="autoSetGale();updateGaleByColorVisibility()"></select></div>
         </div>
         <div id="greenProtectionGroup" style="display:none;margin-bottom:10px">
           <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;padding:8px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:6px">
@@ -108,7 +108,15 @@
           <div class="form-group"><label>Score Minimo</label><input id="fMinScore" type="number" value="52"></div>
           <div class="form-group"><label>Intervalo entre Sinais (seg)</label><input id="fInterval" type="number" value="60"></div>
         </div>
-        <div class="form-group"><label>Gale Maximo</label><input id="fGale" type="number" value="2" style="max-width:120px"></div>
+        <div class="form-group" id="galeMaxGroup"><label>Gale Maximo</label><input id="fGale" type="number" value="2" style="max-width:120px"></div>
+        <div id="galeByColorGroup" style="display:none">
+          <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin:10px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--border)">Gales por Cor (WHEEL)</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+            <div class="form-group"><label>⚫️ Preto</label><input id="fGaleGrey" type="number" value="1" min="0" style="width:100%"></div>
+            <div class="form-group"><label>🔴 Vermelho</label><input id="fGaleRed" type="number" value="3" min="0" style="width:100%"></div>
+            <div class="form-group"><label>🔵 Azul</label><input id="fGaleBlue" type="number" value="5" min="0" style="width:100%"></div>
+          </div>
+        </div>
         <div class="form-group" id="patternSizeGroup" style="display:none"><label>Tamanho do Padrao</label><select id="fPatternSize"><option value="1">1 cor</option><option value="2">2 cores</option><option value="3" selected>3 cores</option><option value="4">4 cores</option><option value="5">5 cores</option><option value="6">6 cores</option></select></div>
       </div>
     </div>
@@ -249,6 +257,21 @@ function updateTargets(){
   if (greenProtGroup) {
     greenProtGroup.style.display = game === 'double' ? 'block' : 'none';
   }
+  updateGaleByColorVisibility();
+}
+
+function updateGaleByColorVisibility() {
+  const game = document.getElementById('fGame').value;
+  const targetColor = document.getElementById('fTarget').value;
+  const galeByColorGroup = document.getElementById('galeByColorGroup');
+  const galeMaxGroup = document.getElementById('galeMaxGroup');
+  const showByColor = game === 'wheel' && targetColor === 'any';
+  if (galeByColorGroup) {
+    galeByColorGroup.style.display = showByColor ? 'block' : 'none';
+  }
+  if (galeMaxGroup) {
+    galeMaxGroup.style.display = showByColor ? 'none' : 'block';
+  }
 }
 
 function autoSetGale() {
@@ -273,6 +296,11 @@ function autoSetGale() {
   const galeValue = galeMap[game]?.[targetColor];
   if (galeValue !== undefined) {
     galeInput.value = galeValue;
+  }
+  if (game === 'wheel' && targetColor === 'any') {
+    document.getElementById('fGaleGrey').value = 1;
+    document.getElementById('fGaleRed').value = 3;
+    document.getElementById('fGaleBlue').value = 5;
   }
 }
 function showCreate(){
@@ -322,6 +350,11 @@ function showEdit(id){
   if (greenProtCheckbox) {
     greenProtCheckbox.checked = robot.greenProtection || false;
   }
+  const galeByColor = robot.galeByColor || {};
+  document.getElementById('fGaleGrey').value = galeByColor.grey ?? 1;
+  document.getElementById('fGaleRed').value = galeByColor.red ?? 3;
+  document.getElementById('fGaleBlue').value = galeByColor.blue ?? 5;
+  updateGaleByColorVisibility();
   document.getElementById('modal').style.display='flex';
 }
 function getSelectedStrategies() {
@@ -449,7 +482,6 @@ function createRobot(){
   const results = parseInt(document.getElementById('fResults').value) || 40;
   const minConf = parseInt(document.getElementById('fConf').value) || 80;
   const interval = parseInt(document.getElementById('fInterval').value) || 60;
-  const galeMax = parseInt(document.getElementById('fGale').value) || 2;
   const mode = document.getElementById('fMode').value;
   const targetColor = document.getElementById('fTarget').value;
   const targetMult = TARGETS[game].find(t => t.value === targetColor)?.label.match(/(\d+)X/)?.[1] || null;
@@ -461,6 +493,15 @@ function createRobot(){
   const minScore = parseInt(document.getElementById('fMinScore').value) || 52;
   const filters = getSelectedFilters();
   const greenProtection = document.getElementById('fGreenProtection')?.checked || false;
+  const galeByColor = {
+    grey: parseInt(document.getElementById('fGaleGrey')?.value) || 1,
+    red: parseInt(document.getElementById('fGaleRed')?.value) || 3,
+    blue: parseInt(document.getElementById('fGaleBlue')?.value) || 5
+  };
+  let galeMax = parseInt(document.getElementById('fGale').value) || 2;
+  if (game === 'wheel' && targetColor === 'any') {
+    galeMax = Math.max(galeByColor.grey, galeByColor.red, galeByColor.blue);
+  }
 
   if (editId) {
     const robot = RobotEngine.getRobot(editId);
@@ -482,6 +523,7 @@ function createRobot(){
       robot.patternSize = patternSize;
       robot.filters = filters;
       robot.greenProtection = greenProtection;
+      robot.galeByColor = galeByColor;
       RobotEngine.save();
     }
   } else {
@@ -497,7 +539,8 @@ function createRobot(){
       telegram: { enabled: tgEnabled, channelId: tgChannel, msgType: tgMsgType },
       patternSize,
       filters,
-      greenProtection
+      greenProtection,
+      galeByColor
     });
     RobotEngine.save();
   }
