@@ -119,6 +119,10 @@
           </div>
         </div>
         <div class="form-group" id="patternSizeGroup" style="display:none"><label>Tamanho do Padrao</label><select id="fPatternSize"><option value="1">1 cor</option><option value="2">2 cores</option><option value="3" selected>3 cores</option><option value="4">4 cores</option><option value="5">5 cores</option><option value="6">6 cores</option></select></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
+          <div class="form-group"><label>Auto-Pausar apos</label><input id="fAutoPause" type="number" value="0" min="0" placeholder="0=desligado" style="width:100%"></div>
+          <div class="form-group"><label> losses seguidos</label><div style="font-size:10px;color:var(--text3);margin-top:4px">0 = desligado</div></div>
+        </div>
       </div>
     </div>
 
@@ -356,6 +360,7 @@ function showEdit(id){
   if (greenProtCheckbox) {
     greenProtCheckbox.checked = robot.greenProtection || false;
   }
+  document.getElementById('fAutoPause').value = robot.autoPause || 0;
   const galeByColor = robot.galeByColor || {};
   document.getElementById('fGaleGrey').value = galeByColor.grey ?? 1;
   document.getElementById('fGaleRed').value = galeByColor.red ?? 3;
@@ -500,6 +505,7 @@ function createRobot(){
   const minScore = parseInt(document.getElementById('fMinScore').value) || 52;
   const filters = getSelectedFilters();
   const greenProtection = document.getElementById('fGreenProtection')?.checked || false;
+  const autoPause = parseInt(document.getElementById('fAutoPause').value) || 0;
   const galeByColor = {
     grey: parseInt(document.getElementById('fGaleGrey')?.value) || 1,
     red: parseInt(document.getElementById('fGaleRed')?.value) || 3,
@@ -531,6 +537,7 @@ function createRobot(){
       robot.patternSize = patternSize;
       robot.filters = filters;
       robot.greenProtection = greenProtection;
+      robot.autoPause = autoPause;
       robot.galeByColor = galeByColor;
       RobotEngine.save();
     }
@@ -548,6 +555,7 @@ function createRobot(){
       patternSize,
       filters,
       greenProtection,
+      autoPause,
       galeByColor
     });
     RobotEngine.save();
@@ -625,6 +633,8 @@ function loadRobots(){
           : `<button class="btn btn-sm btn-red" onclick="stop('${r.id}')">Stop</button>`}
         <button class="btn btn-sm btn-red" onclick="deleteRobot('${r.id}')">Del</button>
         <button class="btn btn-sm btn-purple" onclick="resetTelegramMessages('${r.id}')" title="Resetar mensagens do Telegram">Reset TG</button>
+        <button class="btn btn-sm btn-orange" onclick="showResetStats('${r.id}')" title="Resetar estatisticas">Reset Stats</button>
+        <button class="btn btn-sm btn-blue" onclick="showSignalHistory('${r.id}')" title="Historico de sinais"> Historico</button>
       </td>
     </tr>`;
   }).join('') || '<tr><td colspan="10" style="color:var(--text3);text-align:center;padding:20px">Nenhum robo criado</td></tr>';
@@ -638,6 +648,150 @@ function changeRobotPatternSize(id, size) {
 function start(id){ RobotEngine.startRobot(id); loadRobots(); }
 function stop(id){ RobotEngine.stopRobot(id); loadRobots(); }
 function deleteRobot(id){ if(!confirm('Excluir este robo?')) return; RobotEngine.deleteRobot(id); loadRobots(); }
+function showResetStats(id) {
+  const robot = RobotEngine.getRobot(id);
+  if (!robot) return;
+  const name = robot.name || id;
+  const stats = robot.stats || {};
+  const diag = robot.diagnostic || {};
+  const html = `
+    <div style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:9999" onclick="this.remove()">
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;max-width:400px;width:90%;max-height:80vh;overflow-y:auto" onclick="event.stopPropagation()">
+        <div style="font-size:14px;font-weight:700;margin-bottom:16px;color:var(--text)">📊 Gerenciar Stats - ${escapeHtml(name)}</div>
+        
+        <div style="margin-bottom:12px">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:6px">SEQUENCIA (melhores recorde)</div>
+          <div style="font-size:12px;margin-bottom:8px">✅ WIN: ${stats.sequenceWins||0} | ❌ LOSS: ${stats.sequenceLosses||0}</div>
+          <button class="btn btn-sm btn-yellow" onclick="resetStat('${id}','sequence')">Resetar Sequencia</button>
+        </div>
+        
+        <div style="margin-bottom:12px">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:6px">WIN / LOSS (total)</div>
+          <div style="font-size:12px;margin-bottom:8px">✅ WIN: ${stats.wins||0} | ❌ LOSS: ${stats.losses||0}</div>
+          <button class="btn btn-sm btn-yellow" onclick="resetStat('${id}','winloss')">Resetar Win/Loss</button>
+        </div>
+        
+        <div style="margin-bottom:12px">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:6px">STREAKS (maior rajada)</div>
+          <div style="font-size:12px;margin-bottom:8px">🔥 Maior WIN: ${stats.maxWinStreak||0} | 💀 Maior LOSS: ${stats.maxLossStreak||0}</div>
+          <button class="btn btn-sm btn-yellow" onclick="resetStat('${id}','streaks')">Resetar Streaks</button>
+        </div>
+        
+        <div style="margin-bottom:12px">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:6px">DIAGNOSTICO (padrao atual)</div>
+          <div style="font-size:12px;margin-bottom:8px">📊 ${diag.status||'IDLE'} | 🔥 ${diag.confidence||0}% | ⭐ ${diag.totalScore||0}/100</div>
+          <button class="btn btn-sm btn-yellow" onclick="resetStat('${id}','diagnostic')">Resetar Diagnostico</button>
+        </div>
+        
+        <div style="margin-bottom:12px">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:6px">PLACAR COMPLETO (tudo)</div>
+          <div style="font-size:12px;margin-bottom:8px">Sinais: ${stats.signals||0} | Wins: ${stats.wins||0} | Losses: ${stats.losses||0}</div>
+          <button class="btn btn-sm btn-red" onclick="resetStat('${id}','all')">Resetar Tudo</button>
+        </div>
+        
+        <button class="btn btn-sm btn-blue" onclick="this.closest('[style*=fixed]').remove()" style="margin-top:8px">Fechar</button>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+function resetStat(id, type) {
+  const robot = RobotEngine.getRobot(id);
+  if (!robot) return;
+  const msgs = {
+    sequence: 'Sequencia resetada!',
+    winloss: 'Win/Loss resetado!',
+    streaks: 'Streaks resetados!',
+    diagnostic: 'Diagnostico resetado!',
+    all: 'Placar completo resetado!'
+  };
+  if (!confirm(msgs[type])) return;
+  if (type === 'sequence') {
+    robot.stats.sequenceWins = 0;
+    robot.stats.sequenceLosses = 0;
+  } else if (type === 'winloss') {
+    robot.stats.wins = 0;
+    robot.stats.losses = 0;
+    robot.stats.sequenceWins = 0;
+    robot.stats.sequenceLosses = 0;
+  } else if (type === 'streaks') {
+    robot.stats.currentStreak = 0;
+    robot.stats.maxWinStreak = 0;
+    robot.stats.maxLossStreak = 0;
+  } else if (type === 'diagnostic') {
+    robot.diagnostic = { status: 'IDLE', analyzedResults: 0, mainPattern: null, confidence: 0, suggestedEntry: null, patternScores: {}, totalScore: 0, filterResults: {}, decision: null, risk: 'BAIXO', signalScore: 0, confluences: 0, signalBlocked: false, blockReason: '' };
+  } else if (type === 'all') {
+    robot.stats.wins = 0;
+    robot.stats.losses = 0;
+    robot.stats.signals = 0;
+    robot.stats.sequenceWins = 0;
+    robot.stats.sequenceLosses = 0;
+    robot.stats.currentStreak = 0;
+    robot.stats.maxWinStreak = 0;
+    robot.stats.maxLossStreak = 0;
+    robot.stats.winSG = 0;
+    robot.stats.winG1 = 0;
+    robot.stats.winG2 = 0;
+    robot.diagnostic = { status: 'IDLE', analyzedResults: 0, mainPattern: null, confidence: 0, suggestedEntry: null, patternScores: {}, totalScore: 0, filterResults: {}, decision: null, risk: 'BAIXO', signalScore: 0, confluences: 0, signalBlocked: false, blockReason: '' };
+  }
+  RobotEngine.save();
+  document.querySelector('[style*="position:fixed"]')?.remove();
+  loadRobots();
+  alert(msgs[type]);
+}
+function showSignalHistory(id) {
+  const robot = RobotEngine.getRobot(id);
+  if (!robot) return;
+  const name = robot.name || id;
+  const history = robot.signalHistory || [];
+  const game = robot.game || 'wheel';
+  const colorEmoji = (c) => {
+    const map = { RED:'🔴', BLACK:'⚫️', GREY:'⚫️', GREEN:'🟢', BLUE:'🔵' };
+    return map[String(c||'').toUpperCase()] || '❓';
+  };
+  const historyRows = history.slice().reverse().map((h, i) => {
+    const time = h.time ? new Date(h.time).toLocaleTimeString('pt-BR') : '--';
+    const typeLabel = h.type === 'win' ? '<span style="color:var(--green)">WIN</span>' : '<span style="color:var(--red)">LOSS</span>';
+    const gale = h.gale !== undefined ? 'G' + h.gale : '--';
+    const gp = h.greenProtection ? ' 🛡️' : '';
+    return `<tr>
+      <td style="padding:4px 8px;font-size:11px;border-bottom:1px solid var(--border)">${history.length - i}</td>
+      <td style="padding:4px 8px;font-size:11px;border-bottom:1px solid var(--border)">${typeLabel}</td>
+      <td style="padding:4px 8px;font-size:11px;border-bottom:1px solid var(--border)">${colorEmoji(h.target)} ${h.target || '--'}${gp}</td>
+      <td style="padding:4px 8px;font-size:11px;border-bottom:1px solid var(--border)">${colorEmoji(h.result)} ${h.result || '--'}</td>
+      <td style="padding:4px 8px;font-size:11px;border-bottom:1px solid var(--border)">${gale}</td>
+      <td style="padding:4px 8px;font-size:11px;border-bottom:1px solid var(--border);color:var(--text3)">${time}</td>
+    </tr>`;
+  }).join('');
+  const html = `
+    <div style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:9999" onclick="this.remove()">
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;max-width:600px;width:95%;max-height:80vh;overflow:hidden;display:flex;flex-direction:column" onclick="event.stopPropagation()">
+        <div style="font-size:14px;font-weight:700;margin-bottom:12px;color:var(--text)">📋 Historico de Sinais - ${escapeHtml(name)}</div>
+        <div style="flex:1;overflow-y:auto">
+          ${history.length === 0 ? '<div style="text-align:center;color:var(--text3);padding:20px">Nenhum sinal registrado</div>' : `
+          <table style="width:100%;border-collapse:collapse">
+            <thead>
+              <tr style="background:var(--bg)">
+                <th style="padding:6px 8px;font-size:10px;text-align:left;border-bottom:1px solid var(--border)">#</th>
+                <th style="padding:6px 8px;font-size:10px;text-align:left;border-bottom:1px solid var(--border)">Resultado</th>
+                <th style="padding:6px 8px;font-size:10px;text-align:left;border-bottom:1px solid var(--border)">Entrada</th>
+                <th style="padding:6px 8px;font-size:10px;text-align:left;border-bottom:1px solid var(--border)">Saiu</th>
+                <th style="padding:6px 8px;font-size:10px;text-align:left;border-bottom:1px solid var(--border)">Gale</th>
+                <th style="padding:6px 8px;font-size:10px;text-align:left;border-bottom:1px solid var(--border)">Hora</th>
+              </tr>
+            </thead>
+            <tbody>${historyRows}</tbody>
+          </table>`}
+        </div>
+        <div style="margin-top:12px;display:flex;gap:8px">
+          <button class="btn btn-sm btn-blue" onclick="this.closest('[style*=fixed]').remove()">Fechar</button>
+          <button class="btn btn-sm btn-red" onclick="if(confirm('Limpar historico?')){RobotEngine.getRobot('${id}').signalHistory=[];RobotEngine.save();this.closest('[style*=fixed]').remove();showSignalHistory('${id}')}">Limpar</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', html);
+}
 async function resetTelegramMessages(id) {
   if (!confirm('Resetar todas as mensagens do Telegram deste robo? Isso vai deletar as mensagens de live e entrada do chat.')) return;
   const robot = RobotEngine.getRobot(id);

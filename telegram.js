@@ -862,7 +862,7 @@ const TelegramService = {
       '✅ WIN: ' + wins + ' | ❌ LOSS: ' + losses,
       '━━━━━━━━━━━━━━━━━━━━',
       '📨 Sinais Enviados: ' + sent,
-      '🔗Sequência: ' + sequence,
+      '🔗Maior Sequência: ' + sequence,
       '━━━━━━━━━━━━━━━━━━━━',
       '📊 APROVEITAMENTO',
       this.formatRateBar(rate) + '  ' + rate + '%',

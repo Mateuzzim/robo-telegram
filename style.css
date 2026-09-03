@@ -52,6 +52,7 @@ a:hover{text-decoration:underline}
 .btn-blue{background:linear-gradient(135deg,var(--blue),var(--blue2));color:#fff}
 .btn-yellow{background:linear-gradient(135deg,var(--yellow),#a88712);color:#111}
 .btn-purple{background:linear-gradient(135deg,#a855f7,#7c3aed);color:#fff}
+.btn-orange{background:linear-gradient(135deg,#f97316,#ea580c);color:#fff}
 .btn-ghost{background:transparent;border:1px solid var(--border);color:var(--text2)}
 .btn:hover{opacity:.85;transform:translateY(-1px)}
 .btn-sm{padding:5px 10px;font-size:12px}
