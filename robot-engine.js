@@ -1441,6 +1441,22 @@ const RobotEngine = {
       return null;
     }
 
+    const activeFilters = robot.filters || [];
+    if (activeFilters.length > 0 && typeof Filters !== 'undefined') {
+      const candidate = { color: strategyResult.target, score: signalScore, confidence: strategyResult.confidence };
+      const filteredCandidates = Filters.applyAll(robot, robot.history, [candidate]);
+      if (filteredCandidates.length === 0) {
+        robot.diagnostic.status = 'REJECTED';
+        robot.diagnostic.decision = { approved: false, reason: 'Filtros de qualidade bloquearam o sinal' };
+        robot.diagnostic.signalBlocked = true;
+        robot.diagnostic.blockReason = 'Filtros de qualidade bloquearam o sinal';
+        robot.signalFlow = { step1: 'Padrao: ' + (robot.diagnostic.mainPattern || '--'), step2: 'Bloqueado por Filtros', step3: 'Filtros ativos: ' + activeFilters.length, step4: 'Aguardando proximo ciclo' };
+        robot.stats.signalsRejected++;
+        return null;
+      }
+      strategyResult.target = filteredCandidates[0].color;
+    }
+
     robot.diagnostic.signalBlocked = false;
     robot.diagnostic.blockReason = '';
     const sourceResult = robot.history?.[0] || null;
@@ -1585,6 +1601,7 @@ EventBus.on('results:history', (d) => {
       const existingStable = new Set(robot.history
         .map(h => h.roundId ? 'round:' + h.roundId : (h.storageId ? 'stored:' + h.storageId : ''))
         .filter(Boolean));
+      let addedCount = 0;
       d.results.forEach(r => {
         const rawColor = r.color ?? r.cellColor;
         const color = typeof robot.normalizeColor === 'function' ? robot.normalizeColor(rawColor) : String(rawColor || '').toUpperCase();
@@ -1596,10 +1613,11 @@ EventBus.on('results:history', (d) => {
         if (robot.game === 'wheel' && typeof robot.isImmediateDuplicateResult === 'function' && robot.isImmediateDuplicateResult(robot.history[0], item)) return;
         if (stableKey) existingStable.add(stableKey);
         robot.history.unshift(item);
+        addedCount++;
       });
       if (robot.history.length > 200) robot.history.length = 200;
       robot.diagnostic.analyzedResults = robot.history.length;
-      robot.analyze();
+      if (addedCount > 0) robot.analyze();
     }
   });
   RobotEngine.save();

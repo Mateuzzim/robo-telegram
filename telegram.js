@@ -830,46 +830,37 @@ const TelegramService = {
     const entryLabel = this.colorLabel(d.suggestedEntry);
     const galeMax = robot.gale?.max || 0;
     const galeInstruction = this.formatGaleInstruction(robot);
+    const sequence = this.getSequenceStats(robot);
 
     return [
-      '🚨 ' + gameName + ' AO VIVO 🚨',
-      '━━━━━━━━━━━━━━━━━━━━',
-      'NOME DO ROBÔ:',
-      robot.name,
-      'Protecao/Gales: ' + this.formatGaleInstruction(robot),
+      '━━ 🚨 ' + gameName + ' AO VIVO 🚨',
+      '🤖NOME DO ROBÔ: ' + robot.name,
+      '🔰Proteção/Gales: ' + galeInstruction,
       '',
-      '📊 STATUS DO ROBÔ',
-      '━━━━━━━━━━━━━━━━━━━━',
-      '🟢 Status: ' + (robot.status === 'online' ? 'Online' : robot.status === 'offline' ? 'Offline' : robot.status),
-      '🎮 Jogo: ' + gameLabel,
+      '━━ 📊 STATUS DO ROBÔ ━━',
+      '🟢 Status: ' + (robot.status === 'online' ? 'Online' : robot.status === 'offline' ? 'Offline' : robot.status) + ' 🎮 Jogo: ' + gameLabel,
       '♟️ Estratégia: ' + strategyLabel,
       '🔄 Modo: ' + modeLabel,
-      '🎯 Ultimo Resultado: ' + lastResultEmoji + ' ' + lastResultLabel,
+      '🎯Ultimo Resultado: ' + lastResultEmoji + ' ' + lastResultLabel,
       '',
-      '🧠 DIAGNOSTICO DA IA',
-      '━━━━━━━━━━━━━━━━━━━━',
+      '━━ 🧠 DIAGNOSTICO DA IA ━━',
       '📡 Status: ' + (d.status || 'IDLE'),
       '📊 ' + (d.analyzedResults || 0) + ' Resultados Analisados',
       '🔥 Confiança: ' + (d.confidence || 0) + '%',
       '🔍 Padrão: ' + (d.mainPattern || '--'),
-      '🎯 Entrada: ' + entryEmoji + ' ' + entryLabel,
+      '🎯 Entrada:  ' + entryEmoji + ' ' + entryLabel,
       '⭐ Score: ' + (d.totalScore || 0) + '/100',
-      '━━━━━━━━━━━━━━━━━━━━',
-      '🎡 HISTÓRICO RECENTE',
+      '',
+      '━━ 🎡HISTÓRICO RECENTE🎡 ━━',
       this.formatRecentHistory(robot),
-      '━━━━━━━━━━━━━━━━━━━━',
-      '🏆 RESULTADO DA SESSÃO',
+      '━━ 🏆RESULTADO DA SESSÃO🏆 ━━',
       '✅ WIN: ' + wins + ' | ❌ LOSS: ' + losses,
       '━━━━━━━━━━━━━━━━━━━━',
       '📨 Sinais Enviados: ' + sent,
-      '🎯 SG: ' + sg + (g1 > 0 || robot.gale?.max >= 1 ? ' | 🛡️ G1: ' + g1 : ''),
+      '🔗Sequência: ' + sequence,
       '━━━━━━━━━━━━━━━━━━━━',
       '📊 APROVEITAMENTO',
-      this.formatRateBar(rate) + ' ' + rate + '%',
-      '━━━━━━━━━━━━━━━━━━━━',
-      '⏳ STATUS DO ROBÔ',
-      '━━━━━━━━━━━━━━━━━━━━',
-      this.formatRobotStatus(robot),
+      this.formatRateBar(rate) + '  ' + rate + '%',
       '━━━━━━━━━━━━━━━━━━━━',
       '🌐 Site: ',
       '🕕 Horário Atual: ' + this.getCachedTime()
@@ -986,6 +977,15 @@ const TelegramService = {
     const max = robot.gale?.max || 0;
     if (max <= 0) return 'Entrada seca';
     return 'Gale até G' + max;
+  },
+
+  getSequenceStats(robot) {
+    const stats = robot.stats || {};
+    const lastSignal = robot.lastSignal || {};
+    const currentSignal = robot.currentSignal;
+    const sequenceWins = stats.sequenceWins || 0;
+    const sequenceLosses = stats.sequenceLosses || 0;
+    return '✅ WIN: ' + sequenceWins + ' | ❌ LOSS: ' + sequenceLosses;
   },
 
   formatHistoryTitle(robot) {

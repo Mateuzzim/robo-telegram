@@ -28,13 +28,14 @@
   .live-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
   .live-dot.on{background:var(--green);box-shadow:0 0 8px var(--green)}
   .live-dot.off{background:var(--red)}
-  .strategy-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;max-height:250px;overflow-y:auto;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px}
+  .strategy-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-height:250px;overflow-y:auto;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px}
   .strategy-item{display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:all .2s}
   .strategy-item:hover{border-color:var(--green);background:var(--bg3)}
   .strategy-item input:checked + span{color:var(--green);font-weight:600}
   .strategy-item label{display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;width:100%}
   .strategy-item .strat-tag{font-size:9px;padding:2px 5px;border-radius:4px;background:var(--bg);color:var(--text3);margin-left:auto}
-  @media(max-width:768px){.strategy-grid{grid-template-columns:1fr}}
+  @media(max-width:1024px){.strategy-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:768px){.strategy-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -73,15 +74,43 @@
   </table></div></div>
 </div>
 
-<div class="modal-overlay" id="modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
-  <div class="modal" style="max-width:700px;max-height:90vh;overflow-y:auto">
+  <div class="modal-overlay" id="modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal" style="max-width:950px;max-height:92vh;overflow-y:auto">
     <div class="modal-title" id="modalTitle">Novo Robo</div>
     <input type="hidden" id="fEditId">
-    <div class="form-group"><label>Nome</label><input id="fName" placeholder="Ex: Wheel Alpha"></div>
-    <div class="form-group"><label>Jogo</label><select id="fGame" onchange="updateTargets()"><option value="wheel">Wheel</option><option value="double">Double</option></select></div>
-    <div class="form-group"><label>Alvo (Cor / Multiplier)</label><select id="fTarget"></select></div>
-    <div class="form-group"><label>Estrategias (selecione as que deseja usar)</label>
-      <div class="strategy-grid" id="fStrategies">
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)">Dados Basicos</div>
+        <div class="form-group"><label>Nome</label><input id="fName" placeholder="Ex: Wheel Alpha"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="form-group"><label>Jogo</label><select id="fGame" onchange="updateTargets()"><option value="wheel">Wheel</option><option value="double">Double</option></select></div>
+          <div class="form-group"><label>Alvo (Cor / Multiplier)</label><select id="fTarget"></select></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="form-group"><label>Modo</label><select id="fMode"><option value="monitoramento">Monitoramento</option><option value="telegram">Telegram</option></select></div>
+          <div class="form-group"><label>Filtro de Sinal</label><select id="fFilterMode"><option value="desligado">Desligado</option><option value="conservador">Conservador (Conf>=80 | Conflu>=3 | Score>=75)</option><option value="moderado" selected>Moderado (Conf>=65 | Conflu>=2 | Score>=55)</option><option value="agressivo">Agressivo (Conf>=45 | Conflu>=1 | Score>=30)</option></select></div>
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)">Configuracoes</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="form-group"><label>Resultados para Analisar</label><input id="fResults" type="number" value="40"></div>
+          <div class="form-group"><label>Confianca Minima (%)</label><input id="fConf" type="number" value="80"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="form-group"><label>Score Minimo</label><input id="fMinScore" type="number" value="52"></div>
+          <div class="form-group"><label>Intervalo entre Sinais (seg)</label><input id="fInterval" type="number" value="60"></div>
+        </div>
+        <div class="form-group"><label>Gale Maximo</label><input id="fGale" type="number" value="2" style="max-width:120px"></div>
+        <div class="form-group" id="patternSizeGroup" style="display:none"><label>Tamanho do Padrao</label><select id="fPatternSize"><option value="1">1 cor</option><option value="2">2 cores</option><option value="3" selected>3 cores</option><option value="4">4 cores</option><option value="5">5 cores</option><option value="6">6 cores</option></select></div>
+      </div>
+    </div>
+
+    <div style="margin-top:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)">Estrategias</div>
+      <div class="strategy-grid" id="fStrategies" style="max-height:180px">
         <div class="strategy-item"><label><input type="checkbox" value="todas" checked onchange="togglePatternSize()"><span>Todas (Analise Completa)</span></label><span class="strat-tag">GERAL</span></div>
         <div class="strategy-item"><label><input type="checkbox" value="alternancia" onchange="togglePatternSize()"><span>Alternancia</span></label><span class="strat-tag">GERAL</span></div>
         <div class="strategy-item"><label><input type="checkbox" value="repeticao" onchange="togglePatternSize()"><span>Repeticao</span></label><span class="strat-tag">GERAL</span></div>
@@ -106,28 +135,64 @@
         <div class="strategy-item"><label><input type="checkbox" value="sequenciaAzul" onchange="togglePatternSize()"><span>Sequencia Azul</span></label><span class="strat-tag">WHEEL 5x</span></div>
       </div>
     </div>
-    <div class="form-group" id="patternSizeGroup" style="display:none"><label>Tamanho do Padrao</label><select id="fPatternSize"><option value="1">1 cor</option><option value="2">2 cores</option><option value="3" selected>3 cores</option><option value="4">4 cores</option><option value="5">5 cores</option><option value="6">6 cores</option></select></div>
-    <div class="form-group"><label>Resultados para Analisar</label><input id="fResults" type="number" value="40"></div>
-    <div class="form-group"><label>Confianca Minima (%)</label><input id="fConf" type="number" value="80"></div>
-    <div class="form-group"><label>Score Minimo</label><input id="fMinScore" type="number" value="52"></div>
-    <div class="form-group"><label>Intervalo entre Sinais (seg)</label><input id="fInterval" type="number" value="60"></div>
-    <div class="form-group"><label>Gale Maximo</label><input id="fGale" type="number" value="2"></div>
-    <div class="form-group"><label>Modo</label><select id="fMode"><option value="monitoramento">Monitoramento</option><option value="telegram">Telegram</option></select></div>
-    <div class="form-group"><label>Filtro de Sinal</label><select id="fFilterMode"><option value="desligado">Desligado</option><option value="conservador">Conservador (Conf>=80 | Conflu>=3 | Score>=75)</option><option value="moderado" selected>Moderado (Conf>=65 | Conflu>=2 | Score>=55)</option><option value="agressivo">Agressivo (Conf>=45 | Conflu>=1 | Score>=30)</option></select></div>
-    <div style="border-top:1px solid var(--border);margin:12px 0;padding-top:12px">
+
+    <div style="margin-top:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)">
+        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Filtros de Qualidade</div>
+        <button class="btn btn-sm btn-blue" onclick="suggestFilters()" style="font-size:10px;padding:4px 10px">Sugerir Filtros</button>
+      </div>
+      <div class="strategy-grid" id="fFilters" style="max-height:220px">
+        <div class="strategy-item"><label><input type="checkbox" value="frequencia"><span>Frequencia</span></label><span class="strat-tag">STATS</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="repeticaoExcessiva"><span>Repeticao Excessiva</span></label><span class="strat-tag">STATS</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="sequenciaEsticada"><span>Sequencia Esticada</span></label><span class="strat-tag">STATS</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="recencia"><span>Recencia</span></label><span class="strat-tag">STATS</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="distanciaOcorrencias"><span>Distancia Ocorrencias</span></label><span class="strat-tag">STATS</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="janelaCurtaLonga"><span>Janela Curta x Longa</span></label><span class="strat-tag">STATS</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="tendencia"><span>Tendencia</span></label><span class="strat-tag">TREND</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="quebraTendencia"><span>Quebra de Tendencia</span></label><span class="strat-tag">TREND</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="alternancia"><span>Alternancia</span></label><span class="strat-tag">PATTERN</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="concentracao"><span>Concentracao</span></label><span class="strat-tag">DISTRIB</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="dispersao"><span>Dispersao</span></label><span class="strat-tag">DISTRIB</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="atraso"><span>Atraso</span></label><span class="strat-tag">STATS</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="padraoRecorrente"><span>Padrao Recorrente</span></label><span class="strat-tag">PATTERN</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="transicao"><span>Transicao</span></label><span class="strat-tag">TRANS</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="matrizTransicao"><span>Matriz Transicao</span></label><span class="strat-tag">TRANS</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="probabilidadeCondicional"><span>Prob. Condicional</span></label><span class="strat-tag">TRANS</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="entropia"><span>Entropia</span></label><span class="strat-tag">MATH</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="volatilidade"><span>Volatilidade</span></label><span class="strat-tag">MATH</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="consensoEstrategias"><span>Consenso Estrategias</span></label><span class="strat-tag">FILTER</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="divergenciaEstrategias"><span>Divergencia Estrategias</span></label><span class="strat-tag">FILTER</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="scoreMinimo"><span>Score Minimo</span></label><span class="strat-tag">FILTER</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="confiancaMinima"><span>Confianca Minima</span></label><span class="strat-tag">FILTER</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="diferencaCandidatos"><span>Dif. 1º e 2º Candidato</span></label><span class="strat-tag">FILTER</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="confirmacaoMultipla"><span>Confirmacao Multipla</span></label><span class="strat-tag">FILTER</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="cooldownSinal"><span>Cooldown apos Sinal</span></label><span class="strat-tag">COOLDOWN</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="posWin"><span>Filtro Pos-Win</span></label><span class="strat-tag">COOLDOWN</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="posLoss"><span>Filtro Pos-Loss</span></label><span class="strat-tag">COOLDOWN</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="lossConsecutivo"><span>Loss Consecutivo</span></label><span class="strat-tag">COOLDOWN</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="qualidadeAmostra"><span>Qualidade Amostra</span></label><span class="strat-tag">QUALITY</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="antiOverfitting"><span>Anti-Overfitting</span></label><span class="strat-tag">QUALITY</span></div>
+      </div>
+    </div>
+
+    <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)">Telegram</div>
       <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:10px;cursor:pointer">
         <input type="checkbox" id="fTgEnabled"> Enviar sinais para Telegram
       </label>
-      <div class="form-group"><label>Canal Telegram</label><select id="fTgChannel"><option value="">Selecionar canal...</option></select></div>
-      <div class="form-group"><label>Tipo de Mensagem</label>
-        <select id="fTgMsgType">
-          <option value="live">Live (atualiza a cada resultado)</option>
-          <option value="signal">Sinal (entrada, win, loss, gale)</option>
-          <option value="both">Live + Sinal</option>
-        </select>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group"><label>Canal Telegram</label><select id="fTgChannel"><option value="">Selecionar canal...</option></select></div>
+        <div class="form-group"><label>Tipo de Mensagem</label>
+          <select id="fTgMsgType">
+            <option value="live">Live (atualiza a cada resultado)</option>
+            <option value="signal">Sinal (entrada, win, loss, gale)</option>
+            <option value="both">Live + Sinal</option>
+          </select>
+        </div>
       </div>
     </div>
-    <div style="display:flex;gap:8px;margin-top:16px"><button class="btn btn-green" onclick="createRobot()" id="modalBtn">Criar</button><button class="btn btn-ghost" onclick="document.getElementById('modal').style.display='none'">Cancelar</button></div>
+
+    <div style="display:flex;gap:10px;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)"><button class="btn btn-green" onclick="createRobot()" id="modalBtn" style="padding:10px 28px;font-size:14px">Criar</button><button class="btn btn-ghost" onclick="document.getElementById('modal').style.display='none'" style="padding:10px 28px;font-size:14px">Cancelar</button></div>
   </div>
 </div>
 <script src="config.js"></script>
@@ -138,6 +203,7 @@
 <script src="ws-source.js"></script>
 <script src="robot.js"></script>
 <script src="robot-engine.js"></script>
+<script src="filters.js"></script>
 <script src="telegram.js"></script>
 <script src="app.js"></script>
 <script>
@@ -174,6 +240,7 @@ function updateTargets(){
   const game = document.getElementById('fGame').value;
   const sel = document.getElementById('fTarget');
   sel.innerHTML = TARGETS[game].map(t => `<option value="${t.value}">${t.label}</option>`).join('');
+  setTimeout(() => suggestFilters(), 50);
 }
 function showCreate(){
   document.getElementById('modalTitle').textContent = 'Novo Robo';
@@ -181,6 +248,7 @@ function showCreate(){
   document.getElementById('fEditId').value = '';
   updateTargets();
   setSelectedStrategies(['todas']);
+  setTimeout(() => suggestFilters(), 100);
   const channels = getChannels();
   const sel = document.getElementById('fTgChannel');
   sel.innerHTML = '<option value="">Selecionar canal...</option>' + channels.map(c => `<option value="${c.id}">${escapeHtml(c.name)} (${c.id})</option>`).join('');
@@ -215,6 +283,8 @@ function showEdit(id){
   document.getElementById('fTgEnabled').checked = !!tg.enabled;
   document.getElementById('fTgChannel').value = tg.channelId || '';
   document.getElementById('fTgMsgType').value = tg.msgType || 'both';
+  const filters = robot.filters || [];
+  setSelectedFilters(filters);
   document.getElementById('modal').style.display='flex';
 }
 function getSelectedStrategies() {
@@ -227,6 +297,110 @@ function setSelectedStrategies(strategies) {
   checkboxes.forEach(cb => {
     cb.checked = strategies.includes(cb.value);
   });
+}
+
+function getSelectedFilters() {
+  const checkboxes = document.querySelectorAll('#fFilters input[type="checkbox"]:checked');
+  return Array.from(checkboxes).map(cb => cb.value);
+}
+
+function setSelectedFilters(filters) {
+  const checkboxes = document.querySelectorAll('#fFilters input[type="checkbox"]');
+  checkboxes.forEach(cb => {
+    cb.checked = filters.includes(cb.value);
+  });
+}
+
+function suggestFilters() {
+  const game = document.getElementById('fGame').value;
+  const targetColor = document.getElementById('fTarget').value;
+  const targetLabel = TARGETS[game].find(t => t.value === targetColor)?.label || '';
+  const multMatch = targetLabel.match(/(\d+)X/);
+  const multiplier = multMatch ? parseInt(multMatch[1]) : 1;
+  const suggested = [];
+
+  suggested.push('qualidadeAmostra');
+  suggested.push('cooldownSinal');
+  suggested.push('lossConsecutivo');
+
+  if (game === 'wheel') {
+    if (targetColor === 'green' || multiplier >= 50) {
+      suggested.push('atraso');
+      suggested.push('distanciaOcorrencias');
+      suggested.push('recencia');
+      suggested.push('janelaCurtaLonga');
+      suggested.push('probabilidadeCondicional');
+      suggested.push('entropia');
+      suggested.push('antiOverfitting');
+    } else if (targetColor === 'blue' || multiplier === 5) {
+      suggested.push('tendencia');
+      suggested.push('quebraTendencia');
+      suggested.push('matrizTransicao');
+      suggested.push('volatilidade');
+      suggested.push('confirmacaoMultipla');
+    } else if (targetColor === 'red' || multiplier === 3) {
+      suggested.push('frequencia');
+      suggested.push('repeticaoExcessiva');
+      suggested.push('sequenciaEsticada');
+      suggested.push('transicao');
+      suggested.push('padraoRecorrente');
+      suggested.push('consensoEstrategias');
+    } else if (targetColor === 'grey' || multiplier === 2) {
+      suggested.push('frequencia');
+      suggested.push('alternancia');
+      suggested.push('concentracao');
+      suggested.push('dispersao');
+      suggested.push('divergenciaEstrategias');
+      suggested.push('scoreMinimo');
+      suggested.push('confiancaMinima');
+    } else {
+      suggested.push('frequencia');
+      suggested.push('tendencia');
+      suggested.push('alternancia');
+      suggested.push('transicao');
+      suggested.push('consensoEstrategias');
+    }
+  } else if (game === 'double') {
+    if (targetColor === 'green' || multiplier >= 14) {
+      suggested.push('atraso');
+      suggested.push('distanciaOcorrencias');
+      suggested.push('recencia');
+      suggested.push('janelaCurtaLonga');
+      suggested.push('probabilidadeCondicional');
+      suggested.push('entropia');
+      suggested.push('antiOverfitting');
+    } else if (targetColor === 'red' || targetColor === 'black') {
+      suggested.push('frequencia');
+      suggested.push('repeticaoExcessiva');
+      suggested.push('alternancia');
+      suggested.push('transicao');
+      suggested.push('matrizTransicao');
+      suggested.push('padraoRecorrente');
+      suggested.push('tendencia');
+      suggested.push('quebraTendencia');
+      suggested.push('confirmacaoMultipla');
+      suggested.push('divergenciaEstrategias');
+    } else {
+      suggested.push('frequencia');
+      suggested.push('alternancia');
+      suggested.push('transicao');
+      suggested.push('consensoEstrategias');
+    }
+  }
+
+  if (multiplier >= 10) {
+    suggested.push('diferencaCandidatos');
+    suggested.push('scoreMinimo');
+    suggested.push('confiancaMinima');
+  }
+
+  if (multiplier <= 3) {
+    suggested.push('repeticaoExcessiva');
+    suggested.push('dispersao');
+    suggested.push('volatilidade');
+  }
+
+  setSelectedFilters([...new Set(suggested)]);
 }
 
 function createRobot(){
@@ -248,6 +422,7 @@ function createRobot(){
   const tgMsgType = document.getElementById('fTgMsgType').value;
   const patternSize = strategies.includes('padroesCores') ? parseInt(document.getElementById('fPatternSize').value) || 3 : 3;
   const minScore = parseInt(document.getElementById('fMinScore').value) || 52;
+  const filters = getSelectedFilters();
 
   if (editId) {
     const robot = RobotEngine.getRobot(editId);
@@ -267,6 +442,7 @@ function createRobot(){
       robot.filterMode = filterMode;
       robot.telegram = { enabled: tgEnabled, channelId: tgChannel, msgType: tgMsgType, message: robot.telegram?.message || {} };
       robot.patternSize = patternSize;
+      robot.filters = filters;
       RobotEngine.save();
     }
   } else {
@@ -280,7 +456,8 @@ function createRobot(){
       intervalMin: interval,
       galeMax, mode,
       telegram: { enabled: tgEnabled, channelId: tgChannel, msgType: tgMsgType },
-      patternSize
+      patternSize,
+      filters
     });
     RobotEngine.save();
   }

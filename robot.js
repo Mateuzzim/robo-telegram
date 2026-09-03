@@ -44,6 +44,7 @@ class Robot {
     this.signalFlow = config.signalFlow || { step1: 'Aguardando padrao...', step2: 'Nenhuma entrada pendente', step3: 'Aguardando entrada...', step4: 'Placar sera atualizado apos resultado' };
     this.strategyIndex = config.strategyIndex || 0;
     this.usedPatterns = config.usedPatterns || { RED: [], BLACK: [], GREY: [] };
+    this._lastResolvedTime = 0;
   }
 
   normalizeColor(color) {
@@ -165,6 +166,12 @@ class Robot {
 
   analyze() {
     this.diagnostic.analyzedResults = this.history.length;
+
+    if (this._lastResolvedTime && Date.now() - this._lastResolvedTime < 2000) {
+      this.diagnostic.status = 'WAITING_RESULT';
+      EventBus.emit('robot:state', this.getState());
+      return;
+    }
 
     if (this.history.length < this.resultsToAnalyze) {
       this.diagnostic.status = 'LOADING';
@@ -394,12 +401,15 @@ class Robot {
       signal.gale = resolvedGale;
       signal.result = { color: rColor, number: normalized.number, multiplier: normalized.multiplier, time: Date.now() };
       this.stats.wins++;
+      this.stats.sequenceWins = (this.stats.sequenceWins || 0) + 1;
+      this.stats.sequenceLosses = 0;
       if (resolvedGale === 0) this.stats.winSG = (this.stats.winSG || 0) + 1;
       if (resolvedGale === 1) this.stats.winG1 = (this.stats.winG1 || 0) + 1;
       if (resolvedGale === 2) this.stats.winG2 = (this.stats.winG2 || 0) + 1;
       this.stats.currentStreak = Math.max(1, (this.stats.currentStreak || 0) + 1);
       this.stats.maxWinStreak = Math.max(this.stats.maxWinStreak || 0, this.stats.currentStreak);
       if (this.currentSignal === signal) this.currentSignal = null;
+      this._lastResolvedTime = Date.now();
       this.galeCount = 0;
       this.resetUsedPatterns();
       this.diagnostic.status = 'RESOLVED';
@@ -438,9 +448,12 @@ class Robot {
         signal.gale = this.gale.max;
         signal.result = { color: rColor, number: normalized.number, multiplier: normalized.multiplier, time: Date.now() };
         this.stats.losses++;
+        this.stats.sequenceLosses = (this.stats.sequenceLosses || 0) + 1;
+        this.stats.sequenceWins = 0;
         this.stats.currentStreak = Math.min(-1, (this.stats.currentStreak || 0) - 1);
         this.stats.maxLossStreak = Math.max(this.stats.maxLossStreak || 0, Math.abs(this.stats.currentStreak));
         if (this.currentSignal === signal) this.currentSignal = null;
+        this._lastResolvedTime = Date.now();
         this.galeCount = 0;
         this.resetUsedPatterns();
         this.diagnostic.status = 'RESOLVED';
