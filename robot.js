@@ -52,8 +52,9 @@ class Robot {
 
   getGaleMaxForTarget(targetColor) {
     if (this.target?.color === 'any' && this.game === 'wheel') {
+      const normalizedTarget = String(targetColor || '').toLowerCase();
       const galeMap = { grey: this.galeByColor.grey, red: this.galeByColor.red, blue: this.galeByColor.blue };
-      return galeMap[targetColor] ?? this.gale.max;
+      return galeMap[normalizedTarget] ?? this.gale.max;
     }
     return this.gale.max;
   }
