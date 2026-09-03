@@ -836,6 +836,7 @@ const TelegramService = {
       '━━ 🚨 ' + gameName + ' AO VIVO 🚨',
       '🤖NOME DO ROBÔ: ' + robot.name,
       '🔰Proteção/Gales: ' + galeInstruction,
+      robot.greenProtection && robot.game === 'double' ? '🛡️ ATENÇÃO PROTEGER= VERDE 🟢' : '',
       '',
       '━━ 📊 STATUS DO ROBÔ ━━',
       '🟢 Status: ' + (robot.status === 'online' ? 'Online' : robot.status === 'offline' ? 'Offline' : robot.status) + ' 🎮 Jogo: ' + gameLabel,

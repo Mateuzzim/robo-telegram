@@ -85,7 +85,12 @@
         <div class="form-group"><label>Nome</label><input id="fName" placeholder="Ex: Wheel Alpha"></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <div class="form-group"><label>Jogo</label><select id="fGame" onchange="updateTargets()"><option value="wheel">Wheel</option><option value="double">Double</option></select></div>
-          <div class="form-group"><label>Alvo (Cor / Multiplier)</label><select id="fTarget"></select></div>
+          <div class="form-group"><label>Alvo (Cor / Multiplier)</label><select id="fTarget" onchange="autoSetGale()"></select></div>
+        </div>
+        <div id="greenProtectionGroup" style="display:none;margin-bottom:10px">
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;padding:8px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:6px">
+            <input type="checkbox" id="fGreenProtection"> 🛡️ Proteção Verde (GREEN conta como WIN)
+          </label>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <div class="form-group"><label>Modo</label><select id="fMode"><option value="monitoramento">Monitoramento</option><option value="telegram">Telegram</option></select></div>
@@ -225,14 +230,12 @@ const TARGETS = {
     { value: 'grey', label: 'Preto 2X' },
     { value: 'red', label: 'Vermelho 3X' },
     { value: 'blue', label: 'Azul 5X' },
-    { value: 'green', label: 'Verde 50X' },
     { value: 'red+grey', label: 'Vermelho / Preto' }
   ],
   double: [
     { value: 'any', label: 'Qualquer cor' },
     { value: 'red', label: 'Vermelho 2X' },
     { value: 'black', label: 'Preto 2X' },
-    { value: 'green', label: 'Verde 14X' },
     { value: 'red+black', label: 'Vermelho / Preto' }
   ]
 };
@@ -241,6 +244,36 @@ function updateTargets(){
   const sel = document.getElementById('fTarget');
   sel.innerHTML = TARGETS[game].map(t => `<option value="${t.value}">${t.label}</option>`).join('');
   setTimeout(() => suggestFilters(), 50);
+  autoSetGale();
+  const greenProtGroup = document.getElementById('greenProtectionGroup');
+  if (greenProtGroup) {
+    greenProtGroup.style.display = game === 'double' ? 'block' : 'none';
+  }
+}
+
+function autoSetGale() {
+  const game = document.getElementById('fGame').value;
+  const targetColor = document.getElementById('fTarget').value;
+  const galeInput = document.getElementById('fGale');
+  
+  const galeMap = {
+    wheel: {
+      grey: 1,
+      red: 3,
+      blue: 5,
+      'red+grey': 1
+    },
+    double: {
+      red: 1,
+      black: 1,
+      'red+black': 1
+    }
+  };
+  
+  const galeValue = galeMap[game]?.[targetColor];
+  if (galeValue !== undefined) {
+    galeInput.value = galeValue;
+  }
 }
 function showCreate(){
   document.getElementById('modalTitle').textContent = 'Novo Robo';
@@ -285,6 +318,10 @@ function showEdit(id){
   document.getElementById('fTgMsgType').value = tg.msgType || 'both';
   const filters = robot.filters || [];
   setSelectedFilters(filters);
+  const greenProtCheckbox = document.getElementById('fGreenProtection');
+  if (greenProtCheckbox) {
+    greenProtCheckbox.checked = robot.greenProtection || false;
+  }
   document.getElementById('modal').style.display='flex';
 }
 function getSelectedStrategies() {
@@ -423,6 +460,7 @@ function createRobot(){
   const patternSize = strategies.includes('padroesCores') ? parseInt(document.getElementById('fPatternSize').value) || 3 : 3;
   const minScore = parseInt(document.getElementById('fMinScore').value) || 52;
   const filters = getSelectedFilters();
+  const greenProtection = document.getElementById('fGreenProtection')?.checked || false;
 
   if (editId) {
     const robot = RobotEngine.getRobot(editId);
@@ -443,6 +481,7 @@ function createRobot(){
       robot.telegram = { enabled: tgEnabled, channelId: tgChannel, msgType: tgMsgType, message: robot.telegram?.message || {} };
       robot.patternSize = patternSize;
       robot.filters = filters;
+      robot.greenProtection = greenProtection;
       RobotEngine.save();
     }
   } else {
@@ -457,7 +496,8 @@ function createRobot(){
       galeMax, mode,
       telegram: { enabled: tgEnabled, channelId: tgChannel, msgType: tgMsgType },
       patternSize,
-      filters
+      filters,
+      greenProtection
     });
     RobotEngine.save();
   }
