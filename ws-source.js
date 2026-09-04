@@ -13,9 +13,12 @@ class WSSource {
   }
 
   connect() {
-    if (!this.url || this.url.includes('your-')) return;
-    if (this.ws && (this.ws.readyState === WebSocket.CONNECTING || this.ws.readyState === WebSocket.OPEN)) return;
     const tokenStatus = this.getAuthorizationStatus();
+    if (!this.url || this.url.includes('your-')) {
+      EventBus.emit('ws-status', { label: this.label, connected: false, reason: 'URL_REQUIRED' });
+      return;
+    }
+    if (this.ws && (this.ws.readyState === WebSocket.CONNECTING || this.ws.readyState === WebSocket.OPEN)) return;
     try {
       this.ws = new WebSocket(this.url);
       this.ws.onopen = () => {

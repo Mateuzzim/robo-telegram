@@ -174,11 +174,6 @@ const TelegramService = {
     return robot?.telegram?.msgType === 'normal';
   },
 
-  isSignalCooldownActive(robot) {
-    if (!robot || !robot.startedAt) return false;
-    return (Date.now() - robot.startedAt) < 20000;
-  },
-
   async updateLiveMessages(result) {
     const game = result?.label || result?.game;
     if (!game) return;
@@ -214,7 +209,6 @@ const TelegramService = {
       robot.status === 'online' &&
       (!game || robot.game === game) &&
       this.shouldSendSignal(robot) &&
-      !this.isSignalCooldownActive(robot) &&
       robot.currentSignal &&
       !robot.currentSignal.entrySending &&
       (!robot.currentSignal.entrySent || !this.hasEntryMessageForSignal(robot, robot.currentSignal))
@@ -243,7 +237,6 @@ const TelegramService = {
   async handleSignalCreated(signal) {
     const robot = RobotEngine.getRobot(signal?.robotId);
     if (!this.shouldSendSignal(robot) || !signal?.id) return;
-    if (this.isSignalCooldownActive(robot)) return;
     const snapshot = {
       ...signal,
       result: signal.result ? { ...signal.result } : null,
@@ -256,14 +249,14 @@ const TelegramService = {
     if (robot.currentSignal?.id === signal.id) robot.currentSignal.entrySending = true;
     try {
       const sent = await this.enqueueEntryMessage(robot, snapshot);
-      if (sent && robot.currentSignal?.id === signal.id) {
+      if (sent && robot.currentSignal?.id === snapshot.id) {
         robot.currentSignal.entrySent = true;
       } else if (!sent) {
-        if (robot.currentSignal?.id === signal.id) robot.currentSignal.entrySent = false;
+        if (robot.currentSignal?.id === snapshot.id) robot.currentSignal.entrySent = false;
         this.forgetEntryEvent(snapshot.entryEventKey);
       }
     } finally {
-      if (robot.currentSignal?.id === signal.id) robot.currentSignal.entrySending = false;
+      if (robot.currentSignal?.id === snapshot.id) robot.currentSignal.entrySending = false;
     }
   },
 
@@ -934,7 +927,10 @@ const TelegramService = {
     const lastResultEmoji = robot.lastResult ? this.colorEmoji(robot.lastResult.color) : '--';
     const lastResultLabel = this.colorLabel(robot.lastResult?.color);
     const gameLabel = robot.game === 'wheel' ? 'Wheel' : 'Double';
-    const strategyLabel = this.formatStrategy(robot.strategy);
+    const effectiveStrategy = robot.strategy === 'multi'
+      ? (robot.currentSignal?.strategy || robot.lastSignal?.strategy || robot.strategy)
+      : robot.strategy;
+    const strategyLabel = this.formatStrategy(effectiveStrategy);
     const modeLabel = robot.mode === 'monitoramento' ? 'Monitoramento' : robot.mode === 'telegram' ? 'Telegram' : robot.mode;
     const entryEmoji = d.suggestedEntry ? this.colorEmoji(d.suggestedEntry) : '';
     const entryLabel = this.colorLabel(d.suggestedEntry);
@@ -1090,21 +1086,77 @@ const TelegramService = {
       frequencia: 'Frequência',
       tendencia: 'Tendência',
       espelhamento: 'Espelhamento',
-      diagonal: 'Diagonal'
+      diagonal: 'Diagonal',
+      padroesCores: 'Padrões Cores',
+      cicloVerde: 'Ciclo Verde',
+      convergencia: 'Convergência',
+      cicloZero: 'Ciclo Zero',
+      padraoNumerico: 'Padrão Numérico',
+      sequenciaNegra: 'Sequência Negra',
+      momentumPreto: 'Momentum Preto',
+      sequenciaVermelha: 'Sequência Vermelha',
+      momentumVermelho: 'Momentum Vermelho',
+      cicloPreto: 'Ciclo Preto',
+      reacaoPreto: 'Reação Preto',
+      cicloVermelho: 'Ciclo Vermelho',
+      convergenciaVermelha: 'Convergência Vermelha',
+      cicloAzul: 'Ciclo Azul',
+      sequenciaAzul: 'Sequência Azul',
+      divergenciaTemporal: 'Divergência Temporal',
+      markovTransicao: 'Markov Transição',
+      bayesiano: 'Bayesiano',
+      regressaoReversao: 'Regressão Reversão',
+      suavizacaoExponencial: 'Suavização Exp.',
+      detectorAnomalias: 'Detector Anomalias',
+      convergenciaMultiEscala: 'Convergência Multi',
+      predicaoCondicional: 'Predição Condicional',
+      entropiaAdaptativa: 'Entropia Adaptativa',
+      volatilidadeAdaptativa: 'Volatilidade Adaptativa'
     };
     return map[strategy] || strategy || '--';
   },
 
   formatProtection(robot) {
-    const max = robot.gale?.max || 0;
-    if (max <= 0) return '🎯 ENTRADA SECA';
-    return '🛡 PROTEÇÃO ATÉ G' + max;
+    const galeByColor = robot.galeByColor || {};
+    const parts = [];
+    if (robot.game === 'double') {
+      const max = robot.gale?.max || 0;
+      if (max > 0) parts.push('🛡 PROTEÇÃO ATÉ G' + max);
+      else parts.push('🎯 ENTRADA SECA');
+    } else {
+      const grey = galeByColor.grey || 0;
+      const red = galeByColor.red || 0;
+      const blue = galeByColor.blue || 0;
+      const green = galeByColor.green || 0;
+      const protections = [];
+      if (grey > 0) protections.push('⚫ G' + grey);
+      if (red > 0) protections.push('🔴 G' + red);
+      if (blue > 0) protections.push('🔵 G' + blue);
+      if (green > 0) protections.push('🟢 G' + green);
+      if (protections.length) parts.push('🛡 PROTEÇÃO: ' + protections.join(' / '));
+      else parts.push('🎯 ENTRADA SECA');
+    }
+    return parts.join(' | ');
   },
 
   formatGaleInstruction(robot) {
-    const max = robot.gale?.max || 0;
-    if (max <= 0) return 'Entrada seca';
-    return 'Gale até G' + max;
+    const galeByColor = robot.galeByColor || {};
+    if (robot.game === 'double') {
+      const max = robot.gale?.max || 0;
+      if (max > 0) return 'Gale até G' + max;
+      return 'Entrada seca';
+    }
+    const grey = galeByColor.grey || 0;
+    const red = galeByColor.red || 0;
+    const blue = galeByColor.blue || 0;
+    const green = galeByColor.green || 0;
+    const protections = [];
+    if (grey > 0) protections.push('⚫G' + grey);
+    if (red > 0) protections.push('🔴G' + red);
+    if (blue > 0) protections.push('🔵G' + blue);
+    if (green > 0) protections.push('🟢G' + green);
+    if (protections.length) return protections.join('/');
+    return 'Entrada seca';
   },
 
   getSequenceStats(robot) {

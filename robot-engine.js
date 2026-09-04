@@ -1827,6 +1827,25 @@ const RobotEngine = {
     robot.diagnostic.risk = risk;
     robot.diagnostic.signalScore = signalScore;
 
+    if (strategyResult.matched && typeof robot.matchesLossPattern === 'function') {
+      const lossMatch = robot.matchesLossPattern(strategyResult.target);
+      robot.diagnostic.lossPatternMatch = lossMatch;
+      if (lossMatch.match && lossMatch.score >= 85) {
+        robot.diagnostic.status = 'REJECTED';
+        robot.diagnostic.decision = { approved: false, reason: 'Padrao de LOSS detectado (' + lossMatch.score + '% similaridade)' };
+        robot.diagnostic.signalBlocked = true;
+        robot.diagnostic.blockReason = 'Padrao de LOSS detectado (' + lossMatch.score + '% similaridade)';
+        robot.signalFlow = { step1: 'Padrao: ' + (robot.diagnostic.mainPattern || '--'), step2: 'Bloqueado: Padrão de LOSS (' + lossMatch.score + '%)', step3: 'Alvo ' + (lossMatch.details?.target || '--') + ' perdeu ' + (lossMatch.details?.count || 0) + 'x com contexto similar', step4: 'Aguardando proximo ciclo' };
+        robot.stats.signalsRejected++;
+        return null;
+      }
+      if (lossMatch.match && lossMatch.score >= 60) {
+        const penalty = Math.round((lossMatch.score - 60) * 0.5);
+        signalScore = Math.max(10, signalScore - penalty);
+        robot.diagnostic.signalScore = signalScore;
+      }
+    }
+
     if (!strategyResult.matched) {
       robot.diagnostic.status = 'IDLE';
       robot.diagnostic.decision = { approved: false, reason: strategyResult.reason };
@@ -1877,6 +1896,7 @@ const RobotEngine = {
       robot.diagnostic.signalBlocked = true;
       robot.diagnostic.blockReason = filterLabels[rejected[0]] || rejected[0];
       robot.signalFlow = { step1: 'Padrao: ' + (robot.diagnostic.mainPattern || '--'), step2: 'Bloqueado: ' + (filterLabels[rejected[0]] || rejected[0]), step3: 'Aguardando entrada...', step4: 'Placar sera atualizado apos resultado' };
+      robot.currentSignal = null;
       robot.stats.signalsRejected++;
       return null;
     }
@@ -1918,9 +1938,9 @@ const RobotEngine = {
   createRobot(config) {
     const robot = new Robot(config);
     if (config.status) robot.status = config.status;
-    else robot.status = 'online';
+    else robot.status = 'offline';
     this.robots.set(robot.id, robot);
-    EventBus.emit('robot:started', { id: robot.id });
+    if (robot.status === 'online') EventBus.emit('robot:started', { id: robot.id });
     return robot;
   },
 
@@ -1929,7 +1949,7 @@ const RobotEngine = {
   getAllStates() { return this.getAllRobots().map(r => r.getState()); },
 
   startRobot(id) { const r = this.robots.get(id); if (r) { r.status = 'online'; r.startedAt = Date.now(); EventBus.emit('robot:started', { id }); this.save(); } },
-  stopRobot(id) { const r = this.robots.get(id); if (r) { r.status = 'offline'; r.startedAt = null; EventBus.emit('robot:stopped', { id }); this.save(); } },
+  stopRobot(id) { const r = this.robots.get(id); if (r) { r.status = 'offline'; r.startedAt = null; r.currentSignal = null; EventBus.emit('robot:stopped', { id }); this.save(); } },
   pauseRobot(id) { const r = this.robots.get(id); if (r) { r.status = 'paused'; EventBus.emit('robot:paused', { id }); this.save(); } },
   resumeRobot(id) { const r = this.robots.get(id); if (r) { r.status = 'online'; EventBus.emit('robot:resumed', { id }); this.save(); } },
   deleteRobot(id) {
@@ -1999,7 +2019,7 @@ const RobotEngine = {
       if (added > 0) {
         if (robot.history.length > 400) robot.history.length = 400;
         robot.diagnostic.analyzedResults = robot.history.length;
-        robot.analyze();
+        if (robot.status === 'online') robot.analyze();
       }
       return added > 0;
     } catch {}
@@ -2021,7 +2041,7 @@ const RobotEngine = {
       if (robot.status === 'online' && robot.game === label) {
         const pendingSignal = robot.currentSignal;
         const accepted = robot.receiveResult(result);
-        if (pendingSignal) robot.checkResult(result, pendingSignal);
+        if (pendingSignal && accepted) robot.checkResult(result, pendingSignal);
         EventBus.emit('robot:state', robot.getState());
       }
     });

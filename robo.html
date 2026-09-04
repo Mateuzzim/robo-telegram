@@ -432,7 +432,7 @@ function loadRobot() {
   if (robot && robot.history.length < robot.resultsToAnalyze) {
     RobotEngine.loadHistoryFromStorage(robot);
   }
-  if (robot && robot.history.length > 0 && (!robot.diagnostic || !robot.diagnostic.strategyDetails || Object.keys(robot.diagnostic.strategyDetails).length === 0)) {
+  if (robot && robot.status === 'online' && robot.history.length > 0 && (!robot.diagnostic || !robot.diagnostic.strategyDetails || Object.keys(robot.diagnostic.strategyDetails).length === 0)) {
     robot.analyze();
   }
   robotData = robot?.getState();

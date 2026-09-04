@@ -4,7 +4,7 @@ class Robot {
     this.name = config.name;
     this.game = config.game;
     this.strategy = config.strategy;
-    this.strategies = config.strategies || [config.strategy || 'alternancia'];
+    this.strategies = Array.isArray(config.strategies) ? config.strategies : [config.strategy || 'alternancia'];
     this.status = 'offline';
     this.mode = config.mode || 'monitoramento';
     this.resultsToAnalyze = config.resultsToAnalyze || 10;
@@ -173,12 +173,28 @@ class Robot {
       this.history.unshift({ color, number: normalized.number, multiplier: normalized.multiplier, roundId: normalized.roundId, storageId: normalized.storageId, resultKey: key, timestamp: normalized.time || Date.now() });
       if (this.history.length > 400) this.history.pop();
       this.addLog('Resultado: ' + (color || normalized.number));
-      this.analyze();
     }
     return true;
   }
 
   analyze() {
+    if (this.status !== 'online') {
+      this.diagnostic.status = 'IDLE';
+      this.diagnostic.mainPattern = 'Robo offline';
+      this.diagnostic.confidence = 0;
+      this.diagnostic.suggestedEntry = null;
+      this.diagnostic.signalBlocked = true;
+      this.diagnostic.blockReason = 'Robo offline';
+      this.signalFlow = {
+        step1: 'Robo offline',
+        step2: 'Aguardando PLAY para iniciar',
+        step3: '---',
+        step4: '---'
+      };
+      EventBus.emit('robot:state', this.getState());
+      return;
+    }
+
     this.diagnostic.analyzedResults = this.history.length;
 
     if (this._lastResolvedTime && Date.now() - this._lastResolvedTime < 2000) {
@@ -350,6 +366,7 @@ class Robot {
       if (signal) {
         this.markPatternUsed(name, signal.target);
         this.addLog('SINAL APROVADO: ' + signal.target + ' (' + signal.confidence + '%) via ' + name);
+        signal.strategy = name;
         EventBus.emit('signal:created', signal);
         break;
       }
@@ -494,6 +511,167 @@ class Robot {
     }
   }
 
+  analyzeLossPatterns() {
+    const losses = this.signalHistory.filter(h => h.type === 'loss');
+    if (losses.length < 2) return [];
+    const CONTEXT_SIZE = 10;
+    const lossSignatures = [];
+    for (const loss of losses) {
+      const lossTime = loss.time;
+      const contextColors = [];
+      for (let i = this.history.length - 1; i >= 0 && contextColors.length < CONTEXT_SIZE; i--) {
+        const entry = this.history[i];
+        const entryTime = entry.timestamp || entry.time || 0;
+        if (entryTime >= lossTime) continue;
+        const color = this.normalizeColor(entry.color || entry.cellColor || entry.result || '');
+        if (color) contextColors.unshift(color);
+      }
+      if (contextColors.length < 3) continue;
+      const targetNorm = this.normalizeColor(loss.target);
+      const resultNorm = this.normalizeColor(loss.result);
+      const consecutiveTarget = this.countConsecutive(contextColors, targetNorm, 'end');
+      const consecutiveOpposite = this.countConsecutive(contextColors, resultNorm, 'end');
+      const targetFreq = contextColors.filter(c => c === targetNorm).length;
+      const oppositeFreq = contextColors.filter(c => c === resultNorm).length;
+      const streakBefore = this.computeStreakBefore(contextColors, targetNorm);
+      lossSignatures.push({
+        target: targetNorm,
+        result: resultNorm,
+        context: contextColors,
+        consecutiveTarget,
+        consecutiveOpposite,
+        targetFreq,
+        oppositeFreq,
+        streakBefore,
+        galeUsed: loss.gale || 0,
+        time: lossTime
+      });
+    }
+    const grouped = {};
+    for (const sig of lossSignatures) {
+      const key = sig.target + ':' + sig.result;
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(sig);
+    }
+    const patterns = [];
+    for (const key of Object.keys(grouped)) {
+      const sigs = grouped[key];
+      if (sigs.length < 2) continue;
+      const [target, result] = key.split(':');
+      const avgConsecutiveTarget = sigs.reduce((s, x) => s + x.consecutiveTarget, 0) / sigs.length;
+      const avgConsecutiveOpposite = sigs.reduce((s, x) => s + x.consecutiveOpposite, 0) / sigs.length;
+      const avgTargetFreq = sigs.reduce((s, x) => s + x.targetFreq, 0) / sigs.length;
+      const avgOppositeFreq = sigs.reduce((s, x) => s + x.oppositeFreq, 0) / sigs.length;
+      const commonSeq = this.findCommonSequence(sigs.map(s => s.context));
+      patterns.push({
+        target,
+        result,
+        count: sigs.length,
+        avgConsecutiveTarget: Math.round(avgConsecutiveTarget * 10) / 10,
+        avgConsecutiveOpposite: Math.round(avgConsecutiveOpposite * 10) / 10,
+        avgTargetFreq: Math.round(avgTargetFreq * 10) / 10,
+        avgOppositeFreq: Math.round(avgOppositeFreq * 10) / 10,
+        commonSequence: commonSeq,
+        dangerScore: Math.min(95, 40 + sigs.length * 8)
+      });
+    }
+    patterns.sort((a, b) => b.dangerScore - a.dangerScore);
+    return patterns;
+  }
+
+  countConsecutive(arr, color, direction) {
+    let count = 0;
+    if (direction === 'end') {
+      for (let i = arr.length - 1; i >= 0; i--) {
+        if (arr[i] === color) count++;
+        else break;
+      }
+    } else {
+      for (let i = 0; i < arr.length; i++) {
+        if (arr[i] === color) count++;
+        else break;
+      }
+    }
+    return count;
+  }
+
+  computeStreakBefore(context, target) {
+    let streak = 0;
+    for (let i = context.length - 1; i >= 0; i--) {
+      if (context[i] === target) streak++;
+      else break;
+    }
+    return streak > 0 ? streak : -(this.countConsecutive(context, context[context.length - 1] === target ? this.getOppositeColor(target) : context[context.length - 1], 'end'));
+  }
+
+  getOppositeColor(color) {
+    if (color === 'RED') return 'BLACK';
+    if (color === 'BLACK') return 'RED';
+    return color;
+  }
+
+  findCommonSequence(contexts) {
+    if (contexts.length === 0) return '';
+    const shortest = contexts.reduce((a, b) => a.length < b.length ? a : b);
+    const maxSize = Math.min(6, shortest.length);
+    for (let size = maxSize; size >= 3; size--) {
+      const ngrams = {};
+      for (const ctx of contexts) {
+        for (let i = 0; i <= ctx.length - size; i++) {
+          const ngram = ctx.slice(i, i + size).join('-');
+          ngrams[ngram] = (ngrams[ngram] || 0) + 1;
+        }
+      }
+      const best = Object.entries(ngrams).sort((a, b) => b[1] - a[1])[0];
+      if (best && best[1] >= Math.ceil(contexts.length * 0.6)) return best[0];
+    }
+    return shortest.slice(-4).join('-');
+  }
+
+  matchesLossPattern(target) {
+    const patterns = this.analyzeLossPatterns();
+    if (patterns.length === 0) return { match: false, score: 0, details: null };
+    const targetNorm = this.normalizeColor(target);
+    const currentContext = this.history.slice(0, 10).map(h => this.normalizeColor(h.color || h.cellColor || h.result || '')).filter(Boolean);
+    if (currentContext.length < 3) return { match: false, score: 0, details: null };
+    let bestMatch = null;
+    let bestScore = 0;
+    for (const pattern of patterns) {
+      if (pattern.target !== targetNorm) continue;
+      let score = 0;
+      const seqSim = this.sequenceSimilarity(currentContext, pattern.commonSequence.split('-'));
+      score += seqSim * 0.4;
+      score += (pattern.count >= 3 ? 0.25 : pattern.count >= 2 ? 0.15 : 0.05);
+      const currentStreak = this.countConsecutive(currentContext, targetNorm, 'end');
+      const streakSim = 1 - Math.min(1, Math.abs(currentStreak - pattern.avgConsecutiveTarget) / 5);
+      score += streakSim * 0.2;
+      const currentTargetFreq = currentContext.filter(c => c === targetNorm).length / currentContext.length;
+      const avgFreqRatio = pattern.avgTargetFreq / 10;
+      const freqSim = 1 - Math.min(1, Math.abs(currentTargetFreq - avgFreqRatio) / 0.5);
+      score += freqSim * 0.15;
+      score += (pattern.dangerScore / 100) * 0.05;
+      score = Math.round(Math.min(99, Math.max(0, score * 100)));
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = pattern;
+      }
+    }
+    return { match: bestScore >= 60, score: bestScore, details: bestMatch };
+  }
+
+  sequenceSimilarity(current, pattern) {
+    if (!pattern || pattern.length === 0) return 0;
+    const currSlice = current.slice(-pattern.length);
+    if (currSlice.length === 0) return 0;
+    let matches = 0;
+    const len = Math.min(currSlice.length, pattern.length);
+    for (let i = 0; i < len; i++) {
+      const currIdx = currSlice.length - len + i;
+      if (currSlice[currIdx] === pattern[i]) matches++;
+    }
+    return matches / len;
+  }
+
   addLog(message) {
     const entry = { time: Date.now(), message, id: this.id };
     this.logs.unshift(entry);
@@ -502,10 +680,10 @@ class Robot {
   }
 
   getState() {
-    return { id: this.id, name: this.name, game: this.game, strategy: this.strategy, status: this.status, mode: this.mode, target: this.target, filterMode: this.filterMode, patternSize: this.patternSize, lastPatternAnalysisTime: this.lastPatternAnalysisTime, telegram: { ...this.telegram, message: { ...(this.telegram.message || {}) } }, lastHeartbeat: this.lastHeartbeat, stats: { ...this.stats }, lastResult: this.lastResult, lastSignal: this.lastSignal, currentSignal: this.currentSignal, diagnostic: { ...this.diagnostic }, signalFlow: { ...this.signalFlow }, logs: [...this.logs], signalHistory: [...this.signalHistory], minimumConfidence: this.minimumConfidence, minScore: this.minScore, intervalMin: this.intervalMin, gale: { ...this.gale }, resultsToAnalyze: this.resultsToAnalyze, confirmations: this.confirmations, strategyIndex: this.strategyIndex, usedPatterns: JSON.parse(JSON.stringify(this.usedPatterns)), startedAt: this.startedAt, strategyConfig: JSON.parse(JSON.stringify(this.strategyConfig || {})), greenProtection: this.greenProtection, filters: this.filters, galeByColor: { ...this.galeByColor }, autoPause: this.autoPause };
+    return { id: this.id, name: this.name, game: this.game, strategy: this.strategy, strategies: this.strategies, status: this.status, mode: this.mode, target: this.target, filterMode: this.filterMode, patternSize: this.patternSize, lastPatternAnalysisTime: this.lastPatternAnalysisTime, telegram: { ...this.telegram, message: { ...(this.telegram.message || {}) } }, lastHeartbeat: this.lastHeartbeat, stats: { ...this.stats }, lastResult: this.lastResult, lastSignal: this.lastSignal, currentSignal: this.currentSignal, diagnostic: { ...this.diagnostic }, signalFlow: { ...this.signalFlow }, logs: [...this.logs], signalHistory: [...this.signalHistory], minimumConfidence: this.minimumConfidence, minScore: this.minScore, intervalMin: this.intervalMin, gale: { ...this.gale }, resultsToAnalyze: this.resultsToAnalyze, confirmations: this.confirmations, strategyIndex: this.strategyIndex, usedPatterns: JSON.parse(JSON.stringify(this.usedPatterns)), startedAt: this.startedAt, strategyConfig: JSON.parse(JSON.stringify(this.strategyConfig || {})), greenProtection: this.greenProtection, filters: this.filters, galeByColor: { ...this.galeByColor }, autoPause: this.autoPause };
   }
 
   toJSON() {
-    return { id: this.id, name: this.name, game: this.game, strategy: this.strategy, strategies: this.strategies, status: this.status, mode: this.mode, target: this.target, filterMode: this.filterMode, patternSize: this.patternSize, lastPatternAnalysisTime: this.lastPatternAnalysisTime, history: this.history.slice(0, 200), resultsToAnalyze: this.resultsToAnalyze, minimumConfidence: this.minimumConfidence, minScore: this.minScore, confirmations: this.confirmations, intervalMin: this.intervalMin, galeMax: this.gale.max, telegram: { ...this.telegram, message: { ...(this.telegram.message || {}) } }, stats: this.stats, lastHeartbeat: this.lastHeartbeat, lastResult: this.lastResult, lastSignal: this.lastSignal, currentSignal: this.currentSignal, galeCount: this.galeCount, lastSignalTime: this.lastSignalTime, diagnostic: this.diagnostic, signalFlow: this.signalFlow, logs: this.logs, signalHistory: this.signalHistory, strategyIndex: this.strategyIndex, usedPatterns: this.usedPatterns, startedAt: this.startedAt, strategyConfig: this.strategyConfig || {}, greenProtection: this.greenProtection, filters: this.filters, galeByColor: this.galeByColor, autoPause: this.autoPause };
+    return { id: this.id, name: this.name, game: this.game, strategy: this.strategy, strategies: this.strategies, status: this.status, mode: this.mode, target: this.target, filterMode: this.filterMode, patternSize: this.patternSize, lastPatternAnalysisTime: this.lastPatternAnalysisTime, history: this.history.slice(0, 400), resultsToAnalyze: this.resultsToAnalyze, minimumConfidence: this.minimumConfidence, minScore: this.minScore, confirmations: this.confirmations, intervalMin: this.intervalMin, galeMax: this.gale.max, telegram: { ...this.telegram, message: { ...(this.telegram.message || {}) } }, stats: this.stats, lastHeartbeat: this.lastHeartbeat, lastResult: this.lastResult, lastSignal: this.lastSignal, currentSignal: this.currentSignal, galeCount: this.galeCount, lastSignalTime: this.lastSignalTime, diagnostic: this.diagnostic, signalFlow: this.signalFlow, logs: this.logs, signalHistory: this.signalHistory, strategyIndex: this.strategyIndex, usedPatterns: this.usedPatterns, startedAt: this.startedAt, strategyConfig: this.strategyConfig || {}, greenProtection: this.greenProtection, filters: this.filters, galeByColor: this.galeByColor, autoPause: this.autoPause };
   }
 }

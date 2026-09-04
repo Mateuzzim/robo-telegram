@@ -17,27 +17,33 @@ const Filters = {
     const len = results.length;
     const counts = {};
     results.forEach(r => { counts[r] = (counts[r] || 0) + 1; });
-    const recent10 = results.slice(-10);
-    const recent30 = results.slice(-30);
+    const recent10 = results.slice(0, 10);
+    const recent30 = results.slice(0, 30);
     const countsRecent10 = {};
     recent10.forEach(r => { countsRecent10[r] = (countsRecent10[r] || 0) + 1; });
     const countsRecent30 = {};
     recent30.forEach(r => { countsRecent30[r] = (countsRecent30[r] || 0) + 1; });
     const lastSeen = {};
-    results.forEach((r, i) => { lastSeen[r] = len - 1 - i; });
-    const streaks = {};
-    let currentStreak = 0;
-    let lastColor = null;
-    results.forEach(r => {
-      if (r === lastColor) { currentStreak++; } else { currentStreak = 1; lastColor = r; }
-      streaks[r] = currentStreak;
+    results.forEach((r, i) => {
+      if (lastSeen[r] === undefined) lastSeen[r] = i;
     });
+    const streaks = {};
+    const currentColor = results[0];
+    if (currentColor) {
+      let currentStreak = 0;
+      for (const r of results) {
+        if (r !== currentColor) break;
+        currentStreak++;
+      }
+      streaks[currentColor] = currentStreak;
+    }
     const entropy = this.calcEntropy(results);
     const volatility = this.calcVolatility(results);
     return { results, len, counts, recent10, recent30, countsRecent10, countsRecent30, lastSeen, streaks, entropy, volatility };
   },
 
   calcEntropy(arr) {
+    if (!arr.length) return 0;
     const counts = {};
     arr.forEach(r => { counts[r] = (counts[r] || 0) + 1; });
     const len = arr.length;
@@ -51,8 +57,8 @@ const Filters = {
 
   calcVolatility(arr) {
     if (arr.length < 10) return 0;
-    const recent = arr.slice(-10);
-    const older = arr.slice(-20, -10);
+    const recent = arr.slice(0, 10);
+    const older = arr.slice(10, 20);
     if (older.length === 0) return 0;
     const freqRecent = {};
     recent.forEach(r => { freqRecent[r] = (freqRecent[r] || 0) + 1; });
@@ -97,7 +103,7 @@ const Filters = {
       const positions = [];
       ctx.results.forEach((r, i) => { if (r === c.color) positions.push(i); });
       if (positions.length < 2) return true;
-      const lastTwo = positions.slice(-2);
+      const lastTwo = positions.slice(0, 2);
       const dist = lastTwo[1] - lastTwo[0];
       return dist > 1;
     });
@@ -114,15 +120,15 @@ const Filters = {
   tendencia(candidates, ctx) {
     return candidates.filter(c => {
       const recent = ctx.recent10.filter(r => r === c.color).length;
-      const older = ctx.results.slice(-20, -10).filter(r => r === c.color).length;
+      const older = ctx.results.slice(10, 20).filter(r => r === c.color).length;
       return recent >= older;
     });
   },
 
   quebraTendencia(candidates, ctx) {
     return candidates.filter(c => {
-      const recent5 = ctx.results.slice(-5).filter(r => r === c.color).length;
-      const recent10 = ctx.results.slice(-10).filter(r => r === c.color).length;
+      const recent5 = ctx.results.slice(0, 5).filter(r => r === c.color).length;
+      const recent10 = ctx.results.slice(0, 10).filter(r => r === c.color).length;
       const rate5 = recent5 / 5;
       const rate10 = recent10 / 10;
       return !(rate5 < rate10 * 0.5);
@@ -131,7 +137,7 @@ const Filters = {
 
   alternancia(candidates, ctx) {
     return candidates.filter(c => {
-      const last5 = ctx.results.slice(-5);
+      const last5 = ctx.results.slice(0, 5);
       let alternations = 0;
       for (let i = 1; i < last5.length; i++) {
         if (last5[i] !== last5[i - 1]) alternations++;
@@ -165,9 +171,9 @@ const Filters = {
     return candidates.filter(c => {
       const len = ctx.results.length;
       if (len < 10) return true;
-      const recent = ctx.results.slice(-5).join(',');
+      const recent = ctx.results.slice(0, 5).join(',');
       let occurrences = 0;
-      for (let i = 0; i < len - 5; i++) {
+      for (let i = 1; i <= len - 5; i++) {
         const window = ctx.results.slice(i, i + 5).join(',');
         if (window === recent) occurrences++;
       }
@@ -177,14 +183,14 @@ const Filters = {
 
   transicao(candidates, ctx) {
     return candidates.filter(c => {
-      const last = ctx.results[ctx.len - 1];
+      const last = ctx.results[0];
       if (!last) return true;
       let transFromLast = 0;
       let totalFromLast = 0;
-      for (let i = 0; i < ctx.len - 1; i++) {
+      for (let i = 1; i < ctx.len; i++) {
         if (ctx.results[i] === last) {
           totalFromLast++;
-          if (ctx.results[i + 1] === c.color) transFromLast++;
+          if (ctx.results[i - 1] === c.color) transFromLast++;
         }
       }
       if (totalFromLast === 0) return true;
@@ -262,16 +268,17 @@ const Filters = {
 
   cooldownSinal(candidates, ctx, robot) {
     const cooldown = robot.intervalMin || 60;
-    const lastSignal = robot._lastSignalTime || 0;
+    const lastSignal = robot.lastSignalTime || 0;
     const now = Date.now();
     if (now - lastSignal < cooldown * 1000) return [];
     return candidates;
   },
 
   posWin(candidates, ctx, robot) {
-    if (!robot._lastResult) return candidates;
-    if (robot._lastResult === 'win') {
-      const lastWinTime = robot._lastWinTime || 0;
+    const last = Array.isArray(robot.signalHistory) ? robot.signalHistory[robot.signalHistory.length - 1] : null;
+    if (!last || last.type !== 'win') return candidates;
+    {
+      const lastWinTime = last.time || 0;
       const now = Date.now();
       if (now - lastWinTime < 30000) return [];
     }
@@ -279,9 +286,10 @@ const Filters = {
   },
 
   posLoss(candidates, ctx, robot) {
-    if (!robot._lastResult) return candidates;
-    if (robot._lastResult === 'loss') {
-      const lastLossTime = robot._lastLossTime || 0;
+    const last = Array.isArray(robot.signalHistory) ? robot.signalHistory[robot.signalHistory.length - 1] : null;
+    if (!last || last.type !== 'loss') return candidates;
+    {
+      const lastLossTime = last.time || 0;
       const now = Date.now();
       if (now - lastLossTime < 60000) return [];
     }
@@ -290,7 +298,7 @@ const Filters = {
 
   lossConsecutivo(candidates, ctx, robot) {
     const maxLosses = robot.gale?.max || 2;
-    const consecutiveLosses = robot._consecutiveLosses || 0;
+    const consecutiveLosses = Math.max(0, -(robot.stats?.currentStreak || 0));
     if (consecutiveLosses >= maxLosses) return [];
     return candidates;
   },

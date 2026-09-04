@@ -1582,9 +1582,20 @@ const AnaliseEngine = (() => {
 
   const ALL_ANALISES = ['historico', 'estatistica', 'padroes', 'previsao', 'temporal', 'probabilidade', 'tendencia', 'sequencia', 'predAvancada', 'anomalias', 'confluenciaIA', 'matrizTransicao', 'entropia', 'algoritmoGenetico', 'multidimensional'];
 
+  function normalizeStoredData(raw) {
+    if (Array.isArray(raw)) {
+      return raw.reduce((acc, bot) => {
+        if (bot && bot.id) acc[bot.id] = bot;
+        return acc;
+      }, {});
+    }
+    return raw && typeof raw === 'object' ? raw : {};
+  }
+
   function migrateOldData() {
-    const data = Store.get(STORAGE_KEY) || {};
-    let changed = false;
+    const raw = Store.get(STORAGE_KEY);
+    const data = normalizeStoredData(raw);
+    let changed = Array.isArray(raw);
     Object.entries(data).forEach(([id, config]) => {
       if (!config.analises) { config.analises = [...ALL_ANALISES]; changed = true; }
       if (!config.analiseOrder) { config.analiseOrder = [...(config.analises || ALL_ANALISES)]; changed = true; }
@@ -1615,7 +1626,7 @@ const AnaliseEngine = (() => {
 
   function loadFromStorage() {
     migrateOldData();
-    const data = Store.get(STORAGE_KEY) || {};
+    const data = normalizeStoredData(Store.get(STORAGE_KEY));
     Object.entries(data).forEach(([id, config]) => {
       const existing = bots.get(id);
       bots.set(id, {
@@ -1638,7 +1649,7 @@ const AnaliseEngine = (() => {
   }
 
   function saveToStorage() {
-    const existing = Store.get(STORAGE_KEY) || {};
+    const existing = normalizeStoredData(Store.get(STORAGE_KEY));
     const data = {};
     bots.forEach((bot, id) => {
       const savedCfg = (existing[id] && existing[id].config) || {};
@@ -1700,13 +1711,19 @@ const AnaliseEngine = (() => {
       if (!bot || bot.status !== 'online') return;
 
       const storageKey = `historico-${bot.game}-v1`;
-      const allResults = localStorage.getItem(storageKey);
-      const parsed = allResults ? JSON.parse(allResults) : [];
+      let parsed = [];
+      try {
+        const allResults = localStorage.getItem(storageKey);
+        parsed = allResults ? JSON.parse(allResults) : [];
+        if (!Array.isArray(parsed)) parsed = [];
+      } catch {
+        parsed = [];
+      }
       const results = parsed.slice(0, bot.historico);
 
       if (results.length < 10) return;
 
-      const allBots = Store.get(STORAGE_KEY) || {};
+      const allBots = normalizeStoredData(Store.get(STORAGE_KEY));
       if (allBots[id] && allBots[id].config) {
         bot.config = allBots[id].config;
       }

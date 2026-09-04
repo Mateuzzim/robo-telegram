@@ -51,6 +51,8 @@
   .perf-metric .perf-sub{font-size:11px;color:var(--text3);margin-top:2px}
   @keyframes barGrow{from{width:0}to{width:var(--w)}}
   .chart-bar-fill{animation:barGrow .8s ease forwards}
+  @keyframes strategyPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.05)}}
+  .strategy-active{animation:strategyPulse 1.2s infinite}
 </style>
 </head>
 <body>
@@ -201,7 +203,11 @@
     <div style="margin-top:14px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)">
         <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Filtros de Qualidade</div>
-        <button class="btn btn-sm btn-blue" onclick="suggestFilters()" style="font-size:10px;padding:4px 10px">Sugerir Filtros</button>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button class="btn btn-sm btn-blue" onclick="toggleAllFilters(true)" style="font-size:10px;padding:4px 10px">Marcar todos</button>
+          <button class="btn btn-sm btn-ghost" onclick="toggleAllFilters(false)" style="font-size:10px;padding:4px 10px">Desmarcar todos</button>
+          <button class="btn btn-sm btn-blue" onclick="suggestFilters()" style="font-size:10px;padding:4px 10px">Sugerir Filtros</button>
+        </div>
       </div>
       <div class="strategy-grid" id="fFilters" style="max-height:220px">
         <div class="strategy-item"><label><input type="checkbox" value="frequencia"><span>Frequencia</span></label><span class="strat-tag">STATS</span></div>
@@ -235,6 +241,11 @@
         <div class="strategy-item"><label><input type="checkbox" value="qualidadeAmostra"><span>Qualidade Amostra</span></label><span class="strat-tag">QUALITY</span></div>
         <div class="strategy-item"><label><input type="checkbox" value="antiOverfitting"><span>Anti-Overfitting</span></label><span class="strat-tag">QUALITY</span></div>
       </div>
+    </div>
+
+    <div id="lossPatternsSection" style="margin-top:14px;display:none">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)">🛡️ Padroes de LOSS Detectados</div>
+      <div id="lossPatternsContent" style="max-height:200px;overflow-y:auto;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px"></div>
     </div>
 
     <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px">
@@ -412,7 +423,35 @@ function showEdit(id){
   document.getElementById('fGaleBlue').value = galeByColor.blue ?? 5;
   document.getElementById('fGaleGreen').value = galeByColor.green ?? 10;
   updateGaleByColorVisibility();
+  renderLossPatterns(robot);
   document.getElementById('modal').style.display='flex';
+}
+function renderLossPatterns(robot) {
+  const section = document.getElementById('lossPatternsSection');
+  const content = document.getElementById('lossPatternsContent');
+  if (!robot || typeof robot.analyzeLossPatterns !== 'function') { section.style.display = 'none'; return; }
+  const patterns = robot.analyzeLossPatterns();
+  const losses = (robot.signalHistory || []).filter(h => h.type === 'loss').length;
+  if (patterns.length === 0 || losses < 2) {
+    section.style.display = 'none';
+    return;
+  }
+  section.style.display = 'block';
+  const colorMap = { RED: '🔴', BLACK: '⚫', GREY: '⚫', GREEN: '🟢', BLUE: '🔵', PRETO: '⚫', VERMELHO: '🔴', VERDE: '🟢', AZUL: '🔵' };
+  let html = '<div style="font-size:10px;color:var(--text3);margin-bottom:8px">' + losses + ' losses analisados | ' + patterns.length + ' padroes encontrados</div>';
+  for (const p of patterns.slice(0, 5)) {
+    const dangerColor = p.dangerScore >= 75 ? 'var(--red)' : p.dangerScore >= 50 ? 'var(--yellow)' : 'var(--text3)';
+    html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;margin-bottom:6px">';
+    html += '<div style="display:flex;gap:2px;font-size:12px">' + (p.commonSequence || '').split('-').map(c => colorMap[c] || c).join(' ') + '</div>';
+    html += '<div style="flex:1;font-size:10px">';
+    html += '<span style="color:var(--text3)">Alvo:</span> <strong>' + (colorMap[p.target] || p.target) + '</strong>';
+    html += ' <span style="color:var(--text3)">perdeu para</span> <strong>' + (colorMap[p.result] || p.result) + '</strong>';
+    html += ' <span style="color:var(--text3)">' + p.count + 'x</span>';
+    html += '</div>';
+    html += '<div style="font-size:10px;font-weight:700;color:' + dangerColor + '">' + p.dangerScore + '%</div>';
+    html += '</div>';
+  }
+  content.innerHTML = html;
 }
 function getSelectedStrategies() {
   const checkboxes = document.querySelectorAll('#fStrategies input[type="checkbox"]:checked');
@@ -436,6 +475,11 @@ function setSelectedFilters(filters) {
   checkboxes.forEach(cb => {
     cb.checked = filters.includes(cb.value);
   });
+}
+
+function toggleAllFilters(checked) {
+  const checkboxes = document.querySelectorAll('#fFilters input[type="checkbox"]');
+  checkboxes.forEach(cb => { cb.checked = checked; });
 }
 
 function suggestFilters() {
@@ -647,14 +691,18 @@ function loadRobots(){
   };
   
   document.getElementById('robotsTable').innerHTML = robots.map(r => {
+    const robotId = escapeAttr(r.id);
+    const robotIdJs = escapeAttr(escapeJsString(r.id));
     const conf = r.diagnostic?.confidence || 0;
     const confColor = conf >= 80 ? 'var(--green)' : conf >= 60 ? 'var(--yellow)' : 'var(--red)';
     const wins = r.stats?.wins || 0;
     const losses = r.stats?.losses || 0;
-    const robotStrategies = r.strategies || [r.strategy || 'todas'];
-    const strategyTags = robotStrategies.map(s => 
-      `<span style="display:inline-block;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700;background:${stratColors[s] || 'var(--bg)'}22;color:${stratColors[s] || 'var(--text3)'};border:1px solid ${stratColors[s] || 'var(--border)'}44">${stratLabels[s] || s}</span>`
-    ).join(' ');
+    const robotStrategies = Array.isArray(r.strategies) ? r.strategies : [r.strategy || 'todas'];
+    const activeStrategy = r.currentSignal?.strategy || r.lastSignal?.strategy || null;
+    const strategyTags = robotStrategies.map(s => {
+      const activeClass = (s === activeStrategy) ? ' strategy-active' : '';
+      return `<span class="${activeClass}" style="display:inline-block;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700;background:${stratColors[s] || 'var(--bg)'}22;color:${stratColors[s] || 'var(--text3)'};border:1px solid ${stratColors[s] || 'var(--border)'}44">${stratLabels[s] || s}</span>`;
+    }).join(' ');
     
     return `<tr>
       <td>
@@ -662,7 +710,7 @@ function loadRobots(){
           <span class="live-dot ${r.status==='online'?'on':'off'}"></span>
           <div>
             <strong style="font-size:12px">${escapeHtml(r.name)}</strong>
-            <div style="font-size:10px;color:var(--text3)">${r.game} &bull; ${r.id}</div>
+            <div style="font-size:10px;color:var(--text3)">${escapeHtml(r.game)} &bull; ${robotId}</div>
           </div>
         </div>
       </td>
@@ -679,16 +727,16 @@ function loadRobots(){
       <td style="font-size:11px;color:var(--text3)">${r.intervalMin||60}s</td>
       <td style="font-size:11px;color:var(--text3)">${r.gale?.max||0}</td>
       <td style="display:flex;gap:3px;align-items:center;flex-wrap:wrap">
-        <a href="robo.html?id=${r.id}" class="btn btn-sm btn-blue">Abrir</a>
-        <button class="btn btn-sm btn-yellow" onclick="showEdit('${r.id}')">Editar</button>
+        <a href="robo.html?id=${encodeURIComponent(r.id)}" class="btn btn-sm btn-blue">Abrir</a>
+        <button class="btn btn-sm btn-yellow" onclick="showEdit('${robotIdJs}')">Editar</button>
         ${r.status==='offline'
-          ? `<button class="btn btn-sm btn-green" onclick="start('${r.id}')">Play</button>`
-          : `<button class="btn btn-sm btn-red" onclick="stop('${r.id}')">Stop</button>`}
-        <button class="btn btn-sm btn-cyan" onclick="analyzeRobotAuto('${r.id}')" title="Analise Automatica">Analise</button>
-        <button class="btn btn-sm btn-purple" onclick="resetTelegramMessages('${r.id}')" title="Resetar mensagens do Telegram">Reset TG</button>
-        <button class="btn btn-sm btn-orange" onclick="showResetStats('${r.id}')" title="Resetar estatisticas">Reset Stats</button>
-        <button class="btn btn-sm btn-blue" onclick="showSignalHistory('${r.id}')" title="Historico de sinais">Historico</button>
-        <button class="btn btn-sm btn-red" onclick="deleteRobot('${r.id}')">Del</button>
+          ? `<button class="btn btn-sm btn-green" onclick="start('${robotIdJs}')">Play</button>`
+          : `<button class="btn btn-sm btn-red" onclick="stop('${robotIdJs}')">Stop</button>`}
+        <button class="btn btn-sm btn-cyan" onclick="analyzeRobotAuto('${robotIdJs}')" title="Analise Automatica">Analise</button>
+        <button class="btn btn-sm btn-purple" onclick="resetTelegramMessages('${robotIdJs}')" title="Resetar mensagens do Telegram">Reset TG</button>
+        <button class="btn btn-sm btn-orange" onclick="showResetStats('${robotIdJs}')" title="Resetar estatisticas">Reset Stats</button>
+        <button class="btn btn-sm btn-blue" onclick="showSignalHistory('${robotIdJs}')" title="Historico de sinais">Historico</button>
+        <button class="btn btn-sm btn-red" onclick="deleteRobot('${robotIdJs}')">Del</button>
       </td>
     </tr>`;
   }).join('') || '<tr><td colspan="10" style="color:var(--text3);text-align:center;padding:20px">Nenhum robo criado</td></tr>';
@@ -960,9 +1008,103 @@ function rerunAutoAnalysis() {
   setTimeout(() => runAutoAnalysis(robot, history), 300);
 }
 
+function normalizeAutoColor(game, color) {
+  const c = String(color || '').toUpperCase();
+  if (game === 'wheel' && (c === 'BLACK' || c === 'GRAY')) return 'GREY';
+  if (game === 'double' && (c === 'GREY' || c === 'GRAY')) return 'BLACK';
+  return c;
+}
+
+function normalizeAutoHistory(robot, history) {
+  return (Array.isArray(history) ? history : []).map(item => {
+    if (robot && typeof robot.normalizeResult === 'function') return robot.normalizeResult(item);
+    return {
+      color: normalizeAutoColor(robot?.game || 'wheel', item?.color ?? item?.cellColor ?? item?.result),
+      number: item?.number ?? item?.cellIndex,
+      multiplier: item?.multiplier ?? null
+    };
+  }).filter(item => item.color);
+}
+
+function getGamePayoutProfile(game) {
+  const raw = game === 'double'
+    ? [
+        { color: 'RED', label: 'Vermelho', payout: 2 },
+        { color: 'BLACK', label: 'Preto', payout: 2 },
+        { color: 'GREEN', label: 'Verde', payout: 14 }
+      ]
+    : [
+        { color: 'GREY', label: 'Preto', payout: 2 },
+        { color: 'RED', label: 'Vermelho', payout: 3 },
+        { color: 'BLUE', label: 'Azul', payout: 5 },
+        { color: 'GREEN', label: 'Verde', payout: 50 }
+      ];
+  const totalWeight = raw.reduce((sum, item) => sum + (1 / item.payout), 0);
+  return raw.map(item => ({
+    ...item,
+    expected: (1 / item.payout) / totalWeight
+  }));
+}
+
+function getAutoColorCss(color) {
+  const c = String(color || '').toUpperCase();
+  if (c === 'RED') return 'var(--red)';
+  if (c === 'GREEN') return 'var(--green)';
+  if (c === 'BLUE') return 'var(--blue)';
+  if (c === 'BLACK' || c === 'GREY') return '#8b93a7';
+  return 'var(--text3)';
+}
+
+function buildPayoutTargetAnalysis(robot, history, strategyResults) {
+  const profile = getGamePayoutProfile(robot.game);
+  const maxExpected = Math.max(...profile.map(p => p.expected));
+  const total = history.length || 1;
+  return profile.map(p => {
+    const observed = history.filter(h => normalizeAutoColor(robot.game, h.color) === p.color).length;
+    const observedRate = observed / total;
+    const targeted = strategyResults.filter(r => normalizeAutoColor(robot.game, r.target) === p.color);
+    const topTargeted = targeted.slice(0, 5);
+    const avgStrategy = topTargeted.length
+      ? Math.round(topTargeted.reduce((sum, r) => sum + (r.confidence || 0), 0) / topTargeted.length)
+      : 0;
+    const expectedScore = Math.round((p.expected / maxExpected) * 100);
+    const lift = Math.round((observedRate - p.expected) * 100);
+    const payoutRisk = Math.round((1 - (p.expected / maxExpected)) * 35);
+    const score = Math.max(0, Math.min(100, Math.round(avgStrategy * 0.55 + expectedScore * 0.35 + Math.max(-15, lift) * 0.25 - payoutRisk * 0.2)));
+    return {
+      ...p,
+      observed,
+      observedRate,
+      expectedScore,
+      lift,
+      strategyCount: targeted.length,
+      topStrategies: topTargeted,
+      score
+    };
+  }).sort((a, b) => b.score - a.score);
+}
+
+function getSuggestedStrategies(strategyResults) {
+  const matched = strategyResults.filter(r => r.matched && r.score >= 45);
+  const base = matched.length ? matched : strategyResults.filter(r => r.score >= 45);
+  const unique = [];
+  base.sort((a, b) => b.score - a.score).forEach(r => {
+    if (r.name && !unique.includes(r.name)) unique.push(r.name);
+  });
+  if (unique.length < 3) {
+    strategyResults.sort((a, b) => b.score - a.score).forEach(r => {
+      if (r.name && !unique.includes(r.name)) unique.push(r.name);
+    });
+  }
+  return unique.slice(0, 5);
+}
+
 function runAutoAnalysis(robot, history) {
   const target = robot.target || { color: 'any' };
   const patternSize = robot.patternSize || 3;
+  const normalizedHistory = normalizeAutoHistory(robot, history);
+  const payoutProfile = getGamePayoutProfile(robot.game);
+  const maxExpected = Math.max(...payoutProfile.map(p => p.expected));
   const results = [];
   const applicableStrategies = ALL_STRATEGIES.filter(s => s !== 'todas');
 
@@ -970,31 +1112,45 @@ function runAutoAnalysis(robot, history) {
     try {
       const stratFn = RobotEngine.strategies[stratName];
       if (!stratFn) continue;
-      const slice = history.slice(0, Math.min(500, history.length));
+      const slice = normalizedHistory.slice(0, Math.min(500, normalizedHistory.length));
       const result = stratFn(slice, target, patternSize);
+      const normalizedTarget = normalizeAutoColor(robot.game, result.target);
+      const profile = payoutProfile.find(p => p.color === normalizedTarget);
+      const expectedWeight = profile ? profile.expected / maxExpected : 0.5;
+      const payoutPenalty = profile ? Math.round((1 - expectedWeight) * 18) : 8;
+      const observedRate = profile && normalizedHistory.length
+        ? normalizedHistory.filter(h => normalizeAutoColor(robot.game, h.color) === profile.color).length / normalizedHistory.length
+        : 0;
+      const liftBonus = profile ? Math.max(-8, Math.min(10, Math.round((observedRate - profile.expected) * 100))) : 0;
+      const adjustedScore = Math.max(0, Math.min(100, Math.round((result.confidence || 0) - payoutPenalty + liftBonus)));
       results.push({
         name: stratName,
         matched: result.matched,
         confidence: result.confidence || 0,
-        target: result.target,
+        target: normalizedTarget || result.target,
+        payout: profile?.payout || null,
+        expectedRate: profile?.expected || null,
+        observedRate,
         reason: result.reason || '',
-        score: result.confidence || 0
+        score: adjustedScore
       });
     } catch (e) {
       results.push({ name: stratName, matched: false, confidence: 0, target: null, reason: 'Erro: ' + e.message, score: 0 });
     }
   }
 
-  results.sort((a, b) => b.confidence - a.confidence);
+  results.sort((a, b) => b.score - a.score);
   const bestMatched = results.filter(r => r.matched);
   const best = bestMatched.length > 0 ? bestMatched[0] : null;
-  const allScores = results.map(r => r.confidence);
+  const allScores = results.map(r => r.score);
   const avgScore = allScores.length ? Math.round(allScores.reduce((a, b) => a + b, 0) / allScores.length) : 0;
   const maxScore = Math.max(...allScores);
   const matchedCount = results.filter(r => r.matched).length;
+  const targetAnalyses = buildPayoutTargetAnalysis(robot, normalizedHistory, results);
+  const suggestedStrategies = getSuggestedStrategies(results);
 
   const filterResults = [];
-  const filterColors = history.map(h => h.result || h.color || h);
+  const filterColors = normalizedHistory.map(h => h.color);
   const filterContext = buildFilterContext(filterColors);
   for (const fName of ALL_FILTERS) {
     try {
@@ -1018,9 +1174,9 @@ function runAutoAnalysis(robot, history) {
   const recommendedFilters = filterResults.filter(f => f.isRelevant && f.score >= 55).map(f => f.name);
   const topFilters = filterResults.slice(0, 10);
 
-  const bestConfidence = best ? best.confidence : 0;
+  const bestConfidence = best ? best.score : 0;
   const suggestedConf = Math.min(95, Math.max(50, bestConfidence + 5));
-  const suggestedResults = Math.max(30, Math.min(80, history.length * 0.6));
+  const suggestedResults = Math.max(30, Math.min(80, normalizedHistory.length * 0.6));
   const suggestedMinScore = Math.min(75, Math.max(45, bestConfidence - 10));
 
   const stratLabels = {
@@ -1052,9 +1208,9 @@ function runAutoAnalysis(robot, history) {
 
   const totalAnalyzed = applicableStrategies.length + ALL_FILTERS.length;
 
-  const excellentCount = results.filter(r => r.confidence >= 75).length;
-  const goodCount = results.filter(r => r.confidence >= 50 && r.confidence < 75).length;
-  const weakCount = results.filter(r => r.confidence < 50).length;
+  const excellentCount = results.filter(r => r.score >= 75).length;
+  const goodCount = results.filter(r => r.score >= 50 && r.score < 75).length;
+  const weakCount = results.filter(r => r.score < 50).length;
   const projWinRate = Math.min(92, Math.round(bestConfidence * 0.85 + recommendedFilters.length * 0.5));
   const projROI = Math.round((projWinRate - 50) * 0.8);
   const projDailySignals = Math.max(2, Math.round(1440 / (robot.intervalMin || 60) * (bestConfidence / 100) * 0.3));
@@ -1105,9 +1261,34 @@ function runAutoAnalysis(robot, history) {
       </div>
       <div class="perf-metric">
         <div class="perf-value" style="color:var(--cyan,#06b6d4)">${bestConfidence}%</div>
-        <div class="perf-label">Confianca Max</div>
-        <div class="perf-sub">melhor estrategia</div>
+        <div class="perf-label">Score Ajustado</div>
+        <div class="perf-sub">pagamento + historico</div>
       </div>
+    </div>
+
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;padding-bottom:4px;border-bottom:1px solid var(--border)">Analise por Cor / Pagamento</div>
+    <div style="display:grid;grid-template-columns:repeat(${robot.game === 'double' ? 3 : 4},1fr);gap:8px;margin-bottom:16px">
+      ${targetAnalyses.map(t => {
+        const color = getAutoColorCss(t.color);
+        const observedPct = Math.round(t.observedRate * 100);
+        const expectedPct = Math.round(t.expected * 100);
+        const topNames = t.topStrategies.slice(0, 2).map(s => stratLabels[s.name] || s.name).join(', ') || 'Sem estrategia forte';
+        return `
+          <div style="background:var(--bg);border:1px solid ${color};border-radius:8px;padding:10px">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:6px">
+              <strong style="font-size:12px;color:${color}">${t.label}</strong>
+              <span style="font-size:10px;color:var(--text3)">${t.payout}X</span>
+            </div>
+            <div style="font-size:22px;font-weight:800;color:${color};line-height:1">${t.score}%</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:5px">Saiu ${t.observed}x (${observedPct}%)</div>
+            <div style="font-size:10px;color:var(--text3)">Esperado aprox.: ${expectedPct}%</div>
+            <div style="height:5px;background:var(--bg3);border-radius:99px;overflow:hidden;margin:8px 0">
+              <div style="height:100%;width:${Math.min(100, observedPct)}%;background:${color}"></div>
+            </div>
+            <div style="font-size:10px;color:var(--text2);line-height:1.35">${topNames}</div>
+          </div>
+        `;
+      }).join('')}
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">

@@ -4,16 +4,24 @@ const ChartService = (() => {
   let chartTimer = null;
   let canvas = null;
   let ctx = null;
+  let timersEnabled = true;
 
-  function init() {
+  function init(options = {}) {
+    timersEnabled = options.startTimer !== false;
+    ensureCanvas();
+    if (timersEnabled) startChartTimer();
+  }
+
+  function ensureCanvas() {
+    if (canvas && ctx) return;
     canvas = document.createElement('canvas');
     canvas.width = 800;
     canvas.height = 500;
     ctx = canvas.getContext('2d');
-    startChartTimer();
   }
 
   function startChartTimer() {
+    if (!timersEnabled) return;
     if (chartTimer) clearInterval(chartTimer);
     const config = getChartConfig();
     if (!config.enabled || !config.channelId) return;
@@ -28,7 +36,7 @@ const ChartService = (() => {
 
   function saveChartConfig(config) {
     localStorage.setItem(CHART_STORAGE_KEY, JSON.stringify(config));
-    startChartTimer();
+    if (timersEnabled) startChartTimer();
   }
 
   function loadHistory(game) {
@@ -76,6 +84,7 @@ const ChartService = (() => {
   }
 
   function generateChart() {
+    ensureCanvas();
     const robots = RobotEngine.getAllRobots().filter(r => r.status === 'online');
     const wheelResults = loadHistory('wheel');
     const doubleResults = loadHistory('double');

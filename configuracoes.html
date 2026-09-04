@@ -336,7 +336,9 @@ function renderChannels() {
   const el = document.getElementById('channelsList');
   if (!channels.length) { el.innerHTML = '<div style="font-size:13px;color:var(--text3);padding:8px 0">Nenhum canal adicionado.</div>'; return; }
   el.innerHTML = channels.map(c => {
-    const linkedRobots = robots.filter(r => r.telegram?.channelId === c.id).map(r => r.name);
+    const linkedRobots = robots.filter(r => r.telegram?.channelId === c.id).map(r => escapeHtml(r.name));
+    const channelId = escapeAttr(c.id);
+    const channelIdJs = escapeAttr(escapeJsString(c.id));
     const usedBy = linkedRobots.length ? `<div class="ch-used">Usado por: ${linkedRobots.join(', ')}</div>` : '';
     const history = getSendHistory(c.id);
     const lastSend = history.length ? `<div class="ch-history">Ultimo envio: ${formatTime(history[0].time)}</div>` : '';
@@ -344,13 +346,13 @@ function renderChannels() {
     <div class="ch-item">
       <div>
         <span>${escapeHtml(c.name)}</span>
-        <div class="ch-id">${c.id}</div>
+        <div class="ch-id">${channelId}</div>
         ${usedBy}
         ${lastSend}
       </div>
       <div style="display:flex;gap:6px">
-        <button class="btn btn-sm btn-ghost" onclick="showEditChannel('${c.id}')">Editar</button>
-        <button class="btn btn-sm btn-ghost" onclick="removeChannel('${c.id}')">Remover</button>
+        <button class="btn btn-sm btn-ghost" onclick="showEditChannel('${channelIdJs}')">Editar</button>
+        <button class="btn btn-sm btn-ghost" onclick="removeChannel('${channelIdJs}')">Remover</button>
       </div>
     </div>`;
   }).join('');
@@ -366,16 +368,17 @@ function renderRobotLinks() {
     const pending = pendingLinks[r.id] || {};
     const current = pending.channelId !== undefined ? pending.channelId : (r.telegram?.channelId || '');
     const enabled = pending.enabled !== undefined ? pending.enabled : !!r.telegram?.enabled;
+    const robotId = escapeAttr(r.id);
     return `<div class="robot-link">
       <div>
         <strong style="font-size:13px">${escapeHtml(r.name)}</strong>
         <span style="font-size:11px;color:var(--text3);margin-left:8px">${r.game}</span>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
-        <label><input type="checkbox" id="tgEnabled_${r.id}" ${enabled ? 'checked' : ''} style="margin-right:4px">Ativar</label>
-        <select id="tgChannel_${r.id}">
+        <label><input type="checkbox" id="tgEnabled_${robotId}" ${enabled ? 'checked' : ''} style="margin-right:4px">Ativar</label>
+        <select id="tgChannel_${robotId}">
           <option value="">Sem canal</option>
-          ${channels.map(c => `<option value="${c.id}" ${current === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
+          ${channels.map(c => `<option value="${escapeAttr(c.id)}" ${current === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
         </select>
       </div>
     </div>`;
@@ -458,9 +461,10 @@ function exportRobots() {
     return data;
   });
   
-  let analysisData = [];
+  let analysisData = {};
   try {
-    analysisData = JSON.parse(localStorage.getItem('analise-bots-v1') || '[]');
+    analysisData = JSON.parse(localStorage.getItem('analise-bots-v1') || '{}');
+    if (!analysisData || typeof analysisData !== 'object' || Array.isArray(analysisData)) analysisData = {};
   } catch {}
   
   const exportData = {
@@ -482,7 +486,7 @@ function exportRobots() {
   URL.revokeObjectURL(url);
   
   el.className = 'test-result test-ok';
-  el.textContent = `Exportados: ${robots.length} robos, ${analysisData.length} analises.`;
+  el.textContent = `Exportados: ${robots.length} robos, ${Object.keys(analysisData).length} analises.`;
 }
 
 function showImportRobots() { document.getElementById('importRobotsForm').style.display = 'block'; }
@@ -511,16 +515,18 @@ function importRobots() {
         el.textContent = `Importados: ${imported} robos novos de ${data.robots.length} total.`;
       }
       
-      if (data.analysis && Array.isArray(data.analysis)) {
-        let existingAnalysis = [];
+      if (data.analysis && typeof data.analysis === 'object') {
+        let existingAnalysis = {};
         try {
-          existingAnalysis = JSON.parse(localStorage.getItem('analise-bots-v1') || '[]');
+          existingAnalysis = JSON.parse(localStorage.getItem('analise-bots-v1') || '{}');
+          if (!existingAnalysis || typeof existingAnalysis !== 'object' || Array.isArray(existingAnalysis)) existingAnalysis = {};
         } catch {}
         
         let importedAnalysis = 0;
-        data.analysis.forEach(bot => {
-          if (!existingAnalysis.find(b => b.id === bot.id)) {
-            existingAnalysis.push(bot);
+        const analysisEntries = Array.isArray(data.analysis) ? data.analysis.map(bot => [bot.id, bot]) : Object.entries(data.analysis);
+        analysisEntries.forEach(([id, bot]) => {
+          if (id && bot && !existingAnalysis[id]) {
+            existingAnalysis[id] = bot;
             importedAnalysis++;
           }
         });
