@@ -19,9 +19,13 @@
 <script src="telegram.js"></script>
 <script src="analise-engine.js"></script>
 <script src="analise-telegram.js"></script>
+<script src="news.js"></script>
+<script src="chart.js"></script>
 <script src="app.js"></script>
 <script>
 App.init();
+NewsService.init();
+ChartService.init();
 
 (function migrateWheelGreyToBlack() {
   const key = 'historico-wheel-v1';

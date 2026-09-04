@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>News - Feed em Tempo Real</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  body{background:var(--bg);margin:0;padding:0}
+  .news-header{padding:16px 20px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
+  .news-header h1{font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px}
+  .news-header h1 .dot-accent{width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  .news-filters{padding:12px 20px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap}
+  .news-filters select,.news-filters button{padding:5px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:11px;cursor:pointer}
+  .news-filters select:focus,.news-filters button:hover{border-color:var(--blue);outline:none}
+  .news-filters button.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+  .news-feed{padding:16px 20px;max-height:calc(100vh - 120px);overflow-y:auto}
+  .news-item{padding:12px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;margin-bottom:8px;animation:slideIn .3s ease}
+  @keyframes slideIn{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
+  .news-item-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+  .news-item-robot{font-weight:700;font-size:12px;display:flex;align-items:center;gap:6px}
+  .news-item-robot .robot-dot{width:6px;height:6px;border-radius:50%;display:inline-block}
+  .news-item-time{font-size:10px;color:var(--text3);font-family:monospace}
+  .news-item-type{font-size:10px;padding:2px 8px;border-radius:10px;font-weight:700;text-transform:uppercase;letter-spacing:.3px}
+  .news-item-type.signal{background:rgba(35,104,255,.15);color:var(--blue)}
+  .news-item-type.win{background:rgba(41,217,120,.15);color:var(--green)}
+  .news-item-type.loss{background:rgba(255,74,85,.15);color:var(--red)}
+  .news-item-type.gale{background:rgba(224,197,64,.15);color:var(--yellow)}
+  .news-item-type.started{background:rgba(41,217,120,.15);color:var(--green)}
+  .news-item-type.stopped{background:rgba(255,74,85,.15);color:var(--red)}
+  .news-item-type.info{background:rgba(35,104,255,.15);color:var(--blue)}
+  .news-item-type.analysis{background:rgba(168,85,247,.15);color:#a855f7}
+  .news-item-message{font-size:13px;line-height:1.5}
+  .news-item-stats{font-size:11px;color:var(--text3);margin-top:6px;display:flex;gap:12px}
+  .news-item-stats span{display:flex;align-items:center;gap:4px}
+  .news-empty{text-align:center;padding:60px 20px;color:var(--text3)}
+  .news-empty .icon{font-size:48px;margin-bottom:12px;opacity:.5}
+  .news-count{font-size:11px;color:var(--text3)}
+  .btn-clear{padding:5px 12px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text3);font-size:11px;cursor:pointer}
+  .btn-clear:hover{border-color:var(--red);color:var(--red)}
+  .live-indicator{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--green)}
+  .live-indicator .pulse{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 1.5s infinite}
+  .news-scoreboard{padding:16px 20px;background:var(--bg2);border-bottom:1px solid var(--border)}
+  .scoreboard-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px}
+  .scoreboard-card{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center;transition:all .2s}
+  .scoreboard-card:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.3)}
+  .scoreboard-icon{font-size:20px;margin-bottom:4px}
+  .scoreboard-value{font-size:24px;font-weight:800;line-height:1}
+  .scoreboard-label{font-size:10px;color:var(--text3);margin-top:4px;text-transform:uppercase;letter-spacing:.5px}
+  .scoreboard-card.green .scoreboard-value{color:var(--green)}
+  .scoreboard-card.red .scoreboard-value{color:var(--red)}
+  .scoreboard-card.blue .scoreboard-value{color:var(--blue)}
+  .scoreboard-card.yellow .scoreboard-value{color:var(--yellow)}
+  .scoreboard-details{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
+  .sb-robot{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 10px;display:flex;align-items:center;justify-content:space-between;font-size:11px}
+  .sb-robot-name{font-weight:700;display:flex;align-items:center;gap:6px}
+  .sb-robot-name .dot{width:6px;height:6px;border-radius:50%;display:inline-block}
+  .sb-robot-stats{display:flex;gap:8px;color:var(--text3)}
+  .sb-robot-stats .w{color:var(--green)}
+  .sb-robot-stats .l{color:var(--red)}
+  .sb-robot-stats .g{color:var(--yellow)}
+</style>
+</head>
+<body>
+<div class="news-header">
+  <h1><span class="dot-accent"></span> News - Tempo Real</h1>
+  <div style="display:flex;align-items:center;gap:12px">
+    <div class="live-indicator"><span class="pulse"></span> AO VIVO</div>
+    <span class="news-count" id="newsCount">0 notícias</span>
+    <button class="btn-clear" onclick="clearNews()">Limpar</button>
+  </div>
+</div>
+<div class="news-filters">
+  <select id="filterType" onchange="applyFilters()">
+    <option value="all">Todos os tipos</option>
+    <option value="started">Robôs Iniciados</option>
+    <option value="stopped">Robôs Parados</option>
+    <option value="analysis">📊 Análises</option>
+  </select>
+  <select id="filterGame" onchange="applyFilters()">
+    <option value="all">Todos os jogos</option>
+    <option value="wheel">Wheel</option>
+    <option value="double">Double</option>
+  </select>
+  <select id="filterRobot" onchange="applyFilters()">
+    <option value="all">Todos os robôs</option>
+  </select>
+  <button id="btnPause" onclick="togglePause()">Pausar</button>
+  <button onclick="toggleSummaryConfig()" style="margin-left:auto">⚙️ Config Resumo</button>
+  <button onclick="toggleAnalysisConfig()">📊 Config Análise</button>
+  <button onclick="toggleChartConfig()">📈 Config Gráfico</button>
+</div>
+<div style="padding:12px 20px;background:var(--bg3);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+  <label style="font-size:11px;color:var(--text);font-weight:bold">📡 Channel ID do Telegram:</label>
+  <input type="text" id="globalChannelId" placeholder="Ex: -1001234567890" oninput="saveGlobalChannelId()" style="padding:5px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:11px;width:250px">
+  <span style="font-size:10px;color:var(--text3)">Salva automaticamente. Compartilhado entre Resumo, Análise e Gráfico.</span>
+</div>
+<div id="summaryConfig" style="display:none;padding:12px 20px;background:var(--bg3);border-bottom:1px solid var(--border)">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <label style="font-size:11px;color:var(--text2)">📡 Resumo Automático p/ Telegram (a cada 4 min):</label>
+    <input type="checkbox" id="summaryEnabled" onchange="saveSummaryConfig()">
+    <input type="text" id="summaryChannelId" placeholder="Channel ID do Telegram" style="padding:5px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:11px;width:200px">
+    <button class="btn btn-sm btn-blue" onclick="testSummaryChannel()">Testar</button>
+    <button class="btn btn-sm btn-green" onclick="sendSummaryNow()">Enviar Agora</button>
+    <span id="summaryStatus" style="font-size:10px;color:var(--text3)"></span>
+  </div>
+</div>
+<div id="analysisConfig" style="display:none;padding:12px 20px;background:var(--bg3);border-bottom:1px solid var(--border)">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <label style="font-size:11px;color:var(--text2)">📊 Análise Automática p/ Telegram (a cada 20 seg):</label>
+    <input type="checkbox" id="analysisEnabled" onchange="saveAnalysisConfig()">
+    <input type="text" id="analysisChannelId" placeholder="Channel ID do Telegram" style="padding:5px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:11px;width:200px">
+    <label style="font-size:11px;color:var(--text3)"><input type="checkbox" id="analysisWheel" checked onchange="saveAnalysisConfig()"> Wheel</label>
+    <label style="font-size:11px;color:var(--text3)"><input type="checkbox" id="analysisDouble" checked onchange="saveAnalysisConfig()"> Double</label>
+    <button class="btn btn-sm btn-blue" onclick="testAnalysisChannel()">Testar</button>
+    <button class="btn btn-sm btn-green" onclick="sendAnalysisNow()">Enviar Agora</button>
+    <span id="analysisStatus" style="font-size:10px;color:var(--text3)"></span>
+  </div>
+  <div style="font-size:10px;color:var(--text3);margin-top:6px">
+    Envia: Distribuição, Streak, Atrasos, Histórico Recente, Padrões Detectados
+  </div>
+</div>
+<div id="chartConfig" style="display:none;padding:12px 20px;background:var(--bg3);border-bottom:1px solid var(--border)">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <label style="font-size:11px;color:var(--text2)">📈 Gráfico em Imagem p/ Telegram (a cada 30 seg):</label>
+    <input type="checkbox" id="chartEnabled" onchange="saveChartConfig()">
+    <input type="text" id="chartChannelId" placeholder="Channel ID do Telegram" style="padding:5px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:11px;width:200px">
+    <label style="font-size:11px;color:var(--text3)"><input type="checkbox" id="chartCaption" checked onchange="saveChartConfig()"> Legenda</label>
+    <button class="btn btn-sm btn-blue" onclick="testChartChannel()">Testar</button>
+    <button class="btn btn-sm btn-green" onclick="sendChartNow()">Enviar Agora</button>
+    <button class="btn btn-sm btn-ghost" onclick="previewChart()">👁️ Preview</button>
+    <span id="chartStatus" style="font-size:10px;color:var(--text3)"></span>
+  </div>
+  <div style="font-size:10px;color:var(--text3);margin-top:6px">
+    Envia: Gráfico com desempenho dos robôs, barras de aprovitamento, histórico Wheel e Double
+  </div>
+  <div id="chartPreview" style="display:none;margin-top:10px;text-align:center">
+    <img id="chartPreviewImg" style="max-width:100%;border-radius:8px;border:1px solid var(--border)">
+  </div>
+</div>
+<div class="news-scoreboard" id="newsScoreboard">
+  <div class="scoreboard-grid">
+    <div class="scoreboard-card">
+      <div class="scoreboard-icon">🤖</div>
+      <div class="scoreboard-value" id="sbTotal">0</div>
+      <div class="scoreboard-label">Robôs Ativos</div>
+    </div>
+    <div class="scoreboard-card green">
+      <div class="scoreboard-icon">✅</div>
+      <div class="scoreboard-value" id="sbWins">0</div>
+      <div class="scoreboard-label">Wins Totais</div>
+    </div>
+    <div class="scoreboard-card red">
+      <div class="scoreboard-icon">❌</div>
+      <div class="scoreboard-value" id="sbLosses">0</div>
+      <div class="scoreboard-label">Losses Totais</div>
+    </div>
+    <div class="scoreboard-card blue">
+      <div class="scoreboard-icon">📊</div>
+      <div class="scoreboard-value" id="sbRate">0%</div>
+      <div class="scoreboard-label">Aproveitamento</div>
+    </div>
+    <div class="scoreboard-card yellow">
+      <div class="scoreboard-icon">📨</div>
+      <div class="scoreboard-value" id="sbSignals">0</div>
+      <div class="scoreboard-label">Sinais Hoje</div>
+    </div>
+  </div>
+  <div class="scoreboard-details" id="sbDetails"></div>
+</div>
+<div class="news-feed" id="newsFeed">
+  <div class="news-empty">
+    <div class="icon">📡</div>
+    <div>Aguardando notícias dos robôs...</div>
+    <div style="font-size:12px;margin-top:4px">As atualizações aparecerão aqui em tempo real</div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = 'news-feed-v1';
+const CHANNEL_NAME = 'robot-news';
+let newsItems = [];
+let isPaused = false;
+let robots = {};
+let channel = null;
+
+function init() {
+  channel = new BroadcastChannel(CHANNEL_NAME);
+  channel.onmessage = (e) => handleNews(e.data);
+  loadNews();
+  renderNews();
+  loadRobots();
+  updateScoreboard();
+  loadGlobalChannelId();
+  loadSummaryUI();
+  loadAnalysisUI();
+  loadChartUI();
+}
+
+function handleNews(data) {
+  if (isPaused) return;
+  if (data.type === 'news') {
+    addNewsItem(data.item);
+  } else if (data.type === 'clear') {
+    newsItems = [];
+    saveNews();
+    renderNews();
+  }
+}
+
+function addNewsItem(item) {
+  item.id = 'news-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
+  newsItems.unshift(item);
+  if (newsItems.length > 500) newsItems = newsItems.slice(0, 500);
+  robots[item.robotId] = item.robotName;
+  updateRobotFilter();
+  saveNews();
+  if (!isPaused) {
+    renderNews();
+    updateScoreboard();
+  }
+}
+
+function updateScoreboard() {
+  const robotStats = {};
+  let totalWins = 0;
+  let totalLosses = 0;
+  let totalSignals = 0;
+  let activeRobots = 0;
+
+  newsItems.forEach(item => {
+    if (!item.robotId) return;
+    if (!robotStats[item.robotId]) {
+      robotStats[item.robotId] = { name: item.robotName, wins: 0, losses: 0, signals: 0, game: item.game, status: item.robotStatus };
+    }
+    const rs = robotStats[item.robotId];
+    if (item.type === 'win') { rs.wins++; totalWins++; }
+    if (item.type === 'loss') { rs.losses++; totalLosses++; }
+    if (item.type === 'signal') { rs.signals++; totalSignals++; }
+    if (item.robotStatus === 'online') rs.status = 'online';
+    if (item.robotName) rs.name = item.robotName;
+    if (item.game) rs.game = item.game;
+  });
+
+  Object.values(robotStats).forEach(rs => {
+    if (rs.status === 'online') activeRobots++;
+  });
+
+  const totalResolved = totalWins + totalLosses;
+  const totalRate = totalResolved > 0 ? Math.round((totalWins / totalResolved) * 100) : 0;
+
+  document.getElementById('sbTotal').textContent = activeRobots;
+  document.getElementById('sbWins').textContent = totalWins;
+  document.getElementById('sbLosses').textContent = totalLosses;
+  document.getElementById('sbRate').textContent = totalRate + '%';
+  document.getElementById('sbSignals').textContent = totalSignals;
+
+  const detailsEl = document.getElementById('sbDetails');
+  const entries = Object.entries(robotStats).sort((a, b) => {
+    const rA = a[1].wins + a[1].losses > 0 ? a[1].wins / (a[1].wins + a[1].losses) : 0;
+    const rB = b[1].wins + b[1].losses > 0 ? b[1].wins / (b[1].wins + b[1].losses) : 0;
+    return rB - rA;
+  });
+
+  detailsEl.innerHTML = entries.map(([id, rs]) => {
+    const resolved = rs.wins + rs.losses;
+    const rate = resolved > 0 ? Math.round((rs.wins / resolved) * 100) : 0;
+    const statusColor = rs.status === 'online' ? 'var(--green)' : 'var(--red)';
+    const gameIcon = rs.game === 'wheel' ? '🎡' : '🎲';
+    const gameLabel = rs.game === 'wheel' ? 'WHEEL' : 'DOUBLE';
+    const filled = Math.round((rate / 100) * 5);
+    const bar = '🟩'.repeat(filled) + '⬛️'.repeat(5 - filled);
+    return `<div class="sb-robot" style="flex-direction:column;align-items:stretch;gap:6px">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div class="sb-robot-name">
+          <span class="dot" style="background:${statusColor}"></span>
+          ${escapeHtml(rs.name || 'Robô')}
+        </div>
+        <span style="font-size:10px;color:var(--text3)">${gameIcon} ${gameLabel}</span>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div class="sb-robot-stats">
+          <span class="w">✅${rs.wins}</span>
+          <span class="l">❌${rs.losses}</span>
+          <span>📊${rate}%</span>
+        </div>
+        <span style="font-size:10px;letter-spacing:-1px">${bar}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderNews() {
+  const feed = document.getElementById('newsFeed');
+  const countEl = document.getElementById('newsCount');
+  const filtered = getFilteredItems();
+  countEl.textContent = filtered.length + ' notícias';
+
+  if (filtered.length === 0) {
+    feed.innerHTML = '<div class="news-empty"><div class="icon">📡</div><div>Aguardando notícias dos robôs...</div></div>';
+    return;
+  }
+
+  feed.innerHTML = filtered.map(item => {
+    const time = formatTime(item.time);
+    const typeClass = item.type || 'info';
+    const typeLabel = {
+      started: 'INICIADO', stopped: 'PARADO', info: 'INFO',
+      analysis: 'ANÁLISE'
+    }[typeClass] || 'INFO';
+    const gameIcon = item.game === 'wheel' ? '🎡' : '🎲';
+    const isAnalysis = item.isAnalysis;
+    const statsHtml = item.stats ?
+      `<div class="news-item-stats">
+        <span>✅ ${item.stats.wins || 0}W</span>
+        <span>❌ ${item.stats.losses || 0}L</span>
+        <span>📊 ${item.stats.rate || 0}%</span>
+      </div>` : '';
+
+    return `<div class="news-item" style="${isAnalysis ? 'border-color:var(--blue);background:rgba(35,104,255,.05)' : ''}">
+      <div class="news-item-header">
+        <div class="news-item-robot">
+          <span class="robot-dot" style="background:${isAnalysis ? 'var(--blue)' : getStatusColor(item.robotStatus)}"></span>
+          ${escapeHtml(item.robotName || 'Robô')}
+          <span style="font-size:10px;color:var(--text3)">${gameIcon} ${item.game || ''}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="news-item-type ${typeClass}">${typeLabel}</span>
+          <span class="news-item-time">${time}</span>
+        </div>
+      </div>
+      <div class="news-item-message">${isAnalysis ? item.message : escapeHtml(item.message || '')}</div>
+      ${statsHtml}
+    </div>`;
+  }).join('');
+}
+
+function getFilteredItems() {
+  const typeFilter = document.getElementById('filterType').value;
+  const gameFilter = document.getElementById('filterGame').value;
+  const robotFilter = document.getElementById('filterRobot').value;
+
+  return newsItems.filter(item => {
+    if (typeFilter !== 'all' && item.type !== typeFilter) return false;
+    if (gameFilter !== 'all' && item.game !== gameFilter) return false;
+    if (robotFilter !== 'all' && item.robotId !== robotFilter) return false;
+    return true;
+  });
+}
+
+function applyFilters() {
+  renderNews();
+}
+
+function updateRobotFilter() {
+  const select = document.getElementById('filterRobot');
+  const current = select.value;
+  select.innerHTML = '<option value="all">Todos os robôs</option>';
+  Object.entries(robots).forEach(([id, name]) => {
+    select.innerHTML += `<option value="${id}" ${current === id ? 'selected' : ''}>${escapeHtml(name)}</option>`;
+  });
+}
+
+function togglePause() {
+  isPaused = !isPaused;
+  const btn = document.getElementById('btnPause');
+  btn.textContent = isPaused ? 'Retomar' : 'Pausar';
+  btn.className = isPaused ? 'active' : '';
+  if (!isPaused) renderNews();
+}
+
+function clearNews() {
+  newsItems = [];
+  saveNews();
+  renderNews();
+  updateScoreboard();
+  if (channel) channel.postMessage({ type: 'clear' });
+}
+
+function saveNews() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(newsItems.slice(0, 500))); } catch(e) {}
+}
+
+function loadNews() {
+  try { newsItems = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch(e) { newsItems = []; }
+}
+
+function loadRobots() {
+  try {
+    const robotsData = JSON.parse(localStorage.getItem('robots') || '[]');
+    if (Array.isArray(robotsData)) {
+      robotsData.forEach(r => { robots[r.id] = r.name; });
+    }
+  } catch(e) {}
+  updateRobotFilter();
+}
+
+function formatTime(ts) {
+  if (!ts) return '--:--';
+  const d = new Date(ts);
+  return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function getStatusColor(status) {
+  if (status === 'online') return 'var(--green)';
+  if (status === 'offline') return 'var(--red)';
+  return 'var(--text3)';
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+const GLOBAL_CHANNEL_KEY = 'news-global-channel-id';
+
+function loadGlobalChannelId() {
+  const id = localStorage.getItem(GLOBAL_CHANNEL_KEY) || '';
+  document.getElementById('globalChannelId').value = id;
+  syncGlobalChannelId(id);
+}
+
+function saveGlobalChannelId() {
+  const id = document.getElementById('globalChannelId').value.trim();
+  localStorage.setItem(GLOBAL_CHANNEL_KEY, id);
+  syncGlobalChannelId(id);
+}
+
+function syncGlobalChannelId(id) {
+  const summaryEl = document.getElementById('summaryChannelId');
+  const analysisEl = document.getElementById('analysisChannelId');
+  const chartEl = document.getElementById('chartChannelId');
+  if (summaryEl) summaryEl.value = id;
+  if (analysisEl) analysisEl.value = id;
+  if (chartEl) chartEl.value = id;
+}
+
+function getGlobalChannelId() {
+  return localStorage.getItem(GLOBAL_CHANNEL_KEY) || '';
+}
+
+const SUMMARY_STORAGE_KEY = 'news-summary-config-v1';
+
+function toggleSummaryConfig() {
+  const el = document.getElementById('summaryConfig');
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+  if (el.style.display === 'block') loadSummaryUI();
+}
+
+function loadSummaryUI() {
+  try {
+    const config = JSON.parse(localStorage.getItem(SUMMARY_STORAGE_KEY) || '{}');
+    document.getElementById('summaryEnabled').checked = !!config.enabled;
+    syncGlobalChannelId(getGlobalChannelId());
+  } catch(e) {}
+}
+
+function saveSummaryConfig() {
+  const config = {
+    enabled: document.getElementById('summaryEnabled').checked,
+    channelId: getGlobalChannelId()
+  };
+  localStorage.setItem(SUMMARY_STORAGE_KEY, JSON.stringify(config));
+  if (typeof NewsService !== 'undefined') {
+    NewsService.saveSummaryConfig(config);
+  }
+  document.getElementById('summaryStatus').textContent = config.enabled ? 'Ativo' : 'Inativo';
+  document.getElementById('summaryStatus').style.color = config.enabled ? 'var(--green)' : 'var(--text3)';
+}
+
+async function testSummaryChannel() {
+  const channelId = document.getElementById('summaryChannelId').value.trim();
+  if (!channelId) {
+    document.getElementById('summaryStatus').textContent = 'Digite o Channel ID';
+    document.getElementById('summaryStatus').style.color = 'var(--red)';
+    return;
+  }
+  document.getElementById('summaryStatus').textContent = 'Testando...';
+  document.getElementById('summaryStatus').style.color = 'var(--yellow)';
+  try {
+    const token = localStorage.getItem('telegram-bot-token') || '';
+    if (!token) {
+      document.getElementById('summaryStatus').textContent = 'Token não configurado';
+      document.getElementById('summaryStatus').style.color = 'var(--red)';
+      return;
+    }
+    const resp = await fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: channelId, text: '✅ Teste de conexão - News Summary', disable_web_page_preview: true })
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      document.getElementById('summaryStatus').textContent = '✅ Conectado!';
+      document.getElementById('summaryStatus').style.color = 'var(--green)';
+    } else {
+      document.getElementById('summaryStatus').textContent = '❌ ' + (data.description || 'Erro');
+      document.getElementById('summaryStatus').style.color = 'var(--red)';
+    }
+  } catch(e) {
+    document.getElementById('summaryStatus').textContent = '❌ Erro: ' + e.message;
+    document.getElementById('summaryStatus').style.color = 'var(--red)';
+  }
+}
+
+function sendSummaryNow() {
+  if (typeof NewsService !== 'undefined') {
+    document.getElementById('summaryStatus').textContent = 'Enviando...';
+    NewsService.sendSummary().then(() => {
+      document.getElementById('summaryStatus').textContent = '✅ Enviado!';
+      document.getElementById('summaryStatus').style.color = 'var(--green)';
+    }).catch(e => {
+      document.getElementById('summaryStatus').textContent = '❌ ' + e.message;
+      document.getElementById('summaryStatus').style.color = 'var(--red)';
+    });
+  }
+}
+
+const ANALYSIS_STORAGE_KEY = 'news-analysis-config-v1';
+
+function toggleAnalysisConfig() {
+  const el = document.getElementById('analysisConfig');
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+  if (el.style.display === 'block') loadAnalysisUI();
+}
+
+function loadAnalysisUI() {
+  try {
+    const config = JSON.parse(localStorage.getItem(ANALYSIS_STORAGE_KEY) || '{}');
+    document.getElementById('analysisEnabled').checked = !!config.enabled;
+    syncGlobalChannelId(getGlobalChannelId());
+    document.getElementById('analysisWheel').checked = config.wheel !== false;
+    document.getElementById('analysisDouble').checked = config.double !== false;
+  } catch(e) {}
+}
+
+function saveAnalysisConfig() {
+  const config = {
+    enabled: document.getElementById('analysisEnabled').checked,
+    channelId: getGlobalChannelId(),
+    wheel: document.getElementById('analysisWheel').checked,
+    double: document.getElementById('analysisDouble').checked
+  };
+  localStorage.setItem(ANALYSIS_STORAGE_KEY, JSON.stringify(config));
+  if (typeof NewsService !== 'undefined') {
+    NewsService.saveAnalysisConfig(config);
+  }
+  document.getElementById('analysisStatus').textContent = config.enabled ? 'Ativo' : 'Inativo';
+  document.getElementById('analysisStatus').style.color = config.enabled ? 'var(--green)' : 'var(--text3)';
+}
+
+async function testAnalysisChannel() {
+  const channelId = document.getElementById('analysisChannelId').value.trim();
+  if (!channelId) {
+    document.getElementById('analysisStatus').textContent = 'Digite o Channel ID';
+    document.getElementById('analysisStatus').style.color = 'var(--red)';
+    return;
+  }
+  document.getElementById('analysisStatus').textContent = 'Testando...';
+  document.getElementById('analysisStatus').style.color = 'var(--yellow)';
+  try {
+    const token = localStorage.getItem('telegram-bot-token') || '';
+    if (!token) {
+      document.getElementById('analysisStatus').textContent = 'Token não configurado';
+      document.getElementById('analysisStatus').style.color = 'var(--red)';
+      return;
+    }
+    const resp = await fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: channelId, text: '✅ Teste de conexão - News Análise', disable_web_page_preview: true })
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      document.getElementById('analysisStatus').textContent = '✅ Conectado!';
+      document.getElementById('analysisStatus').style.color = 'var(--green)';
+    } else {
+      document.getElementById('analysisStatus').textContent = '❌ ' + (data.description || 'Erro');
+      document.getElementById('analysisStatus').style.color = 'var(--red)';
+    }
+  } catch(e) {
+    document.getElementById('analysisStatus').textContent = '❌ Erro: ' + e.message;
+    document.getElementById('analysisStatus').style.color = 'var(--red)';
+  }
+}
+
+function sendAnalysisNow() {
+  if (typeof NewsService !== 'undefined') {
+    document.getElementById('analysisStatus').textContent = 'Enviando...';
+    NewsService.sendAllAnalysis().then(() => {
+      document.getElementById('analysisStatus').textContent = '✅ Enviado!';
+      document.getElementById('analysisStatus').style.color = 'var(--green)';
+    }).catch(e => {
+      document.getElementById('analysisStatus').textContent = '❌ ' + e.message;
+      document.getElementById('analysisStatus').style.color = 'var(--red)';
+    });
+  }
+}
+
+const CHART_STORAGE_KEY = 'news-chart-config-v1';
+
+function toggleChartConfig() {
+  const el = document.getElementById('chartConfig');
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+  if (el.style.display === 'block') loadChartUI();
+}
+
+function loadChartUI() {
+  try {
+    const config = JSON.parse(localStorage.getItem(CHART_STORAGE_KEY) || '{}');
+    document.getElementById('chartEnabled').checked = !!config.enabled;
+    syncGlobalChannelId(getGlobalChannelId());
+    document.getElementById('chartCaption').checked = config.caption !== false;
+  } catch(e) {}
+}
+
+function saveChartConfig() {
+  const config = {
+    enabled: document.getElementById('chartEnabled').checked,
+    channelId: getGlobalChannelId(),
+    caption: document.getElementById('chartCaption').checked
+  };
+  localStorage.setItem(CHART_STORAGE_KEY, JSON.stringify(config));
+  if (typeof ChartService !== 'undefined') {
+    ChartService.saveChartConfig(config);
+  }
+  document.getElementById('chartStatus').textContent = config.enabled ? 'Ativo' : 'Inativo';
+  document.getElementById('chartStatus').style.color = config.enabled ? 'var(--green)' : 'var(--text3)';
+}
+
+async function testChartChannel() {
+  const channelId = document.getElementById('chartChannelId').value.trim();
+  if (!channelId) {
+    document.getElementById('chartStatus').textContent = 'Digite o Channel ID';
+    document.getElementById('chartStatus').style.color = 'var(--red)';
+    return;
+  }
+  document.getElementById('chartStatus').textContent = 'Testando...';
+  document.getElementById('chartStatus').style.color = 'var(--yellow)';
+  try {
+    const token = localStorage.getItem('telegram-bot-token') || '';
+    if (!token) {
+      document.getElementById('chartStatus').textContent = 'Token não configurado';
+      document.getElementById('chartStatus').style.color = 'var(--red)';
+      return;
+    }
+    const resp = await fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: channelId, text: '✅ Teste de conexão - News Gráfico', disable_web_page_preview: true })
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      document.getElementById('chartStatus').textContent = '✅ Conectado!';
+      document.getElementById('chartStatus').style.color = 'var(--green)';
+    } else {
+      document.getElementById('chartStatus').textContent = '❌ ' + (data.description || 'Erro');
+      document.getElementById('chartStatus').style.color = 'var(--red)';
+    }
+  } catch(e) {
+    document.getElementById('chartStatus').textContent = '❌ Erro: ' + e.message;
+    document.getElementById('chartStatus').style.color = 'var(--red)';
+  }
+}
+
+function sendChartNow() {
+  if (typeof ChartService !== 'undefined') {
+    document.getElementById('chartStatus').textContent = 'Enviando...';
+    ChartService.sendChart().then(() => {
+      document.getElementById('chartStatus').textContent = '✅ Enviado!';
+      document.getElementById('chartStatus').style.color = 'var(--green)';
+    }).catch(e => {
+      document.getElementById('chartStatus').textContent = '❌ ' + e.message;
+      document.getElementById('chartStatus').style.color = 'var(--red)';
+    });
+  }
+}
+
+function previewChart() {
+  if (typeof ChartService === 'undefined') return;
+  const img = ChartService.generateChartImage();
+  document.getElementById('chartPreviewImg').src = img;
+  document.getElementById('chartPreview').style.display = 'block';
+}
+
+init();
+</script>
+</body>
+</html>

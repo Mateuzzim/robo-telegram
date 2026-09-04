@@ -461,6 +461,7 @@ const TelegramService = {
         chat_id: chatId,
         message_id: current.messageId,
         text,
+        parse_mode: 'HTML',
         disable_web_page_preview: true
       });
       if (edited.ok) {
@@ -510,6 +511,7 @@ const TelegramService = {
     const sent = await this.api(token, 'sendMessage', {
       chat_id: chatId,
       text,
+      parse_mode: 'HTML',
       disable_web_page_preview: true
     });
     if (sent.ok && sent.result?.message_id) {
@@ -538,6 +540,7 @@ const TelegramService = {
     const sent = await this.api(token, 'sendMessage', {
       chat_id: chatId,
       text,
+      parse_mode: 'HTML',
       disable_web_page_preview: true
     });
     if (sent.ok && sent.result?.message_id) {
@@ -558,6 +561,7 @@ const TelegramService = {
     const sent = await this.api(token, 'sendMessage', {
       chat_id: chatId,
       text,
+      parse_mode: 'HTML',
       disable_web_page_preview: true
     });
     if (sent.ok && sent.result?.message_id) {
@@ -586,6 +590,7 @@ const TelegramService = {
         chat_id: chatId,
         message_id: messageId,
         text,
+        parse_mode: 'HTML',
         disable_web_page_preview: true
       });
       if (edited.ok) {
@@ -633,6 +638,7 @@ const TelegramService = {
     const sent = await this.api(token, 'sendMessage', {
       chat_id: chatId,
       text,
+      parse_mode: 'HTML',
       disable_web_page_preview: true
     });
     if (sent.ok && sent.result?.message_id) {
@@ -799,11 +805,11 @@ const TelegramService = {
       const resultEmoji = this.colorEmoji(signal.result?.color);
       const resultLabel = this.colorLabel(signal.result?.color);
       return [
-        '✅WIN!✅',
+        '✅ <b>WIN! WIN! WIN!</b> ✅',
         '━━━━━━━━━━━━━━━━━━━',
-        'Resultado: ' + resultEmoji + ' ' + resultLabel,
+        'Resultado: ' + resultEmoji + ' <b>' + resultLabel + '</b>',
         '━━━━━━━━━━━━━━━━━━━',
-        '📊 PLACAR: ✅' + wins + 'W / ❌' + losses + 'L (' + rate + '%)',
+        '📊 PLACAR: ✅<b>' + wins + '</b>W / ❌<b>' + losses + '</b>L (<b>' + rate + '%</b>)',
       ].join('\n');
     }
 
@@ -811,11 +817,11 @@ const TelegramService = {
       const resultEmoji = this.colorEmoji(signal.result?.color);
       const resultLabel = this.colorLabel(signal.result?.color);
       return [
-        '❌LOSS❌',
+        '❌ <b>LOSS! LOSS!</b> ❌',
         '━━━━━━━━━━━━━━━━━━━',
-        'Resultado: ' + resultEmoji + ' ' + resultLabel,
+        'Resultado: ' + resultEmoji + ' <b>' + resultLabel + '</b>',
         '━━━━━━━━━━━━━━━━━━━',
-        '📊 PLACAR: ✅' + wins + 'W / ❌' + losses + 'L (' + rate + '%)',
+        '📊 PLACAR: ✅<b>' + wins + '</b>W / ❌<b>' + losses + '</b>L (<b>' + rate + '%</b>)',
       ].join('\n');
     }
 
@@ -826,11 +832,11 @@ const TelegramService = {
       const resultMult = this.getMultiplierLabel(signal.result?.color, robot.game);
       const greenProt = robot.greenProtection && robot.game === 'double' ? ' + 🟢' : '';
       return [
-        '⚡️ G' + (signal.gale || 1) + ' - TENTANDO NOVAMENTE',
-        '🎯 ENTRAR',
+        '⚡️ <b>G' + (signal.gale || 1) + ' - TENTANDO NOVAMENTE</b>',
+        '🎯 <b>ENTRAR</b>',
         target.emoji + greenProt,
         '━━━━━━━━━━━━━━━━━━━',
-        '❌ LOSS, VEIO: ' + resultLabel + ' ' + resultEmoji + resultMult,
+        '❌ <b>LOSS, VEIO:</b> ' + resultLabel + ' ' + resultEmoji + resultMult,
       ].join('\n');
     }
 
@@ -846,14 +852,14 @@ const TelegramService = {
     } else {
       galeMax = robot.gale?.max || 0;
     }
-    const galeLine = galeMax > 0 ? '⚡️ GALE ATÉ: G' + galeMax : '⚡️ ENTRADA SECA';
+    const galeLine = galeMax > 0 ? '⚡️ <b>GALE ATÉ: G' + galeMax + '</b>' : '⚡️ <b>ENTRADA SECA</b>';
     return [
-      '🤖 SINAL ENCONTRADO 🤖',
-      '🎯 ENTRAR NA COR',
+      '🤖 <b>SINAL ENCONTRADO</b> 🤖',
+      '🎯 <b>ENTRAR NA COR</b>',
       target.emoji + greenProtLabel,
       '━━━━━━━━━━━━━━━━━━━━',
       galeLine,
-      '📈 Aproveitamento: ' + rate + '%',
+      '📈 <b>Aproveitamento:</b> <b>' + rate + '%</b>',
       this.formatRateBar(rate)
     ].join('\n');
   },
@@ -877,33 +883,33 @@ const TelegramService = {
     } else {
       galeMax = robot.gale?.max || 0;
     }
-    const galeLine = galeMax > 0 ? '⚡️ GALE ATÉ: G' + galeMax : '⚡️ ENTRADA SECA';
+    const galeLine = galeMax > 0 ? '⚡️ <b>GALE ATÉ: G' + galeMax + '</b>' : '⚡️ <b>ENTRADA SECA</b>';
     const map = {
-      '{wins}': wins,
-      '{losses}': losses,
-      '{rate}': rate,
-      '{signals}': stats.signals || 0,
+      '{wins}': '<b>' + wins + '</b>',
+      '{losses}': '<b>' + losses + '</b>',
+      '{rate}': '<b>' + rate + '%</b>',
+      '{signals}': '<b>' + (stats.signals || 0) + '</b>',
       '{target}': target.emoji + greenProtLabel,
       '{targetEmoji}': target.emoji,
-      '{targetColor}': target.color,
+      '{targetColor}': '<b>' + target.color + '</b>',
       '{greenProtection}': greenProtLabel,
-      '{greenProtectionLabel}': greenProt ? 'PROTEÇÃO VERDE ATIVA' : '',
+      '{greenProtectionLabel}': greenProt ? '<b>PROTEÇÃO VERDE ATIVA</b>' : '',
       '{galeLine}': galeLine,
       '{galeLevels}': galeLevels.join(', '),
-      '{confidence}': signal.confidence || 0,
-      '{gale}': signal.gale || 0,
-      '{galeMax}': galeMax,
-      '{robotName}': robot.name || '',
-      '{game}': robot.game === 'wheel' ? 'Wheel' : 'Double',
-      '{strategy}': this.formatStrategy(robot.strategy),
-      '{status}': status,
+      '{confidence}': '<b>' + (signal.confidence || 0) + '%</b>',
+      '{gale}': '<b>G' + (signal.gale || 0) + '</b>',
+      '{galeMax}': '<b>G' + galeMax + '</b>',
+      '{robotName}': '<b>' + (robot.name || '') + '</b>',
+      '{game}': robot.game === 'wheel' ? '<b>Wheel</b>' : '<b>Double</b>',
+      '{strategy}': '<b>' + this.formatStrategy(robot.strategy) + '</b>',
+      '{status}': '<b>' + status + '</b>',
       '{history}': '',
       '{historyEmojis}': '',
-      '{lastResult}': robot.lastResult ? this.colorEmoji(robot.lastResult.color) + ' ' + this.colorLabel(robot.lastResult.color) : '--',
-      '{diagnosticStatus}': (robot.diagnostic?.status || 'IDLE'),
-      '{confidenceDiag}': (robot.diagnostic?.confidence || 0) + '%',
-      '{pattern}': robot.diagnostic?.mainPattern || '--',
-      '{time}': this.getCachedTime()
+      '{lastResult}': robot.lastResult ? this.colorEmoji(robot.lastResult.color) + ' <b>' + this.colorLabel(robot.lastResult.color) + '</b>' : '--',
+      '{diagnosticStatus}': '<b>' + (robot.diagnostic?.status || 'IDLE') + '</b>',
+      '{confidenceDiag}': '<b>' + (robot.diagnostic?.confidence || 0) + '%</b>',
+      '{pattern}': '<b>' + (robot.diagnostic?.mainPattern || '--') + '</b>',
+      '{time}': '<b>' + this.getCachedTime() + '</b>'
     };
     return template.replace(/\{[^}]+\}/g, (key) => map[key] !== undefined ? map[key] : key);
   },
@@ -937,37 +943,37 @@ const TelegramService = {
     const sequence = this.getSequenceStats(robot);
 
     return [
-      '━━ 🚨 ' + gameName + ' AO VIVO 🚨',
-      '🤖NOME DO ROBÔ: ' + robot.name,
-      '🔰Proteção/Gales: ' + galeInstruction,
-      robot.greenProtection && robot.game === 'double' ? '🛡️ ATENÇÃO PROTEGER= VERDE 🟢' : '',
+      '━━ 🚨 <b>' + gameName + ' AO VIVO</b> 🚨',
+      '🤖 <b>NOME DO ROBÔ:</b> ' + robot.name,
+      '🔰 <b>Proteção/Gales:</b> ' + galeInstruction,
+      robot.greenProtection && robot.game === 'double' ? '🛡️ <b>ATENÇÃO PROTEGER= VERDE</b> 🟢' : '',
       '',
-      '━━ 📊 STATUS DO ROBÔ ━━',
-      '🟢 Status: ' + (robot.status === 'online' ? 'Online' : robot.status === 'offline' ? 'Offline' : robot.status) + ' 🎮 Jogo: ' + gameLabel,
-      '♟️ Estratégia: ' + strategyLabel,
-      '🔄 Modo: ' + modeLabel,
-      '🎯Ultimo Resultado: ' + lastResultEmoji + ' ' + lastResultLabel,
+      '━━ 📊 <b>STATUS DO ROBÔ</b> ━━',
+      '🟢 <b>Status:</b> ' + (robot.status === 'online' ? 'Online' : robot.status === 'offline' ? 'Offline' : robot.status) + ' 🎮 <b>Jogo:</b> ' + gameLabel,
+      '♟️ <b>Estratégia:</b> ' + strategyLabel,
+      '🔄 <b>Modo:</b> ' + modeLabel,
+      '🎯 <b>Último Resultado:</b> ' + lastResultEmoji + ' ' + lastResultLabel,
       '',
-      '━━ 🧠 DIAGNOSTICO DA IA ━━',
-      '📡 Status: ' + (d.status || 'IDLE'),
-      '📊 ' + (d.analyzedResults || 0) + ' Resultados Analisados',
-      '🔥 Confiança: ' + (d.confidence || 0) + '%',
-      '🔍 Padrão: ' + (d.mainPattern || '--'),
-      '🎯 Entrada:  ' + entryEmoji + ' ' + entryLabel,
-      '⭐ Score: ' + (d.totalScore || 0) + '/100',
+      '━━ 🧠 <b>DIAGNÓSTICO DA IA</b> ━━',
+      '📡 <b>Status:</b> ' + (d.status || 'IDLE'),
+      '📊 <b>' + (d.analyzedResults || 0) + ' Resultados Analisados</b>',
+      '🔥 <b>Confiança:</b> ' + (d.confidence || 0) + '%',
+      '🔍 <b>Padrão:</b> ' + (d.mainPattern || '--'),
+      '🎯 <b>Entrada:</b>  ' + entryEmoji + ' ' + entryLabel,
+      '⭐ <b>Score:</b> ' + (d.totalScore || 0) + '/100',
       '',
-      '━━ 🎡HISTÓRICO RECENTE🎡 ━━',
+      '━━ 🎡 <b>HISTÓRICO RECENTE</b> 🎡 ━━',
       this.formatRecentHistory(robot),
-      '━━ 🏆RESULTADO DA SESSÃO🏆 ━━',
-      '✅ WIN: ' + wins + ' | ❌ LOSS: ' + losses,
+      '━━ 🏆 <b>RESULTADO DA SESSÃO</b> 🏆 ━━',
+      '✅ <b>WIN:</b> ' + wins + ' | ❌ <b>LOSS:</b> ' + losses,
       '━━━━━━━━━━━━━━━━━━━━',
-      '📨 Sinais Enviados: ' + sent,
+      '📨 <b>Sinais Enviados:</b> ' + sent,
       '━━━━━━━━━━━━━━━━━━━━',
-      '📊 APROVEITAMENTO',
-      this.formatRateBar(rate) + '  ' + rate + '%',
+      '📊 <b>APROVEITAMENTO</b>',
+      this.formatRateBar(rate) + '  <b>' + rate + '%</b>',
       '━━━━━━━━━━━━━━━━━━━━',
-      '🌐 Site: ',
-      '🕕 Horário Atual: ' + this.getCachedTime()
+      '🌐 <b>Site:</b> ',
+      '🕕 <b>Horário Atual:</b> ' + this.getCachedTime()
     ].filter(line => line !== null).join('\n');
   },
 
@@ -988,39 +994,39 @@ const TelegramService = {
     const galeMax = robot.gale?.max || 0;
     const galeInstruction = this.formatGaleInstruction(robot);
     const map = {
-      '{wins}': wins,
-      '{losses}': losses,
-      '{rate}': rate,
-      '{signals}': stats.signals || 0,
-      '{winSG}': stats.winSG || 0,
-      '{winG1}': stats.winG1 || 0,
-      '{winG2}': stats.winG2 || 0,
-      '{galeMax}': galeMax,
-      '{GALE_MAX}': galeMax,
-      '{galeInstruction}': galeInstruction,
-      '{GALE_INSTRUCTION}': galeInstruction,
-      '{protection}': this.formatProtection(robot),
-      '{PROTECTION}': this.formatProtection(robot),
-      '{robotName}': robot.name || '',
-      '{game}': gameLabel,
-      '{gameName}': robot.game === 'wheel' ? 'WHEEL' : 'DOUBLE',
-      '{strategy}': strategyLabel,
-      '{mode}': modeLabel,
-      '{status}': robot.status === 'online' ? 'Online' : robot.status === 'offline' ? 'Offline' : robot.status,
-      '{lastResult}': lastResultEmoji + ' ' + lastResultLabel,
+      '{wins}': '<b>' + wins + '</b>',
+      '{losses}': '<b>' + losses + '</b>',
+      '{rate}': '<b>' + rate + '%</b>',
+      '{signals}': '<b>' + (stats.signals || 0) + '</b>',
+      '{winSG}': '<b>' + (stats.winSG || 0) + '</b>',
+      '{winG1}': '<b>' + (stats.winG1 || 0) + '</b>',
+      '{winG2}': '<b>' + (stats.winG2 || 0) + '</b>',
+      '{galeMax}': '<b>G' + galeMax + '</b>',
+      '{GALE_MAX}': '<b>G' + galeMax + '</b>',
+      '{galeInstruction}': '<b>' + galeInstruction + '</b>',
+      '{GALE_INSTRUCTION}': '<b>' + galeInstruction + '</b>',
+      '{protection}': '<b>' + this.formatProtection(robot) + '</b>',
+      '{PROTECTION}': '<b>' + this.formatProtection(robot) + '</b>',
+      '{robotName}': '<b>' + (robot.name || '') + '</b>',
+      '{game}': '<b>' + gameLabel + '</b>',
+      '{gameName}': '<b>' + (robot.game === 'wheel' ? 'WHEEL' : 'DOUBLE') + '</b>',
+      '{strategy}': '<b>' + strategyLabel + '</b>',
+      '{mode}': '<b>' + modeLabel + '</b>',
+      '{status}': '<b>' + (robot.status === 'online' ? 'Online' : robot.status === 'offline' ? 'Offline' : robot.status) + '</b>',
+      '{lastResult}': lastResultEmoji + ' <b>' + lastResultLabel + '</b>',
       '{lastResultEmoji}': lastResultEmoji,
-      '{lastResultLabel}': lastResultLabel,
-      '{diagnosticStatus}': d.status || 'IDLE',
-      '{analyzedResults}': d.analyzedResults || 0,
-      '{confidenceDiag}': d.confidence || 0,
-      '{pattern}': d.mainPattern || '--',
-      '{entry}': entryEmoji + ' ' + entryLabel,
+      '{lastResultLabel}': '<b>' + lastResultLabel + '</b>',
+      '{diagnosticStatus}': '<b>' + (d.status || 'IDLE') + '</b>',
+      '{analyzedResults}': '<b>' + (d.analyzedResults || 0) + '</b>',
+      '{confidenceDiag}': '<b>' + (d.confidence || 0) + '%</b>',
+      '{pattern}': '<b>' + (d.mainPattern || '--') + '</b>',
+      '{entry}': entryEmoji + ' <b>' + entryLabel + '</b>',
       '{entryEmoji}': entryEmoji,
-      '{entryLabel}': entryLabel,
-      '{score}': d.totalScore || 0,
+      '{entryLabel}': '<b>' + entryLabel + '</b>',
+      '{score}': '<b>' + (d.totalScore || 0) + '</b>',
       '{history}': this.formatRecentHistory(robot),
       '{historyEmojis}': this.formatRecentHistory(robot),
-      '{time}': this.getCachedTime()
+      '{time}': '<b>' + this.getCachedTime() + '</b>'
     };
     return template.replace(/\{[^}]+\}/g, (key) => map[key] !== undefined ? map[key] : key);
   },
