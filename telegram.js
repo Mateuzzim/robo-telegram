@@ -837,12 +837,16 @@ const TelegramService = {
     const target = this.getSignalTarget(robot, signal);
     const greenProt = robot.greenProtection && robot.game === 'double';
     const greenProtLabel = greenProt ? ' + 🟢' : '';
-    const galeMax = robot.gale?.max || 0;
-    const galeLevels = [];
-    for (let i = 1; i <= galeMax; i++) {
-      galeLevels.push('G' + i);
+    let galeMax;
+    if (robot.game === 'wheel') {
+      const galeByColor = robot.galeByColor || {};
+      const colorKey = { RED: 'red', BLACK: 'grey', GREY: 'grey', BLUE: 'blue' };
+      const key = colorKey[target.color] || 'grey';
+      galeMax = galeByColor[key] ?? 1;
+    } else {
+      galeMax = robot.gale?.max || 0;
     }
-    const galeLine = galeMax > 0 ? '⚡️ GALE ATÉ: ' + galeLevels.join(', ') : '⚡️ ENTRADA SECA';
+    const galeLine = galeMax > 0 ? '⚡️ GALE ATÉ: G' + galeMax : '⚡️ ENTRADA SECA';
     return [
       '🤖 SINAL ENCONTRADO 🤖',
       '🎯 ENTRAR NA COR',
@@ -864,12 +868,16 @@ const TelegramService = {
     const status = signal.status || 'approved';
     const greenProt = robot.greenProtection && robot.game === 'double';
     const greenProtLabel = greenProt ? ' + 🟢' : '';
-    const galeMax = robot.gale?.max || 0;
-    const galeLevels = [];
-    for (let i = 1; i <= galeMax; i++) {
-      galeLevels.push('G' + i);
+    let galeMax;
+    if (robot.game === 'wheel') {
+      const galeByColor = robot.galeByColor || {};
+      const colorKey = { RED: 'red', BLACK: 'grey', GREY: 'grey', BLUE: 'blue' };
+      const key = colorKey[target.color] || 'grey';
+      galeMax = galeByColor[key] ?? 1;
+    } else {
+      galeMax = robot.gale?.max || 0;
     }
-    const galeLine = galeMax > 0 ? '⚡️ GALE ATÉ: ' + galeLevels.join(', ') : '⚡️ ENTRADA SECA';
+    const galeLine = galeMax > 0 ? '⚡️ GALE ATÉ: G' + galeMax : '⚡️ ENTRADA SECA';
     const map = {
       '{wins}': wins,
       '{losses}': losses,
