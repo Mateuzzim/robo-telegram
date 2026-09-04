@@ -1948,8 +1948,8 @@ const RobotEngine = {
   getAllRobots() { return [...this.robots.values()]; },
   getAllStates() { return this.getAllRobots().map(r => r.getState()); },
 
-  startRobot(id) { const r = this.robots.get(id); if (r) { r.status = 'online'; r.startedAt = Date.now(); EventBus.emit('robot:started', { id }); this.save(); } },
-  stopRobot(id) { const r = this.robots.get(id); if (r) { r.status = 'offline'; r.startedAt = null; r.currentSignal = null; EventBus.emit('robot:stopped', { id }); this.save(); } },
+  startRobot(id) { const r = this.robots.get(id); if (r) { r.status = 'online'; r.startedAt = Date.now(); r.startDelayUntil = Date.now() + 10000; if (r._startDelayTimer) clearTimeout(r._startDelayTimer); r._startDelayTimer = setTimeout(() => { r.startDelayUntil = null; r.analyze(); }, 10000); EventBus.emit('robot:started', { id }); this.save(); } },
+  stopRobot(id) { const r = this.robots.get(id); if (r) { r.status = 'offline'; r.startedAt = null; r.currentSignal = null; if (r._startDelayTimer) { clearTimeout(r._startDelayTimer); r._startDelayTimer = null; } r.startDelayUntil = null; EventBus.emit('robot:stopped', { id }); this.save(); } },
   pauseRobot(id) { const r = this.robots.get(id); if (r) { r.status = 'paused'; EventBus.emit('robot:paused', { id }); this.save(); } },
   resumeRobot(id) { const r = this.robots.get(id); if (r) { r.status = 'online'; EventBus.emit('robot:resumed', { id }); this.save(); } },
   deleteRobot(id) {
