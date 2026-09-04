@@ -123,7 +123,6 @@ const Filters = {
     return candidates.filter(c => {
       const recent5 = ctx.results.slice(-5).filter(r => r === c.color).length;
       const recent10 = ctx.results.slice(-10).filter(r => r === c.color).length;
-      const recent20 = ctx.results.slice(-20).filter(r => r === c.color).length;
       const rate5 = recent5 / 5;
       const rate10 = recent10 / 10;
       return !(rate5 < rate10 * 0.5);
@@ -194,47 +193,19 @@ const Filters = {
   },
 
   matrizTransicao(candidates, ctx) {
-    const trans = {};
-    for (let i = 0; i < ctx.len - 1; i++) {
-      const from = ctx.results[i];
-      const to = ctx.results[i + 1];
-      if (!trans[from]) trans[from] = {};
-      trans[from][to] = (trans[from][to] || 0) + 1;
-    }
-    return candidates.filter(c => {
-      const last = ctx.results[ctx.len - 1];
-      if (!last || !trans[last]) return true;
-      const total = Object.values(trans[last]).reduce((a, b) => a + b, 0);
-      const count = trans[last][c.color] || 0;
-      return total > 0 ? (count / total) > 0.05 : true;
-    });
+    return Filters.transicao(candidates, ctx);
   },
 
   probabilidadeCondicional(candidates, ctx) {
-    const last = ctx.results[ctx.len - 1];
-    if (!last) return candidates;
-    const conditional = {};
-    let countCond = 0;
-    for (let i = 0; i < ctx.len - 1; i++) {
-      if (ctx.results[i] === last) {
-        countCond++;
-        const next = ctx.results[i + 1];
-        conditional[next] = (conditional[next] || 0) + 1;
-      }
-    }
-    if (countCond === 0) return candidates;
-    return candidates.filter(c => {
-      const prob = (conditional[c.color] || 0) / countCond;
-      return prob > 0.05;
-    });
+    return Filters.transicao(candidates, ctx);
   },
 
   entropia(candidates, ctx) {
-    return candidates.filter(() => ctx.entropy < 2.5);
+    return candidates.filter(() => ctx.entropy < 1.6);
   },
 
   volatilidade(candidates, ctx) {
-    return candidates.filter(() => ctx.volatility < 5);
+    return candidates.filter(() => ctx.volatility < 3);
   },
 
   consensoEstrategias(candidates, ctx, robot) {
@@ -262,12 +233,18 @@ const Filters = {
   },
 
   confiancaMinima(candidates, ctx, robot) {
-    const min = robot.minimumConfidence || 80;
+    const min = robot.minimumConfidence !== undefined ? robot.minimumConfidence : 50;
     return candidates.filter(c => (c.confidence || 0) >= min);
   },
 
   diferencaCandidatos(candidates, ctx, robot) {
-    if (candidates.length < 2) return candidates;
+    if (candidates.length < 2) {
+      return candidates.filter(c => {
+        const conf = c.confidence || c.score || 0;
+        const avgConf = ctx.len > 0 ? 50 : 50;
+        return conf > avgConf * 0.6;
+      });
+    }
     const sorted = [...candidates].sort((a, b) => (b.score || 0) - (a.score || 0));
     const diff = (sorted[0].score || 0) - (sorted[1].score || 0);
     return diff > 5 ? candidates : [];

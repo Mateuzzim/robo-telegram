@@ -26,7 +26,7 @@ const RobotEngine = {
       for (const c of colors) { if (c === last) count++; else break; }
       const score = count >= 3 ? Math.min(90, 50 + count * 10) : 0;
       const colorLabels = { RED: 'VERMELHO', BLACK: 'PRETO', GREY: 'PRETO', BLUE: 'AZUL', GREEN: 'VERDE' };
-      const others = Object.keys(colorLabels).filter(c => c !== last && c !== 'GREY' || (last !== 'BLACK' && last !== 'GREY'));
+      const others = Object.keys(colorLabels).filter(c => c !== last && c !== 'GREY');
       const target = others.length ? others[0] : (last === 'RED' ? 'BLACK' : 'RED');
       return { matched: score >= 60, target, confidence: score, pattern: colors.slice(0, ps), reason: count >= 3 ? `Repeticao ${count}x ${colorLabels[last] || last}` : 'Sem repeticao' };
     },
@@ -236,7 +236,7 @@ const RobotEngine = {
         const bestAny = analyses.length > 0 ? analyses.sort((a, b) => b.score - a.score)[0] : null;
         return {
           matched: false,
-          target: bestAny?.target || colors[0] === 'RED' ? 'BLACK' : 'RED',
+          target: bestAny?.target || (colors[0] === 'RED' ? 'BLACK' : 'RED'),
           confidence: bestAny ? Math.max(10, Math.round(bestAny.score * 0.6)) : 0,
           pattern: bestAny?.pattern || colors.slice(0, pSize),
           reason: bestAny ? `${bestAny.type.toUpperCase()}: ${bestAny.detail}` : 'Nenhum padrao detectado',
@@ -718,11 +718,7 @@ const RobotEngine = {
       const best = valid[0];
       const confluences = valid.filter(a => a.score >= 60).length;
       
-      let finalConfidence = Math.min(92, Math.round(best.score * (1 + confluences * 0.1)));
-      
-      if (confluences >= 3) {
-        finalConfidence = Math.min(95, finalConfidence + 10);
-      }
+      let finalConfidence = Math.min(88, Math.round(best.score * (1 + confluences * 0.05)));
       
       return {
         matched: best.score >= 55,
@@ -919,11 +915,7 @@ const RobotEngine = {
       const best = valid[0];
       const confluences = valid.filter(a => a.score >= 60).length;
       
-      let finalConfidence = Math.min(92, Math.round(best.score * (1 + confluences * 0.1)));
-      
-      if (confluences >= 3) {
-        finalConfidence = Math.min(95, finalConfidence + 10);
-      }
+      let finalConfidence = Math.min(88, Math.round(best.score * (1 + confluences * 0.05)));
       
       return {
         matched: best.score >= 55,
@@ -1346,6 +1338,454 @@ const RobotEngine = {
         confluences,
         lastAnalysis: Date.now()
       };
+    },
+
+    divergenciaTemporal(history, _target, _patternSize) {
+      if (history.length < 30) return { matched: false, confidence: 0, reason: 'Historico insuficiente (min 30)' };
+      const colors = history.map(r => r.color);
+      const calcRate = (arr, color) => arr.filter(c => c === color).length / arr.length;
+      const windows = [
+        { short: colors.slice(0, 5), long: colors.slice(0, 20), label: '5 vs 20' },
+        { short: colors.slice(0, 10), long: colors.slice(0, 30), label: '10 vs 30' }
+      ];
+      const targetCandidates = ['RED', 'BLACK', 'GREEN', 'BLUE'];
+      let bestScore = 0, bestTarget = 'RED', bestReason = '';
+      for (const t of targetCandidates) {
+        for (const w of windows) {
+          const shortRate = calcRate(w.short, t);
+          const longRate = calcRate(w.long, t);
+          const divergencia = shortRate - longRate;
+          if (Math.abs(divergencia) >= 0.15) {
+            const score = Math.min(88, Math.round(50 + Math.abs(divergencia) * 150));
+            const dir = divergencia > 0 ? 'fortalecendo' : ' enfraquecendo';
+            if (score > bestScore) {
+              bestScore = score;
+              bestTarget = t;
+              bestReason = `${t} ${dir}: ${Math.round(shortRate * 100)}% curto vs ${Math.round(longRate * 100)}% longo (${w.label})`;
+            }
+          }
+        }
+      }
+      return {
+        matched: bestScore >= 58,
+        target: bestTarget,
+        confidence: bestScore,
+        pattern: colors.slice(0, 6),
+        reason: bestScore >= 58 ? 'DIVERGENCIA: ' + bestReason : 'Sem divergencia temporal',
+        analyses: [{ type: 'divergencia', score: bestScore, detail: bestReason }],
+        confluences: bestScore >= 70 ? 1 : 0,
+        lastAnalysis: Date.now()
+      };
+    },
+
+    markovTransicao(history, _target, _patternSize) {
+      if (history.length < 25) return { matched: false, confidence: 0, reason: 'Historico insuficiente (min 25)' };
+      const colors = history.map(r => r.color);
+      const states = ['RED', 'BLACK', 'GREEN', 'BLUE'];
+      const transicoes = {};
+      const totals = {};
+      for (const s of states) { transicoes[s] = {}; totals[s] = 0; }
+      for (let i = 0; i < colors.length - 1; i++) {
+        const from = colors[i], to = colors[i + 1];
+        if (!states.includes(from) || !states.includes(to)) continue;
+        transicoes[from][to] = (transicoes[from][to] || 0) + 1;
+        totals[from]++;
+      }
+      const atual = colors[0];
+      if (!totals[atual] || totals[atual] < 3) {
+        return { matched: false, target: 'RED', confidence: 0, reason: 'Dados insuficientes para Markov' };
+      }
+      let bestProb = 0, bestNext = 'RED';
+      for (const next of states) {
+        const prob = (transicoes[atual][next] || 0) / totals[atual];
+        if (prob > bestProb) { bestProb = prob; bestNext = next; }
+      }
+      const baseline = 1 / states.length;
+      const lift = bestProb / baseline;
+      const score = Math.min(90, Math.round(45 + lift * 25));
+      return {
+        matched: score >= 58,
+        target: bestNext,
+        confidence: score,
+        pattern: colors.slice(0, 5),
+        reason: `Markov: P(${atual} -> ${bestNext}) = ${Math.round(bestProb * 100)}% (lift ${Math.round(lift * 100)}%)`,
+        analyses: [{ type: 'markov', score, detail: `Transicao ${atual}->${bestNext}: ${Math.round(bestProb * 100)}%` }],
+        confluences: score >= 70 ? 1 : 0,
+        lastAnalysis: Date.now()
+      };
+    },
+
+    bayesiano(history, _target, _patternSize) {
+      if (history.length < 20) return { matched: false, confidence: 0, reason: 'Historico insuficiente (min 20)' };
+      const colors = history.map(r => r.color);
+      const prior = { RED: 0.44, BLACK: 0.44, GREEN: 0.04, BLUE: 0.08 };
+      const recent = colors.slice(0, 10);
+      const likelihood = {};
+      for (const c of Object.keys(prior)) {
+        const count = recent.filter(x => x === c).length;
+        const smooth = 0.5;
+        likelihood[c] = (count + smooth) / (recent.length + smooth * Object.keys(prior).length);
+      }
+      const posterior = {};
+      let totalEvidence = 0;
+      for (const c of Object.keys(prior)) {
+        posterior[c] = likelihood[c] * prior[c];
+        totalEvidence += posterior[c];
+      }
+      for (const c of Object.keys(posterior)) {
+        posterior[c] = posterior[c] / totalEvidence;
+      }
+      let bestPost = 0, bestColor = 'RED';
+      for (const [c, p] of Object.entries(posterior)) {
+        if (p > bestPost) { bestPost = p; bestColor = c; }
+      }
+      const maxExpected = Math.max(...Object.values(prior));
+      const lift = bestPost / maxExpected;
+      const score = Math.min(92, Math.round(50 + lift * 30));
+      const streak = [];
+      let sLen = 1;
+      for (let i = 1; i < Math.min(8, colors.length); i++) {
+        if (colors[i] === colors[0]) sLen++; else break;
+      }
+      let bonus = 0;
+      if (sLen >= 3) bonus = Math.min(10, sLen * 2);
+      return {
+        matched: (score + bonus) >= 58,
+        target: bestColor,
+        confidence: Math.min(95, score + bonus),
+        pattern: colors.slice(0, 5),
+        reason: `Bayes: P(${bestColor}) = ${Math.round(bestPost * 100)}% | Prior adj.`,
+        analyses: [{ type: 'bayesiano', score: score + bonus, detail: `Posterior ${bestColor}: ${Math.round(bestPost * 100)}%` }],
+        confluences: (score + bonus) >= 70 ? 1 : 0,
+        lastAnalysis: Date.now()
+      };
+    },
+
+    regressaoReversao(history, _target, _patternSize) {
+      if (history.length < 25) return { matched: false, confidence: 0, reason: 'Historico insuficiente (min 25)' };
+      const colors = history.map(r => r.color);
+      const colorVal = { RED: 1, BLACK: 2, GREEN: 0, BLUE: 3 };
+      const window = colors.slice(0, 20).map(c => colorVal[c] !== undefined ? colorVal[c] : 1);
+      const mean = window.reduce((a, b) => a + b, 0) / window.length;
+      const std = Math.sqrt(window.reduce((s, v) => s + (v - mean) ** 2, 0) / window.length);
+      const current = window[0];
+      const zScore = std > 0 ? (current - mean) / std : 0;
+      let target = 'RED', score = 0, reason = '';
+      if (zScore > 1.2) {
+        const candidates = Object.entries(colorVal).filter(([k, v]) => v < current).sort((a, b) => b[1] - a[1]);
+        target = candidates.length ? candidates[0][0] : 'RED';
+        score = Math.min(88, Math.round(55 + Math.abs(zScore) * 15));
+        reason = `Reversao para baixo: z=${zScore.toFixed(2)} (acima da media)`;
+      } else if (zScore < -1.2) {
+        const candidates = Object.entries(colorVal).filter(([k, v]) => v > current).sort((a, b) => a[1] - b[1]);
+        target = candidates.length ? candidates[0][0] : 'BLACK';
+        score = Math.min(88, Math.round(55 + Math.abs(zScore) * 15));
+        reason = `Reversao para cima: z=${zScore.toFixed(2)} (abaixo da media)`;
+      } else {
+        const extremes = window.slice(0, 5).filter(v => Math.abs((v - mean) / (std || 1)) > 1);
+        if (extremes.length >= 2) {
+          score = Math.round(50 + extremes.length * 5);
+          const lastIsHigh = window[0] > mean;
+          target = lastIsHigh ? 'RED' : 'BLACK';
+          reason = `Extremos recentes: ${extremes.length} - reversao provavel`;
+        }
+      }
+      return {
+        matched: score >= 55,
+        target,
+        confidence: score,
+        pattern: colors.slice(0, 5),
+        reason: score >= 55 ? 'REGRESSAO: ' + reason : 'Sem reversao detectada',
+        analyses: [{ type: 'regressao', score, detail: `z=${zScore.toFixed(2)} | media=${mean.toFixed(2)} | std=${std.toFixed(2)}` }],
+        confluences: score >= 70 ? 1 : 0,
+        lastAnalysis: Date.now()
+      };
+    },
+
+    suavizacaoExponencial(history, _target, _patternSize) {
+      if (history.length < 20) return { matched: false, confidence: 0, reason: 'Historico insuficiente (min 20)' };
+      const colors = history.map(r => r.color);
+      const alpha = 0.3;
+      const colorIdx = { RED: 1, BLACK: 2, GREEN: 0, BLUE: 3 };
+      let smoothed = colorIdx[colors[0]] || 1;
+      for (let i = 1; i < Math.min(30, colors.length); i++) {
+        const val = colorIdx[colors[i]] || 1;
+        smoothed = alpha * val + (1 - alpha) * smoothed;
+      }
+      const actual = colorIdx[colors[0]] || 1;
+      const diff = smoothed - actual;
+      let target = 'RED', score = 0, reason = '';
+      if (Math.abs(diff) >= 0.8) {
+        if (diff > 0) {
+          target = 'RED';
+          reason = `Suavizacao: smooth=${smoothed.toFixed(2)} > atual=${actual} - tendencia de subida`;
+        } else {
+          target = 'BLACK';
+          reason = `Suavizacao: smooth=${smoothed.toFixed(2)} < atual=${actual} - tendencia de descida`;
+        }
+        score = Math.min(85, Math.round(55 + Math.abs(diff) * 20));
+      }
+      const recent = colors.slice(0, 5);
+      const rFreq = {};
+      recent.forEach(c => rFreq[c] = (rFreq[c] || 0) + 1);
+      const dominant = Object.entries(rFreq).sort((a, b) => b[1] - a[1])[0];
+      if (dominant && dominant[1] >= 3) {
+        const others = Object.keys(rFreq).filter(c => c !== dominant[0]);
+        if (others.length) {
+          const altTarget = others[0];
+          if (score < 60) { target = altTarget; score = Math.max(score, 55); reason = `Reversao apos dominancia ${dominant[0]} x${dominant[1]}`; }
+        }
+      }
+      return {
+        matched: score >= 55,
+        target,
+        confidence: score,
+        pattern: colors.slice(0, 5),
+        reason: score >= 55 ? 'EXP-SMOOTH: ' + reason : 'Sem sinal EXP-SMOOTH',
+        analyses: [{ type: 'suavizacao', score, detail: `smooth=${smoothed.toFixed(2)} | diff=${diff.toFixed(2)}` }],
+        confluences: score >= 70 ? 1 : 0,
+        lastAnalysis: Date.now()
+      };
+    },
+
+    detectorAnomalias(history, _target, _patternSize) {
+      if (history.length < 30) return { matched: false, confidence: 0, reason: 'Historico insuficiente (min 30)' };
+      const colors = history.map(r => r.color);
+      const freq = {};
+      colors.forEach(c => freq[c] = (freq[c] || 0) + 1);
+      const total = colors.length;
+      const expected = {};
+      for (const c of Object.keys(freq)) expected[c] = total / Object.keys(freq).length;
+      const chi2 = {};
+      for (const c of Object.keys(freq)) {
+        chi2[c] = Math.pow((freq[c] - expected[c]), 2) / expected[c];
+      }
+      const recent5 = colors.slice(0, 5);
+      const recentFreq = {};
+      recent5.forEach(c => recentFreq[c] = (recentFreq[c] || 0) + 1);
+      let bestScore = 0, bestTarget = 'RED', bestReason = '';
+      for (const c of Object.keys(freq)) {
+        const overallRate = freq[c] / total;
+        const recentRate = (recentFreq[c] || 0) / 5;
+        const deviation = Math.abs(overallRate - recentRate);
+        if (deviation >= 0.2) {
+          const anomalyStrength = deviation / overallRate;
+          const score = Math.min(88, Math.round(55 + anomalyStrength * 20));
+          let target;
+          if (recentRate > overallRate) {
+            target = c === 'RED' ? 'BLACK' : c === 'BLACK' ? 'RED' : 'RED';
+          } else {
+            target = c;
+          }
+          if (score > bestScore) {
+            bestScore = score;
+            bestTarget = target;
+            bestReason = `Anomalia ${c}: geral ${Math.round(overallRate * 100)}% vs recente ${Math.round(recentRate * 100)}% (chi2=${chi2[c].toFixed(1)})`;
+          }
+        }
+      }
+      return {
+        matched: bestScore >= 58,
+        target: bestTarget,
+        confidence: bestScore,
+        pattern: colors.slice(0, 5),
+        reason: bestScore >= 58 ? 'ANOMALIA: ' + bestReason : 'Sem anomalias detectadas',
+        analyses: [{ type: 'anomalia', score: bestScore, detail: bestReason }],
+        confluences: bestScore >= 72 ? 1 : 0,
+        lastAnalysis: Date.now()
+      };
+    },
+
+    convergenciaMultiEscala(history, _target, _patternSize) {
+      if (history.length < 35) return { matched: false, confidence: 0, reason: 'Historico insuficiente (min 35)' };
+      const colors = history.map(r => r.color);
+      const scales = [
+        { start: 0, len: 5, label: '5' },
+        { start: 0, len: 10, label: '10' },
+        { start: 0, len: 20, label: '20' }
+      ];
+      const targets = ['RED', 'BLACK', 'GREEN', 'BLUE'];
+      const votes = {};
+      targets.forEach(t => votes[t] = 0);
+      const scaleResults = [];
+      for (const s of scales) {
+        const slice = colors.slice(s.start, s.start + s.len);
+        if (slice.length < 3) continue;
+        const freq = {};
+        slice.forEach(c => freq[c] = (freq[c] || 0) + 1);
+        let best = 'RED', bestCount = 0;
+        for (const c of Object.keys(freq)) {
+          if (freq[c] > bestCount) { bestCount = freq[c]; best = c; }
+        }
+        votes[best]++;
+        scaleResults.push({ scale: s.label, winner: best, rate: Math.round((bestCount / slice.length) * 100) });
+      }
+      let consensus = 'RED', maxVotes = 0;
+      for (const [c, v] of Object.entries(votes)) {
+        if (v > maxVotes) { maxVotes = v; consensus = c; }
+      }
+      const totalScales = scaleResults.length || 1;
+      const agreement = maxVotes / totalScales;
+      const score = Math.min(90, Math.round(50 + agreement * 35));
+      const detail = scaleResults.map(s => `${s.label}: ${s.winner} ${s.rate}%`).join(' | ');
+      return {
+        matched: score >= 58,
+        target: consensus,
+        confidence: score,
+        pattern: colors.slice(0, 5),
+        reason: score >= 58 ? `MULTI-ESCALA: ${detail}` : 'Sem convergencia multi-escala',
+        analyses: [{ type: 'multiEscala', score, detail }],
+        confluences: maxVotes >= 3 ? 1 : 0,
+        lastAnalysis: Date.now()
+      };
+    },
+
+    predicaoCondicional(history, _target, _patternSize) {
+      if (history.length < 25) return { matched: false, confidence: 0, reason: 'Historico insuficiente (min 25)' };
+      const colors = history.map(r => r.color);
+      const transitions = {};
+      const totals = {};
+      for (let i = 0; i < colors.length - 2; i++) {
+        const key = `${colors[i]}-${colors[i + 1]}`;
+        const next = colors[i + 2];
+        if (!transitions[key]) transitions[key] = {};
+        transitions[key][next] = (transitions[key][next] || 0) + 1;
+        totals[key] = (totals[key] || 0) + 1;
+      }
+      const state = `${colors[1]}-${colors[0]}`;
+      if (!totals[state] || totals[state] < 2) {
+        return { matched: false, target: 'RED', confidence: 0, reason: 'Estado insuficiente: ' + state };
+      }
+      const trans = transitions[state];
+      let bestNext = 'RED', bestProb = 0;
+      for (const [next, count] of Object.entries(trans)) {
+        const prob = count / totals[state];
+        if (prob > bestProb) { bestProb = prob; bestNext = next; }
+      }
+      const baseline = 1 / 4;
+      const lift = bestProb / baseline;
+      const score = Math.min(92, Math.round(50 + lift * 22));
+      const stateCount = totals[state];
+      const sampleBonus = Math.min(5, Math.floor(stateCount / 3));
+      return {
+        matched: score >= 58,
+        target: bestNext,
+        confidence: Math.min(95, score + sampleBonus),
+        pattern: colors.slice(0, 5),
+        reason: `CONDICIONAL: P(${state} -> ${bestNext}) = ${Math.round(bestProb * 100)}% (n=${stateCount})`,
+        analyses: [{ type: 'condicional', score: score + sampleBonus, detail: `Estado ${state}: ${Math.round(bestProb * 100)}% -> ${bestNext}` }],
+        confluences: (score + sampleBonus) >= 72 ? 1 : 0,
+        lastAnalysis: Date.now()
+      };
+    },
+
+    entropiaAdaptativa(history, _target, _patternSize) {
+      if (history.length < 25) return { matched: false, confidence: 0, reason: 'Historico insuficiente (min 25)' };
+      const colors = history.map(r => r.color);
+      const calcEntropy = (arr) => {
+        const freq = {};
+        arr.forEach(c => freq[c] = (freq[c] || 0) + 1);
+        let H = 0;
+        Object.values(freq).forEach(cnt => {
+          const p = cnt / arr.length;
+          if (p > 0) H -= p * Math.log2(p);
+        });
+        return H;
+      };
+      const entFull = calcEntropy(colors.slice(0, 30));
+      const entRecent = calcEntropy(colors.slice(0, 10));
+      const entDiff = entFull - entRecent;
+      const maxEntropy = Math.log2(4);
+      const recentSlice = colors.slice(0, 10);
+      const freq = {};
+      recentSlice.forEach(c => freq[c] = (freq[c] || 0) + 1);
+      const sorted = Object.entries(freq).sort((a, b) => b[1] - a[1]);
+      const dominant = sorted[0];
+      const dominantRate = dominant ? dominant[1] / recentSlice.length : 0;
+      let target = 'RED', score = 0, reason = '';
+      if (entDiff > 0.3 && dominantRate >= 0.5) {
+        const others = Object.keys(freq).filter(c => c !== dominant[0]);
+        target = others.length ? others[0] : 'RED';
+        score = Math.min(88, Math.round(55 + entDiff * 40 + dominantRate * 15));
+        reason = `Entropia caiu: ${entFull.toFixed(2)} -> ${entRecent.toFixed(2)} | ${dominant[0]} dominante ${Math.round(dominantRate * 100)}%`;
+      } else if (entDiff < -0.3) {
+        const last3 = colors.slice(0, 3);
+        const f3 = {};
+        last3.forEach(c => f3[c] = (f3[c] || 0) + 1);
+        const mostRecent = Object.entries(f3).sort((a, b) => b[1] - a[1])[0];
+        if (mostRecent) {
+          const others = Object.keys(freq).filter(c => c !== mostRecent[0]);
+          target = others.length ? others[0] : 'BLACK';
+          score = Math.min(85, Math.round(50 + Math.abs(entDiff) * 35));
+          reason = `Entropia subindo: ${entFull.toFixed(2)} -> ${entRecent.toFixed(2)} | caos aumentando`;
+        }
+      }
+      return {
+        matched: score >= 58,
+        target,
+        confidence: score,
+        pattern: colors.slice(0, 5),
+        reason: score >= 58 ? 'ENTROPIA-ADAPT: ' + reason : 'Sem sinal entropia',
+        analyses: [{ type: 'entropiaAdapt', score, detail: `H_full=${entFull.toFixed(2)} H_recent=${entRecent.toFixed(2)} diff=${entDiff.toFixed(2)}` }],
+        confluences: score >= 72 ? 1 : 0,
+        lastAnalysis: Date.now()
+      };
+    },
+
+    volatilidadeAdaptativa(history, _target, _patternSize) {
+      if (history.length < 25) return { matched: false, confidence: 0, reason: 'Historico insuficiente (min 25)' };
+      const colors = history.map(r => r.color);
+      const calcVolatility = (arr) => {
+        let changes = 0;
+        for (let i = 0; i < arr.length - 1; i++) {
+          if (arr[i] !== arr[i + 1]) changes++;
+        }
+        return changes / Math.max(arr.length - 1, 1);
+      };
+      const vol10 = calcVolatility(colors.slice(0, 10));
+      const vol20 = calcVolatility(colors.slice(0, 20));
+      const volDiff = vol10 - vol20;
+      const recent = colors.slice(0, 5);
+      const streak = [];
+      let cur = recent[0], cnt = 1;
+      for (let i = 1; i < recent.length; i++) {
+        if (recent[i] === cur) cnt++;
+        else { streak.push({ color: cur, count: cnt }); cur = recent[i]; cnt = 1; }
+      }
+      streak.push({ color: cur, count: cnt });
+      const longest = streak.sort((a, b) => b.count - a.count)[0];
+      let target = 'RED', score = 0, reason = '';
+      if (volDiff > 0.15 && longest && longest.count >= 2) {
+        const others = colors.filter(c => c !== longest.color);
+        const freq = {};
+        others.forEach(c => freq[c] = (freq[c] || 0) + 1);
+        const bestAlt = Object.entries(freq).sort((a, b) => b[1] - a[1])[0];
+        target = bestAlt ? bestAlt[0] : 'RED';
+        score = Math.min(85, Math.round(55 + volDiff * 80 + longest.count * 3));
+        reason = `Alta volatilidade + streak ${longest.color} x${longest.count} - reversao provavel`;
+      } else if (volDiff < -0.15) {
+        target = longest ? (longest.color === 'RED' ? 'BLACK' : 'RED') : 'BLACK';
+        score = Math.min(82, Math.round(50 + Math.abs(volDiff) * 70));
+        reason = `Baixa volatilidade - continuacao de ${longest ? longest.color : '?'}`;
+      } else if (longest && longest.count >= 4) {
+        const others = colors.filter(c => c !== longest.color);
+        const freq = {};
+        others.forEach(c => freq[c] = (freq[c] || 0) + 1);
+        const bestAlt = Object.entries(freq).sort((a, b) => b[1] - a[1])[0];
+        target = bestAlt ? bestAlt[0] : 'RED';
+        score = Math.min(80, Math.round(50 + longest.count * 5));
+        reason = `Streak longo ${longest.color} x${longest.count} - reversao estatistica`;
+      }
+      return {
+        matched: score >= 55,
+        target,
+        confidence: score,
+        pattern: colors.slice(0, 5),
+        reason: score >= 55 ? 'VOL-ADAPT: ' + reason : 'Sem sinal volatilidade',
+        analyses: [{ type: 'volatilidadeAdapt', score, detail: `vol10=${Math.round(vol10 * 100)}% vol20=${Math.round(vol20 * 100)}% diff=${Math.round(volDiff * 100)}%` }],
+        confluences: score >= 70 ? 1 : 0,
+        lastAnalysis: Date.now()
+      };
     }
   },
 
@@ -1378,8 +1818,8 @@ const RobotEngine = {
     let signalScore = Math.round(
       (strategyResult.confidence || 0) * 0.4 +
       (confluences / Math.max(Object.keys(robot.diagnostic.patternScores || {}).length, 1)) * 100 * 0.3 +
-      Math.max(0, 100 - recentLosses * 20) * 0.2 +
-      (risk === 'BAIXO' ? 90 : risk === 'MEDIO' ? 60 : 30) * 0.1
+      Math.max(0, 100 - recentLosses * 25) * 0.2 +
+      (risk === 'BAIXO' ? 90 : risk === 'MEDIO' ? 50 : 10) * 0.1
     );
     signalScore = Math.min(99, Math.max(10, signalScore));
 
@@ -1405,7 +1845,7 @@ const RobotEngine = {
       agressivo: { minConf: 45, minConfluences: 1, minScore: 30 }
     };
     const th = thresholds[filterMode] || thresholds.moderado;
-    const effectiveConf = Math.max(th.minConf || 0, robot.minimumConfidence || 80);
+    const effectiveConf = robot.minimumConfidence !== undefined && robot.minimumConfidence !== null ? Math.max(th.minConf || 0, robot.minimumConfidence) : (th.minConf || 0);
 
     const filter = {
       padraoEncontrado: true,

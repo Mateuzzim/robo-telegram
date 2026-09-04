@@ -36,6 +36,21 @@
   .strategy-item .strat-tag{font-size:9px;padding:2px 5px;border-radius:4px;background:var(--bg);color:var(--text3);margin-left:auto}
   @media(max-width:1024px){.strategy-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:768px){.strategy-grid{grid-template-columns:1fr}}
+  .chart-bar{display:flex;align-items:center;gap:8px;padding:5px 0}
+  .chart-bar-label{font-size:11px;color:var(--text3);min-width:110px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chart-bar-track{flex:1;height:22px;background:var(--bg);border-radius:4px;overflow:hidden;position:relative}
+  .chart-bar-fill{height:100%;border-radius:4px;transition:width .6s ease;display:flex;align-items:center;justify-content:flex-end;padding-right:6px;font-size:10px;font-weight:700;color:#fff;min-width:fit-content}
+  .chart-donut{width:170px;height:170px;border-radius:50%;position:relative;display:flex;align-items:center;justify-content:center}
+  .chart-donut-center{position:absolute;width:95px;height:95px;border-radius:50%;background:var(--bg2);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:2}
+  .chart-legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .chart-legend-item{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text3)}
+  .chart-legend-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+  .perf-metric{display:flex;flex-direction:column;align-items:center;padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:10px;text-align:center}
+  .perf-metric .perf-value{font-size:32px;font-weight:800;line-height:1.1}
+  .perf-metric .perf-label{font-size:11px;color:var(--text3);margin-top:4px;text-transform:uppercase;letter-spacing:.5px}
+  .perf-metric .perf-sub{font-size:11px;color:var(--text3);margin-top:2px}
+  @keyframes barGrow{from{width:0}to{width:var(--w)}}
+  .chart-bar-fill{animation:barGrow .8s ease forwards}
 </style>
 </head>
 <body>
@@ -72,6 +87,24 @@
     <thead><tr><th>Robo</th><th>Estrategia</th><th>Status</th><th>Alvo</th><th>Conf</th><th>W/L</th><th>Modo</th><th>Intervalo</th><th>Gale</th><th>Acoes</th></tr></thead>
     <tbody id="robotsTable"></tbody>
   </table></div></div>
+</div>
+
+<div class="modal-overlay" id="autoAnaliseModal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal" style="max-width:95vw;width:95vw;max-height:95vh;overflow-y:auto">
+    <div class="modal-title" id="autoAnaliseTitle">Analise Automatica</div>
+    <div id="autoAnaliseContent">
+      <div style="text-align:center;padding:30px;color:var(--text3)">
+        <div style="font-size:20px;margin-bottom:8px">🔍</div>
+        <div>Analisando todas as estrategias...</div>
+        <div style="font-size:11px;margin-top:4px;color:var(--text3)">Testando cada estrategia com o historico do robo</div>
+      </div>
+    </div>
+    <div id="autoAnaliseActions" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);gap:10px">
+      <button class="btn btn-green" onclick="applyAutoAnalise()" id="btnApplyAnalise" style="padding:10px 24px;font-size:13px">Aplicar Ajustes</button>
+      <button class="btn btn-red" onclick="undoAutoAnalise()" id="btnUndoAnalise" style="padding:10px 24px;font-size:13px;display:none">Voltar (Desfazer)</button>
+      <button class="btn btn-ghost" onclick="document.getElementById('autoAnaliseModal').style.display='none'" style="padding:10px 24px;font-size:13px">Fechar</button>
+    </div>
+  </div>
 </div>
 
   <div class="modal-overlay" id="modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
@@ -151,6 +184,16 @@
         <div class="strategy-item"><label><input type="checkbox" value="convergenciaVermelha" onchange="togglePatternSize()"><span>Convergencia Vermelha</span></label><span class="strat-tag">WHEEL 3x</span></div>
         <div class="strategy-item"><label><input type="checkbox" value="cicloAzul" onchange="togglePatternSize()"><span>Ciclo Azul</span></label><span class="strat-tag">WHEEL 5x</span></div>
         <div class="strategy-item"><label><input type="checkbox" value="sequenciaAzul" onchange="togglePatternSize()"><span>Sequencia Azul</span></label><span class="strat-tag">WHEEL 5x</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="divergenciaTemporal" onchange="togglePatternSize()"><span>Divergencia Temporal</span></label><span class="strat-tag">ADV</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="markovTransicao" onchange="togglePatternSize()"><span>Markov Transicao</span></label><span class="strat-tag">ADV</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="bayesiano" onchange="togglePatternSize()"><span>Bayesiano</span></label><span class="strat-tag">ADV</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="regressaoReversao" onchange="togglePatternSize()"><span>Regressao Reversao</span></label><span class="strat-tag">ADV</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="suavizacaoExponencial" onchange="togglePatternSize()"><span>Suavizacao Exp.</span></label><span class="strat-tag">ADV</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="detectorAnomalias" onchange="togglePatternSize()"><span>Detector Anomalias</span></label><span class="strat-tag">ADV</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="convergenciaMultiEscala" onchange="togglePatternSize()"><span>Convergencia Multi</span></label><span class="strat-tag">ADV</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="predicaoCondicional" onchange="togglePatternSize()"><span>Predicao Condicional</span></label><span class="strat-tag">ADV</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="entropiaAdaptativa" onchange="togglePatternSize()"><span>Entropia Adaptativa</span></label><span class="strat-tag">ADV</span></div>
+        <div class="strategy-item"><label><input type="checkbox" value="volatilidadeAdaptativa" onchange="togglePatternSize()"><span>Volatilidade Adapt.</span></label><span class="strat-tag">ADV</span></div>
       </div>
     </div>
 
@@ -583,7 +626,11 @@ function loadRobots(){
     cicloVerde:'Ciclo Verde', convergencia:'Convergencia', cicloZero:'Ciclo Zero', padraoNumerico:'Padrao Num.',
     sequenciaNegra:'Seq. Negra', momentumPreto:'Mom. Preto', sequenciaVermelha:'Seq. Vermelha', momentumVermelho:'Mom. Vermelho',
     cicloPreto:'Ciclo Preto', reacaoPreto:'Reacao Preto', cicloVermelho:'Ciclo Vermelho', convergenciaVermelha:'Conv. Vermelha',
-    cicloAzul:'Ciclo Azul', sequenciaAzul:'Seq. Azul'
+    cicloAzul:'Ciclo Azul', sequenciaAzul:'Seq. Azul',
+    divergenciaTemporal:'Div. Temporal', markovTransicao:'Markov', bayesiano:'Bayesiano',
+    regressaoReversao:'Regressao', suavizacaoExponencial:'Exp. Smooth', detectorAnomalias:'Anomalias',
+    convergenciaMultiEscala:'Multi-Escala', predicaoCondicional:'Pred. Condicional',
+    entropiaAdaptativa:'Entropia Adapt.', volatilidadeAdaptativa:'Vol. Adapt.'
   };
   const stratColors = {
     todas:'var(--blue)', alternancia:'var(--green)', repeticao:'var(--yellow)', frequencia:'var(--blue)',
@@ -591,7 +638,11 @@ function loadRobots(){
     cicloVerde:'var(--green)', convergencia:'var(--green)', cicloZero:'var(--green)', padraoNumerico:'var(--green)',
     sequenciaNegra:'#666', momentumPreto:'#666', sequenciaVermelha:'var(--red)', momentumVermelho:'var(--red)',
     cicloPreto:'#666', reacaoPreto:'#666', cicloVermelho:'var(--red)', convergenciaVermelha:'var(--red)',
-    cicloAzul:'var(--blue)', sequenciaAzul:'var(--blue)'
+    cicloAzul:'var(--blue)', sequenciaAzul:'var(--blue)',
+    divergenciaTemporal:'var(--purple,#a855f7)', markovTransicao:'var(--cyan,#06b6d4)', bayesiano:'var(--emerald,#10b981)',
+    regressaoReversao:'var(--orange,#f97316)', suavizacaoExponencial:'var(--yellow)', detectorAnomalias:'var(--red)',
+    convergenciaMultiEscala:'var(--blue)', predicaoCondicional:'var(--indigo,#6366f1)',
+    entropiaAdaptativa:'var(--pink,#ec4899)', volatilidadeAdaptativa:'var(--violet,#8b5cf6)'
   };
   
   document.getElementById('robotsTable').innerHTML = robots.map(r => {
@@ -626,16 +677,17 @@ function loadRobots(){
       <td style="font-size:11px;color:var(--text3)">${r.mode}</td>
       <td style="font-size:11px;color:var(--text3)">${r.intervalMin||60}s</td>
       <td style="font-size:11px;color:var(--text3)">${r.gale?.max||0}</td>
-      <td style="display:flex;gap:4px;align-items:center">
+      <td style="display:flex;gap:3px;align-items:center;flex-wrap:wrap">
         <a href="robo.html?id=${r.id}" class="btn btn-sm btn-blue">Abrir</a>
         <button class="btn btn-sm btn-yellow" onclick="showEdit('${r.id}')">Editar</button>
         ${r.status==='offline'
           ? `<button class="btn btn-sm btn-green" onclick="start('${r.id}')">Play</button>`
           : `<button class="btn btn-sm btn-red" onclick="stop('${r.id}')">Stop</button>`}
-        <button class="btn btn-sm btn-red" onclick="deleteRobot('${r.id}')">Del</button>
+        <button class="btn btn-sm btn-cyan" onclick="analyzeRobotAuto('${r.id}')" title="Analise Automatica">Analise</button>
         <button class="btn btn-sm btn-purple" onclick="resetTelegramMessages('${r.id}')" title="Resetar mensagens do Telegram">Reset TG</button>
         <button class="btn btn-sm btn-orange" onclick="showResetStats('${r.id}')" title="Resetar estatisticas">Reset Stats</button>
-        <button class="btn btn-sm btn-blue" onclick="showSignalHistory('${r.id}')" title="Historico de sinais"> Historico</button>
+        <button class="btn btn-sm btn-blue" onclick="showSignalHistory('${r.id}')" title="Historico de sinais">Historico</button>
+        <button class="btn btn-sm btn-red" onclick="deleteRobot('${r.id}')">Del</button>
       </td>
     </tr>`;
   }).join('') || '<tr><td colspan="10" style="color:var(--text3);text-align:center;padding:20px">Nenhum robo criado</td></tr>';
@@ -841,6 +893,530 @@ async function resetTelegramMessages(id) {
   alert('Mensagens resetadas! ' + deletedCount + ' mensagem(ns) deletada(s) do Telegram.');
   loadRobots();
 }
+let autoAnaliseSnapshot = null;
+let autoAnaliseRobotId = null;
+const ALL_STRATEGIES = ['todas','alternancia','repeticao','frequencia','tendencia','espelhamento','diagonal','padroesCores','cicloVerde','convergencia','cicloZero','padraoNumerico','sequenciaNegra','momentumPreto','sequenciaVermelha','momentumVermelho','cicloPreto','reacaoPreto','cicloVermelho','convergenciaVermelha','cicloAzul','sequenciaAzul','divergenciaTemporal','markovTransicao','bayesiano','regressaoReversao','suavizacaoExponencial','detectorAnomalias','convergenciaMultiEscala','predicaoCondicional','entropiaAdaptativa','volatilidadeAdaptativa'];
+
+const ALL_FILTERS = ['frequencia','repeticaoExcessiva','sequenciaEsticada','recencia','distanciaOcorrencias','janelaCurtaLonga','tendencia','quebraTendencia','alternancia','concentracao','dispersao','atraso','padraoRecorrente','transicao','matrizTransicao','probabilidadeCondicional','entropia','volatilidade','consensoEstrategias','divergenciaEstrategias','scoreMinimo','confiancaMinima','diferencaCandidatos','confirmacaoMultipla','cooldownSinal','posWin','posLoss','lossConsecutivo','qualidadeAmostra','antiOverfitting'];
+
+function getHistoryForRobot(robot) {
+  const game = robot.game || 'wheel';
+  const key = 'historico-' + game + '-v1';
+  try {
+    return JSON.parse(localStorage.getItem(key) || '[]');
+  } catch { return []; }
+}
+
+function analyzeRobotAuto(robotId) {
+  const robot = RobotEngine.getRobot(robotId);
+  if (!robot) { alert('Robo nao encontrado'); return; }
+  const history = getHistoryForRobot(robot);
+  if (history.length < 10) {
+    alert('Historico insuficiente (minimo 10 resultados). Conecte o WebSocket primeiro.');
+    return;
+  }
+
+  autoAnaliseRobotId = robotId;
+  autoAnaliseSnapshot = JSON.parse(JSON.stringify({
+    strategies: robot.strategies || [robot.strategy || 'todas'],
+    filters: robot.filters || [],
+    resultsToAnalyze: robot.resultsToAnalyze || 40,
+    minimumConfidence: robot.minimumConfidence || 80,
+    minScore: robot.minScore || 52,
+    gale: robot.gale?.max || 2,
+    intervalMin: robot.intervalMin || 60,
+    patternSize: robot.patternSize || 3,
+    filterMode: robot.filterMode || 'moderado'
+  }));
+
+  document.getElementById('autoAnaliseTitle').textContent = 'Analise: ' + (robot.name || robotId);
+  document.getElementById('autoAnaliseContent').innerHTML = '<div style="text-align:center;padding:30px;color:var(--text3)"><div style="font-size:20px;margin-bottom:8px">&#128269;</div><div>Analisando todas as estrategias...</div></div>';
+  document.getElementById('autoAnaliseActions').style.display = 'none';
+  document.getElementById('autoAnaliseModal').style.display = 'flex';
+
+  setTimeout(() => runAutoAnalysis(robot, history), 300);
+}
+
+function runAutoAnalysis(robot, history) {
+  const target = robot.target || { color: 'any' };
+  const patternSize = robot.patternSize || 3;
+  const results = [];
+  const applicableStrategies = ALL_STRATEGIES.filter(s => {
+    if (s === 'todas') return true;
+    const game = robot.game;
+    if (game === 'double' && ['cicloVerde','convergencia','cicloPreto','reacaoPreto','cicloVermelho','convergenciaVermelha','cicloAzul','sequenciaAzul'].includes(s)) return false;
+    if (game === 'wheel' && ['cicloZero','padraoNumerico','sequenciaNegra','momentumPreto','sequenciaVermelha','momentumVermelho'].includes(s)) return false;
+    return true;
+  });
+
+  for (const stratName of applicableStrategies) {
+    try {
+      const stratFn = RobotEngine.strategies[stratName];
+      if (!stratFn) continue;
+      const slice = history.slice(0, robot.resultsToAnalyze || 40);
+      const result = stratFn(slice, target, patternSize);
+      results.push({
+        name: stratName,
+        matched: result.matched,
+        confidence: result.confidence || 0,
+        target: result.target,
+        reason: result.reason || '',
+        score: result.confidence || 0
+      });
+    } catch (e) {
+      results.push({ name: stratName, matched: false, confidence: 0, target: null, reason: 'Erro: ' + e.message, score: 0 });
+    }
+  }
+
+  results.sort((a, b) => b.confidence - a.confidence);
+  const bestMatched = results.filter(r => r.matched);
+  const best = bestMatched.length > 0 ? bestMatched[0] : null;
+  const allScores = results.map(r => r.confidence);
+  const avgScore = allScores.length ? Math.round(allScores.reduce((a, b) => a + b, 0) / allScores.length) : 0;
+  const maxScore = Math.max(...allScores);
+  const matchedCount = results.filter(r => r.matched).length;
+
+  const filterResults = [];
+  const filterColors = history.map(h => h.result || h.color || h);
+  const filterContext = buildFilterContext(filterColors);
+  for (const fName of ALL_FILTERS) {
+    try {
+      const fn = Filters[fName];
+      if (!fn) continue;
+      const dummyCandidates = filterColors.slice(0, Math.min(20, filterColors.length)).map(c => ({ color: c }));
+      const filtered = fn([...dummyCandidates], filterContext, robot);
+      const keptPct = dummyCandidates.length > 0 ? Math.round((filtered.length / dummyCandidates.length) * 100) : 100;
+      const isRelevant = isFilterRelevant(fName, robot, best, filterContext);
+      filterResults.push({
+        name: fName,
+        keptPct,
+        isRelevant,
+        score: isRelevant ? Math.min(95, 60 + keptPct * 0.3) : Math.max(20, keptPct * 0.5)
+      });
+    } catch {
+      filterResults.push({ name: fName, keptPct: 100, isRelevant: false, score: 30 });
+    }
+  }
+  filterResults.sort((a, b) => b.score - a.score);
+  const recommendedFilters = filterResults.filter(f => f.isRelevant && f.score >= 55).map(f => f.name);
+  const topFilters = filterResults.slice(0, 10);
+
+  const bestConfidence = best ? best.confidence : 0;
+  const suggestedConf = Math.min(95, Math.max(50, bestConfidence + 5));
+  const suggestedResults = Math.max(30, Math.min(80, history.length * 0.6));
+  const suggestedMinScore = Math.min(75, Math.max(45, bestConfidence - 10));
+
+  const stratLabels = {
+    todas:'Todas', alternancia:'Alternancia', repeticao:'Repeticao', frequencia:'Frequencia',
+    tendencia:'Tendencia', espelhamento:'Espelhamento', diagonal:'Diagonal', padroesCores:'Padroes Cores',
+    cicloVerde:'Ciclo Verde', convergencia:'Convergencia', cicloZero:'Ciclo Zero', padraoNumerico:'Padrao Numerico',
+    sequenciaNegra:'Seq. Negra', momentumPreto:'Mom. Preto', sequenciaVermelha:'Seq. Vermelha', momentumVermelho:'Mom. Vermelho',
+    cicloPreto:'Ciclo Preto', reacaoPreto:'Reacao Preto', cicloVermelho:'Ciclo Vermelho', convergenciaVermelha:'Conv. Vermelha',
+    cicloAzul:'Ciclo Azul', sequenciaAzul:'Seq. Azul',
+    divergenciaTemporal:'Div. Temporal', markovTransicao:'Markov', bayesiano:'Bayesiano',
+    regressaoReversao:'Regressao', suavizacaoExponencial:'Exp. Smooth', detectorAnomalias:'Anomalias',
+    convergenciaMultiEscala:'Multi-Escala', predicaoCondicional:'Pred. Condicional',
+    entropiaAdaptativa:'Entropia Adapt.', volatilidadeAdaptativa:'Vol. Adapt.'
+  };
+
+  const filterLabels = {
+    frequencia:'Frequencia', repeticaoExcessiva:'Repeticao Exc.', sequenciaEsticada:'Seq. Esticada',
+    recencia:'Recencia', distanciaOcorrencias:'Dist. Ocorrencias', janelaCurtaLonga:'Janela Curta/Longa',
+    tendencia:'Tendencia', quebraTendencia:'Quebra Tendencia', alternancia:'Alternancia',
+    concentracao:'Concentracao', dispersao:'Dispersao', atraso:'Atraso',
+    padraoRecorrente:'Padrao Recorrente', transicao:'Transicao', matrizTransicao:'Matriz Transicao',
+    probabilidadeCondicional:'Prob. Condicional', entropia:'Entropia', volatilidade:'Volatilidade',
+    consensoEstrategias:'Consenso', divergenciaEstrategias:'Divergencia',
+    scoreMinimo:'Score Minimo', confiancaMinima:'Conf. Minima', diferencaCandidatos:'Dif. Candidatos',
+    confirmacaoMultipla:'Confirmacao Multipla', cooldownSinal:'Cooldown', posWin:'Pos-Win',
+    posLoss:'Pos-Loss', lossConsecutivo:'Loss Consecutivo', qualidadeAmostra:'Qualidade Amostra',
+    antiOverfitting:'Anti-Overfitting'
+  };
+
+  const totalAnalyzed = applicableStrategies.length + ALL_FILTERS.length;
+
+  const excellentCount = results.filter(r => r.confidence >= 75).length;
+  const goodCount = results.filter(r => r.confidence >= 50 && r.confidence < 75).length;
+  const weakCount = results.filter(r => r.confidence < 50).length;
+  const projWinRate = Math.min(92, Math.round(bestConfidence * 0.85 + recommendedFilters.length * 0.5));
+  const projROI = Math.round((projWinRate - 50) * 0.8);
+  const projDailySignals = Math.max(2, Math.round(1440 / (robot.intervalMin || 60) * (bestConfidence / 100) * 0.3));
+  const riskLevel = bestConfidence >= 75 ? 'BAIXO' : bestConfidence >= 55 ? 'MEDIO' : 'ALTO';
+  const riskColor = riskLevel === 'BAIXO' ? 'var(--green)' : riskLevel === 'MEDIO' ? 'var(--yellow)' : 'var(--red)';
+
+  let html = `
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
+      <div class="stat-card green" style="padding:10px">
+        <div class="stat-value" style="color:var(--green);font-size:20px">${matchedCount}/${applicableStrategies.length}</div>
+        <div class="stat-label">Estrategias</div>
+      </div>
+      <div class="stat-card blue" style="padding:10px">
+        <div class="stat-value" style="color:var(--blue);font-size:20px">${recommendedFilters.length}/${ALL_FILTERS.length}</div>
+        <div class="stat-label">Filtros</div>
+      </div>
+      <div class="stat-card red" style="padding:10px">
+        <div class="stat-value" style="color:var(--purple,#a855f7);font-size:20px">${maxScore}%</div>
+        <div class="stat-label">Melhor Score</div>
+      </div>
+      <div class="stat-card" style="padding:10px;border-left:4px solid var(--cyan,#06b6d4)">
+        <div class="stat-value" style="color:var(--cyan,#06b6d4);font-size:20px">${totalAnalyzed}</div>
+        <div class="stat-label">Total Analise</div>
+      </div>
+    </div>
+
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;padding-bottom:4px;border-bottom:1px solid var(--border)">Projecao de Desempenho</div>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:16px">
+      <div class="perf-metric">
+        <div class="perf-value" style="color:var(--green)">${projWinRate}%</div>
+        <div class="perf-label">Win Rate Proj.</div>
+        <div class="perf-sub">com ajustes atuais</div>
+      </div>
+      <div class="perf-metric">
+        <div class="perf-value" style="color:${projROI >= 0 ? 'var(--green)' : 'var(--red)'}">${projROI > 0 ? '+' : ''}${projROI}%</div>
+        <div class="perf-label">ROI Estimado</div>
+        <div class="perf-sub">retorno medio</div>
+      </div>
+      <div class="perf-metric">
+        <div class="perf-value" style="color:var(--blue)">${projDailySignals}</div>
+        <div class="perf-label">Sinais/Dia</div>
+        <div class="perf-sub">estimativa</div>
+      </div>
+      <div class="perf-metric">
+        <div class="perf-value" style="color:${riskColor}">${riskLevel}</div>
+        <div class="perf-label">Risco</div>
+        <div class="perf-sub">baseado na confianca</div>
+      </div>
+      <div class="perf-metric">
+        <div class="perf-value" style="color:var(--cyan,#06b6d4)">${bestConfidence}%</div>
+        <div class="perf-label">Confianca Max</div>
+        <div class="perf-sub">melhor estrategia</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px">
+        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Distribuicao Estrategias</div>
+        <div style="display:flex;align-items:center;gap:16px">
+          <div class="chart-donut" style="background:conic-gradient(var(--green) 0% ${Math.round(excellentCount/results.length*100)}%, var(--yellow) ${Math.round(excellentCount/results.length*100)}% ${Math.round((excellentCount+goodCount)/results.length*100)}%, var(--red) ${Math.round((excellentCount+goodCount)/results.length*100)}% 100%)">
+            <div class="chart-donut-center">
+              <div style="font-size:20px;font-weight:800;color:var(--text)">${results.length}</div>
+              <div style="font-size:9px;color:var(--text3)">TOTAL</div>
+            </div>
+          </div>
+          <div style="flex:1">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+              <div style="width:10px;height:10px;border-radius:2px;background:var(--green)"></div>
+              <span style="font-size:11px;color:var(--text3);flex:1">Excelentes (75%+)</span>
+              <span style="font-size:11px;font-weight:700;color:var(--green)">${excellentCount}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+              <div style="width:10px;height:10px;border-radius:2px;background:var(--yellow)"></div>
+              <span style="font-size:11px;color:var(--text3);flex:1">Boas (50-74%)</span>
+              <span style="font-size:11px;font-weight:700;color:var(--yellow)">${goodCount}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <div style="width:10px;height:10px;border-radius:2px;background:var(--red)"></div>
+              <span style="font-size:11px;color:var(--text3);flex:1">Fracas (&lt;50%)</span>
+              <span style="font-size:11px;font-weight:700;color:var(--red)">${weakCount}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px">
+        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Filtros Relevantes</div>
+        <div style="display:flex;align-items:center;gap:16px">
+          <div class="chart-donut" style="background:conic-gradient(var(--cyan,#06b6d4) 0% ${Math.round(recommendedFilters.length/ALL_FILTERS.length*100)}%, var(--bg3) ${Math.round(recommendedFilters.length/ALL_FILTERS.length*100)}% 100%)">
+            <div class="chart-donut-center">
+              <div style="font-size:20px;font-weight:800;color:var(--cyan,#06b6d4)">${recommendedFilters.length}</div>
+              <div style="font-size:9px;color:var(--text3)">ATIVOS</div>
+            </div>
+          </div>
+          <div style="flex:1">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+              <div style="width:10px;height:10px;border-radius:2px;background:var(--cyan,#06b6d4)"></div>
+              <span style="font-size:11px;color:var(--text3);flex:1">Recomendados</span>
+              <span style="font-size:11px;font-weight:700;color:var(--cyan,#06b6d4)">${recommendedFilters.length}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+              <div style="width:10px;height:10px;border-radius:2px;background:var(--bg3)"></div>
+              <span style="font-size:11px;color:var(--text3);flex:1">Neutros</span>
+              <span style="font-size:11px;font-weight:700;color:var(--text3)">${ALL_FILTERS.length - recommendedFilters.length}</span>
+            </div>
+            <div style="font-size:10px;color:var(--text3);margin-top:8px;padding-top:6px;border-top:1px solid var(--border)">
+              Score medio: <strong style="color:var(--text)">${Math.round(filterResults.reduce((a,f)=>a+f.score,0)/filterResults.length)}%</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">Grafico Desempenho Estrategias</div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;max-height:400px;overflow-y:auto">
+  `;
+
+  const topBarStrats = results.slice(0, 15);
+  topBarStrats.forEach((r, i) => {
+    const color = r.matched ? (r.confidence >= 75 ? 'var(--green)' : r.confidence >= 55 ? 'var(--yellow)' : 'var(--red)') : 'var(--text3)';
+    const bgGrad = r.matched
+      ? (r.confidence >= 75 ? 'linear-gradient(90deg,#22c55e,#16a34a)' : r.confidence >= 55 ? 'linear-gradient(90deg,#eab308,#ca8a04)' : 'linear-gradient(90deg,#ef4444,#dc2626)')
+      : 'linear-gradient(90deg,#6b7280,#4b5563)';
+    html += `
+      <div class="chart-bar">
+        <div class="chart-bar-label">${stratLabels[r.name] || r.name}</div>
+        <div class="chart-bar-track">
+          <div class="chart-bar-fill" style="width:${r.confidence}%;background:${bgGrad};--w:${r.confidence}%">${r.confidence}%</div>
+        </div>
+      </div>
+    `;
+  });
+
+  html += '</div></div>';
+
+  html += `
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">Grafico Score Filtros</div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;max-height:400px;overflow-y:auto">
+  `;
+
+  topFilters.forEach((f, i) => {
+    const color = f.isRelevant ? (f.score >= 70 ? 'var(--cyan,#06b6d4)' : f.score >= 55 ? 'var(--blue)' : 'var(--text3)') : 'var(--text3)';
+    const bgGrad = f.isRelevant
+      ? (f.score >= 70 ? 'linear-gradient(90deg,#06b6d4,#0891b2)' : 'linear-gradient(90deg,#3b82f6,#2563eb)')
+      : 'linear-gradient(90deg,#6b7280,#4b5563)';
+    html += `
+      <div class="chart-bar">
+        <div class="chart-bar-label">${filterLabels[f.name] || f.name}</div>
+        <div class="chart-bar-track">
+          <div class="chart-bar-fill" style="width:${f.score}%;background:${bgGrad};--w:${f.score}%">${f.score}%</div>
+        </div>
+      </div>
+    `;
+  });
+
+  html += '</div></div></div>';
+
+  html += `
+    <div style="background:var(--bg);border:1px solid ${riskColor};border-radius:8px;padding:12px;margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:${riskColor};text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Simulacao de Resultado</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+        <div style="text-align:center;padding:8px">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:4px">100 Sinais</div>
+          <div style="font-size:16px;font-weight:800;color:var(--green)">${Math.round(projWinRate)} W</div>
+          <div style="font-size:14px;font-weight:700;color:var(--red)">${100 - Math.round(projWinRate)} L</div>
+        </div>
+        <div style="text-align:center;padding:8px">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:4px">Sequencia Max</div>
+          <div style="font-size:16px;font-weight:800;color:var(--green)">+${Math.max(3, Math.round(projWinRate / 15))} W</div>
+          <div style="font-size:14px;font-weight:700;color:var(--red)">-${Math.max(2, Math.round((100 - projWinRate) / 20))} L</div>
+        </div>
+        <div style="text-align:center;padding:8px">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:4px">Gale Max</div>
+          <div style="font-size:16px;font-weight:800;color:var(--text)">${robot.gale?.max || 2}x</div>
+          <div style="font-size:10px;color:var(--text3)">martingale</div>
+        </div>
+        <div style="text-align:center;padding:8px">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:4px">Confianca</div>
+          <div style="width:60px;height:60px;border-radius:50%;background:conic-gradient(${riskColor} ${bestConfidence * 3.6}deg, var(--bg3) 0deg);display:flex;align-items:center;justify-content:center;margin:0 auto">
+            <div style="width:44px;height:44px;border-radius:50%;background:var(--bg2);display:flex;align-items:center;justify-content:center">
+              <span style="font-size:13px;font-weight:800;color:${riskColor}">${bestConfidence}%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  html += `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+      <div style="background:var(--bg);border:1px solid var(--green);border-radius:8px;padding:12px">
+        <div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:6px">MELHOR ESTRATEGIA</div>
+        ${best ? `
+        <div style="font-size:14px;font-weight:800;color:var(--text)">${stratLabels[best.name] || best.name}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${best.reason}</div>
+        <div style="font-size:11px;color:var(--text3)">Confianca: <strong style="color:var(--green)">${best.confidence}%</strong> | Alvo: <strong>${best.target || 'N/A'}</strong></div>
+        ` : `
+        <div style="font-size:14px;font-weight:800;color:var(--text3)">Nenhuma estrategia com confianca suficiente</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">Considere usar modo 'todas' ou ajustar filtros</div>
+        `}
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">Ajustes Sugeridos</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:11px">
+            <span style="color:var(--text3)">Estrategia:</span><br>
+            <strong style="color:var(--text)">${best ? (stratLabels[best.name] || best.name) : 'todas'}</strong>
+          </div>
+          <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:11px">
+            <span style="color:var(--text3)">Confianca Min:</span><br>
+            <strong style="color:var(--green)">${suggestedConf}%</strong>
+          </div>
+          <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:11px">
+            <span style="color:var(--text3)">Resultados Analise:</span><br>
+            <strong style="color:var(--text)">${Math.round(suggestedResults)}</strong>
+          </div>
+          <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:11px">
+            <span style="color:var(--text3)">Score Minimo:</span><br>
+            <strong style="color:var(--text)">${Math.round(suggestedMinScore)}</strong>
+          </div>
+        </div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:11px">
+          <span style="color:var(--text3)">Filtros Recomendados (${recommendedFilters.length}):</span><br>
+          <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">
+            ${recommendedFilters.map(f => `<span style="padding:2px 6px;border-radius:4px;background:rgba(6,182,212,.15);color:var(--cyan,#06b6d4);font-size:10px">${filterLabels[f] || f}</span>`).join('')}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('autoAnaliseContent').innerHTML = html;
+  document.getElementById('autoAnaliseActions').style.display = 'flex';
+  document.getElementById('btnUndoAnalise').style.display = 'none';
+  document.getElementById('btnApplyAnalise').style.display = 'inline-flex';
+
+  window._autoAnaliseResult = {
+    robotId: robot.id,
+    bestStrategy: best ? best.name : 'todas',
+    suggestedConf,
+    suggestedResults: Math.round(suggestedResults),
+    suggestedMinScore: Math.round(suggestedMinScore),
+    suggestedFilters: recommendedFilters,
+    suggestedGale: robot.gale?.max || 2,
+    suggestedInterval: robot.intervalMin || 60,
+    suggestedPatternSize: robot.patternSize || 3
+  };
+}
+
+function buildFilterContext(colors) {
+  const len = colors.length;
+  const counts = {};
+  colors.forEach(r => counts[r] = (counts[r] || 0) + 1);
+  const recent10 = colors.slice(-10);
+  const recent30 = colors.slice(-30);
+  const countsRecent10 = {};
+  recent10.forEach(r => countsRecent10[r] = (countsRecent10[r] || 0) + 1);
+  const countsRecent30 = {};
+  recent30.forEach(r => countsRecent30[r] = (countsRecent30[r] || 0) + 1);
+  const lastSeen = {};
+  colors.forEach((r, i) => lastSeen[r] = len - 1 - i);
+  const streaks = {};
+  let currentStreak = 0, lastColor = null;
+  colors.forEach(r => {
+    if (r === lastColor) currentStreak++;
+    else { currentStreak = 1; lastColor = r; }
+    streaks[r] = currentStreak;
+  });
+  const entropy = Filters.calcEntropy(colors);
+  const volatility = Filters.calcVolatility(colors);
+  return { results: colors, len, counts, recent10, recent30, countsRecent10, countsRecent30, lastSeen, streaks, entropy, volatility };
+}
+
+function isFilterRelevant(filterName, robot, bestStrategy, ctx) {
+  const game = robot.game;
+  const color = robot.target?.color || 'any';
+  const rules = {
+    frequencia: () => ctx.len >= 10,
+    repeticaoExcessiva: () => ctx.countsRecent10,
+    sequenciaEsticada: () => ctx.streaks,
+    recencia: () => ctx.lastSeen,
+    distanciaOcorrencias: () => ctx.len >= 15,
+    janelaCurtaLonga: () => ctx.recent10.length >= 5 && ctx.recent30.length >= 15,
+    tendencia: () => ctx.len >= 10,
+    quebraTendencia: () => ctx.len >= 15,
+    alternancia: () => ctx.len >= 8,
+    concentracao: () => ctx.len >= 10,
+    dispersao: () => ctx.len >= 10,
+    atraso: () => ctx.len >= 15,
+    padraoRecorrente: () => ctx.len >= 12,
+    transicao: () => ctx.len >= 10,
+    matrizTransicao: () => ctx.len >= 20,
+    probabilidadeCondicional: () => ctx.len >= 15,
+    entropia: () => ctx.entropy !== undefined && ctx.entropy < 1.6,
+    volatilidade: () => ctx.volatility !== undefined && ctx.volatility < 3,
+    consensoEstrategias: () => bestStrategy && bestStrategy.matched,
+    divergenciaEstrategias: () => bestStrategy && bestStrategy.matched,
+    scoreMinimo: () => bestStrategy && bestStrategy.confidence > 0,
+    confiancaMinima: () => bestStrategy && bestStrategy.confidence > 0,
+    diferencaCandidatos: () => true,
+    confirmacaoMultipla: () => ctx.len >= 15,
+    cooldownSinal: () => true,
+    posWin: () => true,
+    posLoss: () => true,
+    lossConsecutivo: () => true,
+    qualidadeAmostra: () => ctx.len >= 20,
+    antiOverfitting: () => ctx.len >= 25
+  };
+  const fn = rules[filterName];
+  return fn ? fn() : true;
+}
+
+function applyAutoAnalise() {
+  const data = window._autoAnaliseResult;
+  if (!data) return;
+  const robot = RobotEngine.getRobot(data.robotId);
+  if (!robot) return;
+
+  autoAnaliseSnapshot = {
+    strategies: [...(robot.strategies || [robot.strategy])],
+    filters: [...(robot.filters || [])],
+    minimumConfidence: robot.minimumConfidence,
+    resultsToAnalyze: robot.resultsToAnalyze,
+    minScore: robot.minScore,
+    gale: robot.gale ? { ...robot.gale } : undefined,
+    intervalMin: robot.intervalMin,
+    patternSize: robot.patternSize
+  };
+  autoAnaliseRobotId = robot.id;
+
+  if (data.bestStrategy === 'todas') {
+    robot.strategies = ['todas'];
+    robot.strategy = 'todas';
+  } else {
+    robot.strategies = [data.bestStrategy];
+    robot.strategy = data.bestStrategy;
+  }
+  robot.minimumConfidence = data.suggestedConf;
+  robot.resultsToAnalyze = data.suggestedResults;
+  robot.minScore = data.suggestedMinScore;
+  robot.filters = data.suggestedFilters;
+  robot.filterMode = data.suggestedConf >= 80 ? 'conservador' : data.suggestedConf >= 65 ? 'moderado' : 'agressivo';
+  RobotEngine.save();
+
+  document.getElementById('btnApplyAnalise').style.display = 'none';
+  document.getElementById('btnUndoAnalise').style.display = 'inline-flex';
+
+  loadRobots();
+  alert('Ajustes aplicados com sucesso! Estrategia: ' + data.bestStrategy);
+}
+
+function undoAutoAnalise() {
+  if (!autoAnaliseSnapshot || !autoAnaliseRobotId) { alert('Nada para desfazer'); return; }
+  const robot = RobotEngine.getRobot(autoAnaliseRobotId);
+  if (!robot) return;
+
+  robot.strategies = autoAnaliseSnapshot.strategies;
+  robot.strategy = autoAnaliseSnapshot.strategies.length === 1 ? autoAnaliseSnapshot.strategies[0] : 'multi';
+  robot.filters = autoAnaliseSnapshot.filters;
+  robot.resultsToAnalyze = autoAnaliseSnapshot.resultsToAnalyze;
+  robot.minimumConfidence = autoAnaliseSnapshot.minimumConfidence;
+  robot.minScore = autoAnaliseSnapshot.minScore;
+  robot.gale.max = autoAnaliseSnapshot.gale;
+  robot.intervalMin = autoAnaliseSnapshot.intervalMin;
+  robot.patternSize = autoAnaliseSnapshot.patternSize;
+  robot.filterMode = autoAnaliseSnapshot.filterMode;
+  RobotEngine.save();
+
+  autoAnaliseSnapshot = null;
+  autoAnaliseRobotId = null;
+  document.getElementById('btnUndoAnalise').style.display = 'none';
+  document.getElementById('btnApplyAnalise').style.display = 'inline-flex';
+  loadRobots();
+  alert('Configuracao anterior restaurada!');
+}
+
 loadRobots();
 EventBus.on('robots:synced', loadRobots);
 </script>
