@@ -181,12 +181,12 @@ const NewsService = (() => {
         for (const msg of selected) {
           emitAnalysis('wheel', msg);
           if (hasChannel) await sendToTelegram(msg);
-          await delay(randomDelay(2000, 5000));
+          await delay(randomDelay(8000, 15000));
         }
       }
     }
 
-    await delay(randomDelay(3000, 7000));
+    await delay(randomDelay(10000, 20000));
 
     if (config.double !== false) {
       const results = loadHistory('double');
@@ -196,7 +196,7 @@ const NewsService = (() => {
         for (const msg of selected) {
           emitAnalysis('double', msg);
           if (hasChannel) await sendToTelegram(msg);
-          await delay(randomDelay(2000, 5000));
+          await delay(randomDelay(8000, 15000));
         }
       }
     }

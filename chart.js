@@ -81,8 +81,14 @@ const ChartService = (() => {
     const doubleResults = loadHistory('double');
     const now = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
+    const robotsHeight = robots.length * 40 + 60;
+    const statsHeight = 160;
+    const chartsHeight = 200;
+    const totalHeight = Math.max(500, statsHeight + robotsHeight + chartsHeight + 40);
+
+    canvas.height = totalHeight;
     ctx.fillStyle = '#0b0d12';
-    ctx.fillRect(0, 0, 800, 500);
+    ctx.fillRect(0, 0, 800, totalHeight);
 
     ctx.fillStyle = '#12151c';
     drawRoundRect(15, 15, 770, 60, 10);
@@ -184,7 +190,7 @@ const ChartService = (() => {
     }
 
     const chartY = robotsY + robots.length * 40 + 60;
-    const remainingH = 500 - chartY - 20;
+    const remainingH = totalHeight - chartY - 20;
     if (remainingH > 100) {
       ctx.fillStyle = '#1a1e28';
       drawRoundRect(15, chartY, 380, remainingH, 10);
