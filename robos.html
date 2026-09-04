@@ -102,6 +102,7 @@
     <div id="autoAnaliseActions" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);gap:10px">
       <button class="btn btn-green" onclick="applyAutoAnalise()" id="btnApplyAnalise" style="padding:10px 24px;font-size:13px">Aplicar Ajustes</button>
       <button class="btn btn-red" onclick="undoAutoAnalise()" id="btnUndoAnalise" style="padding:10px 24px;font-size:13px;display:none">Voltar (Desfazer)</button>
+      <button class="btn btn-cyan" onclick="rerunAutoAnalysis()" id="btnRerunAnalise" style="padding:10px 24px;font-size:13px">Nova Analise</button>
       <button class="btn btn-ghost" onclick="document.getElementById('autoAnaliseModal').style.display='none'" style="padding:10px 24px;font-size:13px">Fechar</button>
     </div>
   </div>
@@ -298,11 +299,11 @@ const TARGETS = {
     { value: 'red+black', label: 'Vermelho / Preto' }
   ]
 };
-function updateTargets(){
+function updateTargets(skipSuggest){
   const game = document.getElementById('fGame').value;
   const sel = document.getElementById('fTarget');
   sel.innerHTML = TARGETS[game].map(t => `<option value="${t.value}">${t.label}</option>`).join('');
-  setTimeout(() => suggestFilters(), 50);
+  if (!skipSuggest) setTimeout(() => suggestFilters(), 50);
   autoSetGale();
   const greenProtGroup = document.getElementById('greenProtectionGroup');
   if (greenProtGroup) {
@@ -377,7 +378,7 @@ function showEdit(id){
   document.getElementById('fEditId').value = id;
   document.getElementById('fName').value = robot.name || '';
   document.getElementById('fGame').value = robot.game || 'wheel';
-  updateTargets();
+  updateTargets(true);
   document.getElementById('fTarget').value = robot.target?.color || 'any';
   const strategies = robot.strategies || [robot.strategy || 'alternancia'];
   setSelectedStrategies(strategies);
@@ -700,7 +701,13 @@ function changeRobotPatternSize(id, size) {
 }
 function start(id){ RobotEngine.startRobot(id); loadRobots(); }
 function stop(id){ RobotEngine.stopRobot(id); loadRobots(); }
-function deleteRobot(id){ if(!confirm('Excluir este robo?')) return; RobotEngine.deleteRobot(id); loadRobots(); }
+function deleteRobot(id){ 
+  if(!confirm('Excluir este robo?')) return; 
+  try {
+    RobotEngine.deleteRobot(id); 
+    loadRobots();
+  } catch(e) { console.error('Erro ao excluir:', e); }
+}
 function showResetStats(id) {
   const robot = RobotEngine.getRobot(id);
   if (!robot) return;
@@ -937,23 +944,33 @@ function analyzeRobotAuto(robotId) {
   setTimeout(() => runAutoAnalysis(robot, history), 300);
 }
 
+function rerunAutoAnalysis() {
+  if (!autoAnaliseRobotId) return;
+  const robot = RobotEngine.getRobot(autoAnaliseRobotId);
+  if (!robot) { alert('Robo nao encontrado'); return; }
+  const history = getHistoryForRobot(robot);
+  if (history.length < 10) {
+    alert('Historico insuficiente (minimo 10 resultados).');
+    return;
+  }
+
+  document.getElementById('autoAnaliseContent').innerHTML = '<div style="text-align:center;padding:30px;color:var(--text3)"><div style="font-size:20px;margin-bottom:8px">&#128269;</div><div>Reanalisando todas as estrategias...</div></div>';
+  document.getElementById('autoAnaliseActions').style.display = 'none';
+
+  setTimeout(() => runAutoAnalysis(robot, history), 300);
+}
+
 function runAutoAnalysis(robot, history) {
   const target = robot.target || { color: 'any' };
   const patternSize = robot.patternSize || 3;
   const results = [];
-  const applicableStrategies = ALL_STRATEGIES.filter(s => {
-    if (s === 'todas') return true;
-    const game = robot.game;
-    if (game === 'double' && ['cicloVerde','convergencia','cicloPreto','reacaoPreto','cicloVermelho','convergenciaVermelha','cicloAzul','sequenciaAzul'].includes(s)) return false;
-    if (game === 'wheel' && ['cicloZero','padraoNumerico','sequenciaNegra','momentumPreto','sequenciaVermelha','momentumVermelho'].includes(s)) return false;
-    return true;
-  });
+  const applicableStrategies = ALL_STRATEGIES.filter(s => s !== 'todas');
 
   for (const stratName of applicableStrategies) {
     try {
       const stratFn = RobotEngine.strategies[stratName];
       if (!stratFn) continue;
-      const slice = history.slice(0, robot.resultsToAnalyze || 40);
+      const slice = history.slice(0, Math.min(500, history.length));
       const result = stratFn(slice, target, patternSize);
       results.push({
         name: stratName,

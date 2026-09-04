@@ -1997,7 +1997,7 @@ const RobotEngine = {
         added++;
       }
       if (added > 0) {
-        if (robot.history.length > 200) robot.history.length = 200;
+        if (robot.history.length > 400) robot.history.length = 400;
         robot.diagnostic.analyzedResults = robot.history.length;
         robot.analyze();
       }
@@ -2012,7 +2012,6 @@ const RobotEngine = {
       if (robot.status !== 'online') return;
       changed = this.loadHistoryFromStorage(robot) || changed;
     });
-    if (changed) this.save();
     return changed;
   },
 
@@ -2026,12 +2025,13 @@ const RobotEngine = {
         EventBus.emit('robot:state', robot.getState());
       }
     });
-    this.save();
+    if (document.title !== 'WS Background') this.save();
   }
 };
 
 EventBus.on('result:new', (result) => {
   RobotEngine.distributeResult(result);
+  if (document.title !== 'WS Background') RobotEngine.save();
 });
 
 EventBus.on('results:history', (d) => {
@@ -2055,10 +2055,10 @@ EventBus.on('results:history', (d) => {
         robot.history.unshift(item);
         addedCount++;
       });
-      if (robot.history.length > 200) robot.history.length = 200;
+      if (robot.history.length > 400) robot.history.length = 400;
       robot.diagnostic.analyzedResults = robot.history.length;
       if (addedCount > 0) robot.analyze();
     }
   });
-  RobotEngine.save();
+  if (document.title !== 'WS Background') RobotEngine.save();
 });

@@ -171,7 +171,7 @@ class Robot {
     this.lastHeartbeat = Date.now();
     if (!isDuplicate) {
       this.history.unshift({ color, number: normalized.number, multiplier: normalized.multiplier, roundId: normalized.roundId, storageId: normalized.storageId, resultKey: key, timestamp: normalized.time || Date.now() });
-      if (this.history.length > 200) this.history.pop();
+      if (this.history.length > 400) this.history.pop();
       this.addLog('Resultado: ' + (color || normalized.number));
       this.analyze();
     }
