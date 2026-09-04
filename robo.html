@@ -250,6 +250,7 @@ function renderAll() {
           <option value="live" ${tg.msgType === 'live' ? 'selected' : ''}>Live</option>
           <option value="signal" ${tg.msgType === 'signal' ? 'selected' : ''}>Sinal</option>
           <option value="both" ${tg.msgType === 'both' || !tg.msgType ? 'selected' : ''}>Live+Sinal</option>
+          <option value="normal" ${tg.msgType === 'normal' ? 'selected' : ''}>Normal</option>
         </select>
         <button class="btn btn-sm btn-blue" onclick="testTelegramChannel()" id="btnTestTg">Testar</button>
         <span id="testTgResult" style="font-size:10px"></span>
@@ -350,7 +351,7 @@ function renderTelegramMessagePreview(r) {
   const current = r.currentSignal;
   const msgType = tg.msgType || 'both';
   const showLive = msgType === 'live' || msgType === 'both';
-  const showEntry = msgType === 'signal' || msgType === 'both';
+  const showEntry = msgType === 'signal' || msgType === 'both' || msgType === 'normal';
   const lastError = readStoredObject('telegram-last-error-v1');
   let html = '';
 

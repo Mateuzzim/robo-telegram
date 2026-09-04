@@ -12,6 +12,7 @@ const TelegramService = {
   queues: {},
   _cachedTime: '',
   _cachedTimeAt: 0,
+  _normalProcessed: {},
 
   getCachedTime() {
     const now = Date.now();
@@ -157,7 +158,6 @@ const TelegramService = {
     if (!this.isTelegramEnabled(robot)) return false;
     const msgType = robot.telegram?.msgType || 'both';
     if (msgType !== 'live' && msgType !== 'both') {
-      console.warn('[Telegram] Live bloqueado: msgType=', msgType, robot?.id);
       return false;
     }
     return true;
@@ -166,8 +166,12 @@ const TelegramService = {
   shouldSendSignal(robot) {
     if (!this.isTelegramEnabled(robot)) return false;
     const msgType = robot.telegram?.msgType || 'both';
-    if (msgType !== 'signal' && msgType !== 'both') return false;
+    if (msgType !== 'signal' && msgType !== 'both' && msgType !== 'normal') return false;
     return true;
+  },
+
+  isNormalMode(robot) {
+    return robot?.telegram?.msgType === 'normal';
   },
 
   isSignalCooldownActive(robot) {
@@ -369,14 +373,40 @@ const TelegramService = {
     this.saveEntryEvents(events);
   },
 
+  isNormalProcessed(robotId, signalId, status, gale) {
+    const key = robotId + '|' + signalId + '|' + status + '|' + (gale || 0);
+    const entry = this._normalProcessed[key];
+    if (!entry) return false;
+    if (Date.now() - entry > 5000) {
+      delete this._normalProcessed[key];
+      return false;
+    }
+    return true;
+  },
+
+  markNormalProcessed(robotId, signalId, status, gale) {
+    const key = robotId + '|' + signalId + '|' + status + '|' + (gale || 0);
+    this._normalProcessed[key] = Date.now();
+  },
+
   async enqueueEntryMessage(robot, signal) {
     const key = 'entry:' + this.entryMessageKey(robot);
+    if (this.isNormalMode(robot)) {
+      if (this.isNormalProcessed(robot.id, signal.id, signal.status, signal.gale)) {
+        return false;
+      }
+      this.markNormalProcessed(robot.id, signal.id, signal.status, signal.gale);
+      return this.enqueue(key, () => this.sendEntryNormal(robot, signal));
+    }
     return this.enqueue(key, () => this.withLock(key, () => this.sendEntryMessage(robot, signal)));
   },
 
   async enqueueLiveMessage(robot) {
     const key = 'live:' + this.messageKey(robot);
-    return this.enqueue(key, () => this.withLock(key, () => this.sendOrEditLiveMessage(robot)));
+    const task = this.isNormalMode(robot)
+      ? () => this.sendLiveNormal(robot)
+      : () => this.withLock(key, () => this.sendOrEditLiveMessage(robot));
+    return this.enqueue(key, task);
   },
 
   async enqueue(key, task) {
@@ -494,6 +524,46 @@ const TelegramService = {
         this.saveLiveMessages(latest);
       }
       this.logApiError('sendMessage/live', sent);
+      return false;
+    }
+  },
+
+  async sendLiveNormal(robot) {
+    const token = this.getToken();
+    const chatId = robot.telegram?.channelId || '';
+    if (!token || !chatId) return false;
+
+    const text = this.prepareTelegramText(this.buildLiveMessage(robot));
+
+    const sent = await this.api(token, 'sendMessage', {
+      chat_id: chatId,
+      text,
+      disable_web_page_preview: true
+    });
+    if (sent.ok && sent.result?.message_id) {
+      return true;
+    } else {
+      this.logApiError('sendMessage/live-normal', sent);
+      return false;
+    }
+  },
+
+  async sendEntryNormal(robot, signal) {
+    const token = this.getToken();
+    const chatId = robot.telegram?.channelId || '';
+    if (!token || !chatId) return false;
+
+    const text = this.prepareTelegramText(this.buildEntryMessage(robot, signal));
+
+    const sent = await this.api(token, 'sendMessage', {
+      chat_id: chatId,
+      text,
+      disable_web_page_preview: true
+    });
+    if (sent.ok && sent.result?.message_id) {
+      return true;
+    } else {
+      this.logApiError('sendMessage/entry-normal', sent);
       return false;
     }
   },
@@ -754,21 +824,31 @@ const TelegramService = {
       const resultLabel = this.colorLabel(signal.result?.color);
       const target = this.getSignalTarget(robot, signal);
       const resultMult = this.getMultiplierLabel(signal.result?.color, robot.game);
+      const greenProt = robot.greenProtection && robot.game === 'double' ? ' + 🟢' : '';
       return [
         '⚡️ G' + (signal.gale || 1) + ' - TENTANDO NOVAMENTE',
-        '🎯 ENTRAR ' + target.label,
-        '',
+        '🎯 ENTRAR',
+        target.emoji + greenProt,
         '━━━━━━━━━━━━━━━━━━━',
-        '❌ VEIO: ' + resultLabel + ' ' + resultEmoji + resultMult,
+        '❌ LOSS, VEIO: ' + resultLabel + ' ' + resultEmoji + resultMult,
       ].join('\n');
     }
 
     const target = this.getSignalTarget(robot, signal);
+    const greenProt = robot.greenProtection && robot.game === 'double';
+    const greenProtLabel = greenProt ? ' + 🟢' : '';
+    const galeMax = robot.gale?.max || 0;
+    const galeLevels = [];
+    for (let i = 1; i <= galeMax; i++) {
+      galeLevels.push('G' + i);
+    }
+    const galeLine = galeMax > 0 ? '⚡️ GALE ATÉ: ' + galeLevels.join(', ') : '⚡️ ENTRADA SECA';
     return [
-      '🤖 SINAL ENCONTRADO',
+      '🤖 SINAL ENCONTRADO 🤖',
       '🎯 ENTRAR NA COR',
-      target.emoji + ' ' + target.label,
+      target.emoji + greenProtLabel,
       '━━━━━━━━━━━━━━━━━━━━',
+      galeLine,
       '📈 Aproveitamento: ' + rate + '%',
       this.formatRateBar(rate)
     ].join('\n');
@@ -782,17 +862,29 @@ const TelegramService = {
     const rate = resolved > 0 ? Math.round((wins / resolved) * 100) : 0;
     const target = this.getSignalTarget(robot, signal);
     const status = signal.status || 'approved';
+    const greenProt = robot.greenProtection && robot.game === 'double';
+    const greenProtLabel = greenProt ? ' + 🟢' : '';
+    const galeMax = robot.gale?.max || 0;
+    const galeLevels = [];
+    for (let i = 1; i <= galeMax; i++) {
+      galeLevels.push('G' + i);
+    }
+    const galeLine = galeMax > 0 ? '⚡️ GALE ATÉ: ' + galeLevels.join(', ') : '⚡️ ENTRADA SECA';
     const map = {
       '{wins}': wins,
       '{losses}': losses,
       '{rate}': rate,
       '{signals}': stats.signals || 0,
-      '{target}': target.label,
+      '{target}': target.emoji + greenProtLabel,
       '{targetEmoji}': target.emoji,
       '{targetColor}': target.color,
+      '{greenProtection}': greenProtLabel,
+      '{greenProtectionLabel}': greenProt ? 'PROTEÇÃO VERDE ATIVA' : '',
+      '{galeLine}': galeLine,
+      '{galeLevels}': galeLevels.join(', '),
       '{confidence}': signal.confidence || 0,
       '{gale}': signal.gale || 0,
-      '{galeMax}': robot.gale?.max || 0,
+      '{galeMax}': galeMax,
       '{robotName}': robot.name || '',
       '{game}': robot.game === 'wheel' ? 'Wheel' : 'Double',
       '{strategy}': this.formatStrategy(robot.strategy),
