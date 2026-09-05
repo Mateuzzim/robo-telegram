@@ -1367,6 +1367,15 @@ const TelegramService = {
     const token = this.getToken();
     const chatId = robot.telegram?.channelId || '';
     if (!token || !chatId) return false;
+    const key = 'entry:' + this.entryMessageKey(robot);
+    const task = () => this._sendFreshEntryMessage(robot, signal);
+    return this.enqueue(key, task);
+  },
+
+  async _sendFreshEntryMessage(robot, signal) {
+    const token = this.getToken();
+    const chatId = robot.telegram?.channelId || '';
+    if (!token || !chatId) return false;
     const key = this.entryMessageKey(robot);
     const text = signal && signal.id !== 'cleanup' ? this.prepareTelegramText(this.buildEntryMessage(robot, signal)) : '';
     const messages = this.getEntryMessages();
