@@ -53,6 +53,11 @@
   .chart-bar-fill{animation:barGrow .8s ease forwards}
   @keyframes strategyPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.05)}}
   .strategy-active{animation:strategyPulse 1.2s infinite}
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:999}
+  .modal{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:18px;max-width:420px;width:90%}
+  .modal h3{margin:0 0 10px}
+  .modal select{width:100%;padding:8px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;margin-bottom:12px}
+  .modal-actions{display:flex;gap:8px;justify-content:flex-end}
 </style>
 </head>
 <body>
@@ -256,12 +261,14 @@
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div class="form-group"><label>Canal Telegram</label><select id="fTgChannel"><option value="">Selecionar canal...</option></select></div>
         <div class="form-group"><label>Tipo de Mensagem</label>
-          <select id="fTgMsgType">
-            <option value="live">Live (atualiza a cada resultado)</option>
-            <option value="signal">Sinal (entrada, win, loss, gale)</option>
-            <option value="both">Live + Sinal</option>
-            <option value="normal">Envio Normal (sem editar/excluir)</option>
-          </select>
+           <select id="fTgMsgType">
+             <option value="live">Live (atualiza a cada resultado)</option>
+             <option value="signal">Sinal (entrada, win, loss, gale)</option>
+             <option value="both">Live + Sinal</option>
+             <option value="normal">Envio Normal (sem editar/excluir)</option>
+             <option value="dynamic">Dinâmico (entrada/gale/win/loss unificada)</option>
+             <option value="live_dynamic">Live + Dinâmico</option>
+           </select>
         </div>
       </div>
     </div>
@@ -731,7 +738,7 @@ function loadRobots(){
         <button class="btn btn-sm btn-yellow" onclick="showEdit('${robotIdJs}')">Editar</button>
         ${r.status==='offline'
           ? `<button class="btn btn-sm btn-green" onclick="start('${robotIdJs}')">Play</button>`
-          : `<button class="btn btn-sm btn-red" onclick="stop('${robotIdJs}')">Stop</button>`}
+          : `<button class="btn btn-sm btn-red" onclick="openStopModal('${robotIdJs}')">Stop</button>`}
         <button class="btn btn-sm btn-cyan" onclick="analyzeRobotAuto('${robotIdJs}')" title="Analise Automatica">Analise</button>
         <button class="btn btn-sm btn-purple" onclick="resetTelegramMessages('${robotIdJs}')" title="Resetar mensagens do Telegram">Reset TG</button>
         <button class="btn btn-sm btn-orange" onclick="showResetStats('${robotIdJs}')" title="Resetar estatisticas">Reset Stats</button>
@@ -747,8 +754,29 @@ function changeRobotPatternSize(id, size) {
   robot.patternSize = size;
   RobotEngine.save();
 }
-function start(id){ RobotEngine.startRobot(id); loadRobots(); }
-function stop(id){ RobotEngine.stopRobot(id); loadRobots(); }
+function start(id){ 
+  const robot = RobotEngine.getRobot(id);
+  if (robot && typeof TelegramService !== 'undefined') {
+    TelegramService.clearAllMessages(robot);
+  }
+  RobotEngine.startRobot(id); 
+  loadRobots(); 
+}
+let _pendingStopId = null;
+function openStopModal(id){ _pendingStopId = id; document.getElementById('stopMsgType').value = ''; document.getElementById('stopModal').style.display = 'flex'; }
+function confirmStop(sendMessage){
+  const id = _pendingStopId;
+  if (!id) return;
+  const robot = RobotEngine.getRobot(id);
+  const type = document.getElementById('stopMsgType').value;
+  RobotEngine.stopRobot(id);
+  if (sendMessage && type && robot && typeof TelegramService !== 'undefined') {
+    TelegramService.sendMaintenanceMessage(robot, type);
+  }
+  _pendingStopId = null;
+  document.getElementById('stopModal').style.display = 'none';
+  loadRobots();
+}
 function deleteRobot(id){ 
   if(!confirm('Excluir este robo?')) return; 
   try {
@@ -1618,5 +1646,22 @@ function undoAutoAnalise() {
 loadRobots();
 EventBus.on('robots:synced', loadRobots);
 </script>
+<div class="modal-overlay" id="stopModal">
+  <div class="modal">
+    <h3>Parar Robô e Enviar Mensagem</h3>
+    <select id="stopMsgType">
+      <option value="">Sem mensagem</option>
+      <option value="maintenance">🔧 Manutenção Simples</option>
+      <option value="update">🔄 Atualização Programada</option>
+      <option value="pause">⏸️ Pausa Estratégica</option>
+      <option value="recalibration">🛠️ Recalibração do Sistema</option>
+      <option value="full">🚀 Manutenção Completa</option>
+    </select>
+    <div class="modal-actions">
+      <button class="btn btn-red" onclick="confirmStop(false)">Parar sem enviar</button>
+      <button class="btn btn-blue" onclick="confirmStop(true)">Parar e Enviar</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>

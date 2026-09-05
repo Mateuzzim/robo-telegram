@@ -470,6 +470,7 @@ class Robot {
       };
       this.addLog(isGreenProtection ? 'WIN por Proteção Verde! GREEN = ' + targetColor : 'WIN! ' + rColor + ' === ' + targetColor);
       EventBus.emit('signal:win', { ...signal, robotId: this.id });
+      EventBus.emit('signal:resolved', { ...signal, robotId: this.id, type: 'win' });
       this.signalHistory.push({ type: 'win', target: targetColor, result: rColor, gale: resolvedGale, time: Date.now(), greenProtection: isGreenProtection });
       if (this.signalHistory.length > 100) this.signalHistory.shift();
     } else {
@@ -516,6 +517,7 @@ class Robot {
         };
         this.addLog('LOSS FINAL');
         EventBus.emit('signal:loss', { ...signal, robotId: this.id });
+        EventBus.emit('signal:resolved', { ...signal, robotId: this.id, type: 'loss' });
         this.signalHistory.push({ type: 'loss', target: targetColor, result: rColor, gale: maxGale, time: Date.now() });
         if (this.signalHistory.length > 100) this.signalHistory.shift();
         if (this.autoPause > 0 && Math.abs(this.stats.currentStreak) >= this.autoPause) {

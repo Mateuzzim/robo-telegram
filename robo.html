@@ -7,6 +7,13 @@
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="robo.css">
 <style>@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}</style>
+<style>
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:999}
+  .modal{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:18px;max-width:420px;width:90%}
+  .modal h3{margin:0 0 10px}
+  .modal select{width:100%;padding:8px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;margin-bottom:12px}
+  .modal-actions{display:flex;gap:8px;justify-content:flex-end}
+</style>
 </head>
 <body>
 <nav class="nav">
@@ -44,6 +51,23 @@
         <div id="telegramMessagePreview" style="margin-top:12px"></div>
       </div>
       <div style="margin-top:12px;display:flex;gap:8px"><button class="btn btn-green" onclick="saveConfig()">Salvar</button><button class="btn btn-red" onclick="resetRobot()">Resetar</button><button class="btn btn-yellow" onclick="resetPatterns()">Resetar Padroes</button></div>
+    </div>
+  </div>
+</div>
+<div class="modal-overlay" id="stopModal">
+  <div class="modal">
+    <h3>Parar Robô e Enviar Mensagem</h3>
+    <select id="stopMsgType">
+      <option value="">Sem mensagem</option>
+      <option value="maintenance">🔧 Manutenção Simples</option>
+      <option value="update">🔄 Atualização Programada</option>
+      <option value="pause">⏸️ Pausa Estratégica</option>
+      <option value="recalibration">🛠️ Recalibração do Sistema</option>
+      <option value="full">🚀 Manutenção Completa</option>
+    </select>
+    <div class="modal-actions">
+      <button class="btn btn-red" onclick="confirmStop(false)">Parar sem enviar</button>
+      <button class="btn btn-blue" onclick="confirmStop(true)">Parar e Enviar</button>
     </div>
   </div>
 </div>
@@ -247,10 +271,12 @@ function renderAll() {
           ${channels.map(c => `<option value="${c.id}" ${tg.channelId === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
         </select>
         <select id="tgMsgType" style="padding:4px 8px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:11px">
-          <option value="live" ${tg.msgType === 'live' ? 'selected' : ''}>Live</option>
-          <option value="signal" ${tg.msgType === 'signal' ? 'selected' : ''}>Sinal</option>
-          <option value="both" ${tg.msgType === 'both' || !tg.msgType ? 'selected' : ''}>Live+Sinal</option>
-          <option value="normal" ${tg.msgType === 'normal' ? 'selected' : ''}>Normal</option>
+           <option value="live" ${tg.msgType === 'live' ? 'selected' : ''}>Live</option>
+           <option value="signal" ${tg.msgType === 'signal' ? 'selected' : ''}>Sinal</option>
+           <option value="both" ${tg.msgType === 'both' || !tg.msgType ? 'selected' : ''}>Live+Sinal</option>
+           <option value="normal" ${tg.msgType === 'normal' ? 'selected' : ''}>Normal</option>
+           <option value="dynamic" ${tg.msgType === 'dynamic' ? 'selected' : ''}>Dinâmico</option>
+           <option value="live_dynamic" ${tg.msgType === 'live_dynamic' ? 'selected' : ''}>Live + Dinâmico</option>
         </select>
         <button class="btn btn-sm btn-blue" onclick="testTelegramChannel()" id="btnTestTg">Testar</button>
         <span id="testTgResult" style="font-size:10px"></span>
@@ -549,10 +575,25 @@ function toggleRobotPower() {
   const robot = RobotEngine.getRobot(robotId);
   if (!robot) return;
   if (robot.status === 'offline') {
+    if (typeof TelegramService !== 'undefined') {
+      TelegramService.clearAllMessages(robot);
+    }
     RobotEngine.startRobot(robotId);
+    loadRobot();
   } else {
-    RobotEngine.stopRobot(robotId);
+    document.getElementById('stopModal').style.display = 'flex';
   }
+}
+
+function confirmStop(sendMessage) {
+  const robot = RobotEngine.getRobot(robotId);
+  if (!robot) return;
+  const type = document.getElementById('stopMsgType').value;
+  RobotEngine.stopRobot(robotId);
+  if (sendMessage && type && typeof TelegramService !== 'undefined') {
+    TelegramService.sendMaintenanceMessage(robot, type);
+  }
+  document.getElementById('stopModal').style.display = 'none';
   loadRobot();
 }
 

@@ -4,6 +4,7 @@ const TelegramService = {
   entryStoreKey: 'telegram-entry-messages-v1',
   entryEventStoreKey: 'telegram-entry-events-v1',
   errorStoreKey: 'telegram-last-error-v1',
+  maintenanceStoreKey: 'telegram-maintenance-messages-v1',
   lockPrefix: 'telegram-live-lock:',
   ownerKey: 'telegram-owner-name',
   liveSendingTimeoutMs: 20000,
@@ -31,6 +32,7 @@ const TelegramService = {
     EventBus.on('signal:gale', (signal) => this.handleSignalChange(signal));
     EventBus.on('signal:win', (signal) => this.handleSignalChange(signal));
     EventBus.on('signal:loss', (signal) => this.handleSignalChange(signal));
+    EventBus.on('signal:resolved', (signal) => this.handleSignalResolved(signal));
     EventBus.on('robot:started', (d) => this.handleRobotStarted(d));
     this.startRecalibration();
     setTimeout(() => this.sendAllPendingEntryMessages(), 0);
@@ -43,7 +45,11 @@ const TelegramService = {
       robot.status === 'online' && this.shouldSendLive(robot)
     ));
     for (const robot of robots) {
-      await this.enqueueLiveMessage(robot);
+      if (this.isDynamicMode(robot)) {
+        await this.updateDynamicMessage(robot);
+      } else {
+        await this.enqueueLiveMessage(robot);
+      }
     }
   },
 
@@ -96,6 +102,7 @@ const TelegramService = {
     const allRobots = RobotEngine.getAllStates();
     const robotIds = new Set(allRobots.map(r => r.id));
     const liveMessages = this.getLiveMessages();
+    const maintenanceMessages = this.getMaintenanceMessages();
     let changed = false;
     for (const [key, msg] of Object.entries(liveMessages)) {
       const robotId = key.split(':')[0];
@@ -108,7 +115,21 @@ const TelegramService = {
         changed = true;
       }
     }
-    if (changed) this.saveLiveMessages(liveMessages);
+    for (const [key, msg] of Object.entries(maintenanceMessages)) {
+      const robotId = key.split(':')[0];
+      if (!robotIds.has(robotId) && msg.messageId) {
+        const chatId = msg.chatId || '';
+        if (chatId) {
+          await this.api(token, 'deleteMessage', { chat_id: chatId, message_id: msg.messageId }).catch(() => {});
+        }
+        delete maintenanceMessages[key];
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.saveLiveMessages(liveMessages);
+      this.saveMaintenanceMessages(maintenanceMessages);
+    }
   },
 
   getToken() {
@@ -142,6 +163,15 @@ const TelegramService = {
     localStorage.setItem(this.entryEventStoreKey, JSON.stringify(data));
   },
 
+  getMaintenanceMessages() {
+    try { return JSON.parse(localStorage.getItem(this.maintenanceStoreKey) || '{}'); }
+    catch { return {}; }
+  },
+
+  saveMaintenanceMessages(data) {
+    localStorage.setItem(this.maintenanceStoreKey, JSON.stringify(data));
+  },
+
   messageKey(robot) {
     return [robot.id, robot.telegram?.channelId || ''].join(':');
   },
@@ -157,7 +187,7 @@ const TelegramService = {
   shouldSendLive(robot) {
     if (!this.isTelegramEnabled(robot)) return false;
     const msgType = robot.telegram?.msgType || 'both';
-    if (msgType !== 'live' && msgType !== 'both') {
+    if (msgType !== 'live' && msgType !== 'both' && msgType !== 'dynamic' && msgType !== 'live_dynamic') {
       return false;
     }
     return true;
@@ -166,12 +196,16 @@ const TelegramService = {
   shouldSendSignal(robot) {
     if (!this.isTelegramEnabled(robot)) return false;
     const msgType = robot.telegram?.msgType || 'both';
-    if (msgType !== 'signal' && msgType !== 'both' && msgType !== 'normal') return false;
+    if (msgType !== 'signal' && msgType !== 'both' && msgType !== 'normal' && msgType !== 'dynamic' && msgType !== 'live_dynamic') return false;
     return true;
   },
 
   isNormalMode(robot) {
     return robot?.telegram?.msgType === 'normal';
+  },
+
+  isDynamicMode(robot) {
+    return robot?.telegram?.msgType === 'dynamic';
   },
 
   async updateLiveMessages(result) {
@@ -183,7 +217,11 @@ const TelegramService = {
       this.shouldSendLive(robot)
     ));
     for (const robot of robots) {
-      await this.enqueueLiveMessage(robot);
+      if (this.isDynamicMode(robot)) {
+        await this.updateDynamicMessage(robot);
+      } else {
+        await this.enqueueLiveMessage(robot);
+      }
     }
   },
 
@@ -209,6 +247,8 @@ const TelegramService = {
       robot.status === 'online' &&
       (!game || robot.game === game) &&
       this.shouldSendSignal(robot) &&
+      !this.isDynamicMode(robot) &&
+      robot.telegram?.msgType !== 'live_dynamic' &&
       robot.currentSignal &&
       !robot.currentSignal.entrySending &&
       (!robot.currentSignal.entrySent || !this.hasEntryMessageForSignal(robot, robot.currentSignal))
@@ -248,12 +288,19 @@ const TelegramService = {
     }
     if (robot.currentSignal?.id === signal.id) robot.currentSignal.entrySending = true;
     try {
-      const sent = await this.enqueueEntryMessage(robot, snapshot);
-      if (sent && robot.currentSignal?.id === snapshot.id) {
-        robot.currentSignal.entrySent = true;
-      } else if (!sent) {
-        if (robot.currentSignal?.id === snapshot.id) robot.currentSignal.entrySent = false;
-        this.forgetEntryEvent(snapshot.entryEventKey);
+      if (this.isDynamicMode(robot)) {
+        await this.updateDynamicMessage(robot);
+        if (robot.currentSignal?.id === snapshot.id) robot.currentSignal.entrySent = true;
+      } else if (robot.telegram?.msgType === 'live_dynamic') {
+        await this.sendFreshEntryMessage(robot, snapshot);
+      } else {
+        const sent = await this.enqueueEntryMessage(robot, snapshot);
+        if (sent && robot.currentSignal?.id === snapshot.id) {
+          robot.currentSignal.entrySent = true;
+        } else if (!sent) {
+          if (robot.currentSignal?.id === snapshot.id) robot.currentSignal.entrySent = false;
+          this.forgetEntryEvent(snapshot.entryEventKey);
+        }
       }
     } finally {
       if (robot.currentSignal?.id === snapshot.id) robot.currentSignal.entrySending = false;
@@ -307,7 +354,31 @@ const TelegramService = {
 
     if (!this.shouldProcessEntryEvent(robot, snapshot)) return;
 
-    await this.enqueueEntryMessage(robot, snapshot);
+    if (robot.telegram?.msgType === 'live_dynamic') {
+      await this.sendFreshEntryMessage(robot, snapshot);
+    } else {
+      await this.enqueueEntryMessage(robot, snapshot);
+    }
+  },
+
+  async handleSignalResolved(signal) {
+    const robot = RobotEngine.getRobot(signal?.robotId);
+    if (!robot || (!this.isDynamicMode(robot) && robot.telegram?.msgType !== 'live_dynamic')) return;
+    if (this.isDynamicMode(robot)) {
+      await this.updateDynamicMessage(robot);
+    }
+    if (!robot.currentSignal) {
+      setTimeout(() => {
+        const current = RobotEngine.getRobot(robot.id);
+        if (current && !current.currentSignal && (this.isDynamicMode(current) || current.telegram?.msgType === 'live_dynamic')) {
+          if (this.isDynamicMode(current)) {
+            this.updateDynamicMessage(current);
+          } else {
+            this.sendFreshEntryMessage(current, { id: 'cleanup' });
+          }
+        }
+      }, 5000);
+    }
   },
 
   entryEventKey(robot, signal) {
@@ -1292,6 +1363,30 @@ const TelegramService = {
     return '🟩 '.repeat(filled) + '⬛️ '.repeat(empty);
   },
 
+  async sendFreshEntryMessage(robot, signal) {
+    const token = this.getToken();
+    const chatId = robot.telegram?.channelId || '';
+    if (!token || !chatId) return false;
+    const key = this.entryMessageKey(robot);
+    const text = signal && signal.id !== 'cleanup' ? this.prepareTelegramText(this.buildEntryMessage(robot, signal)) : '';
+    const messages = this.getEntryMessages();
+    const current = messages[key];
+    if (current?.messageId) {
+      await this.api(token, 'deleteMessage', { chat_id: chatId, message_id: current.messageId }).catch(() => {});
+    }
+    delete messages[key];
+    this.saveEntryMessages(messages);
+    if (!text) return false;
+    const sent = await this.api(token, 'sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true });
+    if (sent.ok && sent.result?.message_id) {
+      const latest = this.getEntryMessages();
+      latest[key] = { messageId: sent.result.message_id, text, robotId: robot.id, chatId, signalId: signal.id, status: signal.status || 'approved', gale: signal.gale || 0, result: signal.result || null, eventKey: signal.entryEventKey || '', historyResultKey: signal.historyResultKey || signal.lastCheckedResultKey || signal.waitingAfterResultKey || signal.sourceResultKey || '', createdAt: Date.now(), updatedAt: Date.now() };
+      this.saveEntryMessages(latest);
+      return true;
+    }
+    return false;
+  },
+
   formatRobotStatus(robot) {
     if (robot.currentSignal) {
       if (robot.currentSignal.status === 'gale_pending') {
@@ -1301,5 +1396,189 @@ const TelegramService = {
     }
     if (robot.status !== 'online') return 'Robô ' + (robot.status === 'offline' ? 'Offline' : robot.status);
     return 'Aguardando próximo\npadrão confirmado...';
+  },
+
+  async updateDynamicMessage(robot) {
+    const token = this.getToken();
+    const chatId = robot.telegram?.channelId || '';
+    if (!token || !chatId) return;
+    const key = this.messageKey(robot);
+    const text = this.prepareTelegramText(this.buildDynamicMessage(robot));
+    const messages = this.getLiveMessages();
+    const current = messages[key];
+
+    if (current?.sending && Date.now() - (current.updatedAt || 0) < this.liveSendingTimeoutMs) return;
+
+    if (robot.currentSignal) {
+      if (current?.messageId && current?.text === text) return;
+      if (current?.messageId) {
+        const edited = await this.api(token, 'editMessageText', { chat_id: chatId, message_id: current.messageId, text, parse_mode: 'HTML', disable_web_page_preview: true });
+        if (edited.ok || this.isNotModified(edited)) {
+          const latest = this.getLiveMessages();
+          latest[key] = { messageId: current.messageId, text, updatedAt: Date.now() };
+          this.saveLiveMessages(latest);
+          return;
+        }
+        if (this.isEditMessageNotFound(edited) || this.isMessageCantBeEdited(edited)) {
+          const latest = this.getLiveMessages();
+          delete latest[key];
+          this.saveLiveMessages(latest);
+        }
+      }
+      const pending = this.getLiveMessages();
+      pending[key] = { sending: true, text, robotId: robot.id, chatId, owner: this.clientId, updatedAt: Date.now() };
+      this.saveLiveMessages(pending);
+      const sent = await this.api(token, 'sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true });
+      if (sent.ok && sent.result?.message_id) {
+        const latest = this.getLiveMessages();
+        latest[key] = { messageId: sent.result.message_id, text, updatedAt: Date.now() };
+        this.saveLiveMessages(latest);
+      } else {
+        const latest = this.getLiveMessages();
+        if (latest[key]?.sending && latest[key]?.owner === this.clientId) delete latest[key];
+        this.saveLiveMessages(latest);
+      }
+    } else if (current?.messageId) {
+      const deleted = await this.api(token, 'deleteMessage', { chat_id: chatId, message_id: current.messageId }).catch(() => ({}));
+      if (deleted.ok || this.isAlreadyDeleted(deleted)) {
+        const latest = this.getLiveMessages();
+        delete latest[key];
+        this.saveLiveMessages(latest);
+      }
+    }
+  },
+
+  buildDynamicMessage(robot) {
+    const signal = robot.currentSignal;
+    if (!signal) {
+      return '━━ 🚨 <b>AGUARDANDO SINAL</b> 🚨\n🤖 ' + robot.name + '\n🕕 ' + this.getCachedTime();
+    }
+    const targetEmoji = this.colorEmoji(signal.target);
+    const targetLabel = this.colorLabel(signal.target);
+    const wins = robot.stats?.wins || 0;
+    const losses = robot.stats?.losses || 0;
+    const rate = (wins + losses) > 0 ? Math.round((wins / (wins + losses)) * 100) : 0;
+    if (signal.status === 'win') {
+      return [
+        '━━ ✅ <b>WIN!</b> ✅ ━━',
+        '🎯 Resultado: ' + targetEmoji + ' ' + targetLabel,
+        '📊 ' + wins + 'W / ' + losses + 'L (' + rate + '%)',
+        '🕕 ' + this.getCachedTime()
+      ].join('\n');
+    }
+    if (signal.status === 'loss') {
+      return [
+        '━━ ❌ <b>LOSS!</b> ❌ ━━',
+        '🎯 Resultado: ' + targetEmoji + ' ' + targetLabel,
+        '📊 ' + wins + 'W / ' + losses + 'L (' + rate + '%)',
+        '🕕 ' + this.getCachedTime()
+      ].join('\n');
+    }
+    if (signal.status === 'gale_pending') {
+      return [
+        '━━ ⚡️ <b>G' + (signal.gale || 1) + ' - TENTANDO NOVAMENTE</b> ⚡️',
+        '🎯 <b>ENTRAR</b>',
+        targetEmoji,
+        '❌ <b>LOSS, VEIO:</b> ' + targetLabel + ' ' + targetEmoji,
+        '📊 ' + wins + 'W / ' + losses + 'L (' + rate + '%)',
+        '🕕 ' + this.getCachedTime()
+      ].join('\n');
+    }
+    return [
+      '━━ 🤖 <b>SINAL ENCONTRADO</b> 🤖 ━━',
+      '🎯 <b>ENTRAR NA COR</b>',
+      targetEmoji,
+      '📈 <b>Aproveitamento:</b> <b>' + rate + '%</b>',
+      '🕕 ' + this.getCachedTime()
+    ].join('\n');
+  },
+
+  async sendMaintenanceMessage(robot, type) {
+    const token = this.getToken();
+    const chatId = robot?.telegram?.channelId || '';
+    if (!token || !chatId) return;
+    await this.clearAllMessages(robot);
+    const name = robot?.name || 'Robô';
+    const strategy = this.formatStrategy(robot?.strategy || '--');
+    const now = new Date().toLocaleString('pt-BR');
+    const messages = {
+      maintenance: [
+        '🔧 <b>MANUTENÇÃO DO ROBÔ</b> 🔧',
+        '🤖 Robô: ' + name,
+        '📅 Início: ' + now,
+        '🔒 Status: Em manutenção',
+        '⚙️ Atualização em andamento...'
+      ].join('\n'),
+      update: [
+        '🔄 <b>ATUALIZAÇÃO PROGRAMADA</b> 🔄',
+        '🤖 Robô: ' + name,
+        '⏰ Início: ' + now,
+        '✅ Retorno automático em breve',
+        '📊 Estratégia: ' + strategy
+      ].join('\n'),
+      pause: [
+        '⏸️ <b>PAUSA ESTRATÉGICA</b> ⏸️',
+        '🤖 Robô: ' + name,
+        '🎯 Ajustando configurações...',
+        '📈 Em breve com análise renovada',
+        '💡 Motivo: Atualização de padrões'
+      ].join('\n'),
+      recalibration: [
+        '🛠️ <b>RECALIBRAÇÃO DO SISTEMA</b> 🛠️',
+        '🤖 Robô: ' + name,
+        '📡 Recalculando padrões...',
+        '⚙️ Otimizando estratégias',
+        '⏳ Volta automática após ajustes'
+      ].join('\n'),
+      full: [
+        '🚀 <b>MANUTENÇÃO & ATUALIZAÇÃO</b> 🚀',
+        '🤖 Robô: ' + name,
+        '🔄 Versão: v1.0',
+        '📅 ' + now,
+        '⚙️ Atualizando base de dados',
+        '🎯 Estratégia: ' + strategy,
+        '✅ Em breve online novamente'
+      ].join('\n')
+    };
+    const text = this.prepareTelegramText(messages[type] || messages.maintenance);
+    const sent = await this.api(token, 'sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true });
+    if (sent.ok && sent.result?.message_id) {
+      const key = this.messageKey(robot);
+      const latest = this.getMaintenanceMessages();
+      latest[key] = { messageId: sent.result.message_id, chatId, robotId: robot.id, type, createdAt: Date.now() };
+      this.saveMaintenanceMessages(latest);
+    }
+  },
+
+  async clearAllMessages(robot) {
+    const token = this.getToken();
+    const chatId = robot?.telegram?.channelId || '';
+    if (!token || !chatId) return;
+    const liveMessages = this.getLiveMessages();
+    const entryMessages = this.getEntryMessages();
+    const maintenanceMessages = this.getMaintenanceMessages();
+    const liveKey = this.messageKey(robot);
+    const entryKey = this.entryMessageKey(robot);
+    const live = liveMessages[liveKey];
+    if (live?.messageId) {
+      await this.api(token, 'deleteMessage', { chat_id: chatId, message_id: live.messageId }).catch(() => {});
+      delete liveMessages[liveKey];
+      this.saveLiveMessages(liveMessages);
+    }
+    for (const [key, msg] of Object.entries(entryMessages)) {
+      if (key === entryKey || key.startsWith(entryKey + ':')) {
+        if (msg.messageId) {
+          await this.api(token, 'deleteMessage', { chat_id: chatId, message_id: msg.messageId }).catch(() => {});
+        }
+        delete entryMessages[key];
+      }
+    }
+    this.saveEntryMessages(entryMessages);
+    const maintenance = maintenanceMessages[liveKey];
+    if (maintenance?.messageId) {
+      await this.api(token, 'deleteMessage', { chat_id: chatId, message_id: maintenance.messageId }).catch(() => {});
+      delete maintenanceMessages[liveKey];
+      this.saveMaintenanceMessages(maintenanceMessages);
+    }
   }
 };
