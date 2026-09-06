@@ -15,6 +15,12 @@
 .ch-used{font-size:10px;color:var(--green);margin-top:2px}
 .ch-history{font-size:10px;color:var(--text3);margin-top:2px;font-style:italic}
 .ch-item .btn{font-size:11px;padding:4px 8px}
+.topic-item{display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:var(--bg2);border:1px solid var(--border);border-radius:5px;margin-top:4px;font-size:11px}
+.topic-item .topic-name{font-weight:600;color:var(--text)}
+.topic-item .topic-id{font-size:10px;color:var(--text3);font-family:monospace}
+.topic-add-form{display:flex;gap:6px;margin-top:6px;align-items:center}
+.topic-add-form input{padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:11px}
+.topic-add-form input:first-child{flex:1}
 @media(max-width:768px){.ch-list{grid-template-columns:1fr}}
 .robot-link{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)}
 .robot-link:last-child{border-bottom:none}
@@ -197,10 +203,12 @@ function getPendingRobotLinks() {
   RobotEngine.getAllStates().forEach(r => {
     const enabledEl = document.getElementById('tgEnabled_' + r.id);
     const channelEl = document.getElementById('tgChannel_' + r.id);
-    if (enabledEl || channelEl) {
+    const topicEl = document.getElementById('tgTopic_' + r.id);
+    if (enabledEl || channelEl || topicEl) {
       pending[r.id] = {
         enabled: enabledEl ? enabledEl.checked : !!r.telegram?.enabled,
-        channelId: channelEl ? channelEl.value : (r.telegram?.channelId || '')
+        channelId: channelEl ? channelEl.value : (r.telegram?.channelId || ''),
+        threadId: topicEl ? topicEl.value : (r.telegram?.threadId || '')
       };
     }
   });
@@ -330,29 +338,177 @@ function removeChannel(id) {
   renderStatus();
 }
 
+function getChannelTopics(channelId) {
+  const channels = getChannels();
+  const ch = channels.find(c => c.id === channelId);
+  return ch?.topics || [];
+}
+
+function saveChannelTopics(channelId, topics) {
+  const channels = getChannels();
+  const ch = channels.find(c => c.id === channelId);
+  if (ch) {
+    ch.topics = topics;
+    saveChannels(channels);
+  }
+}
+
+function addTopic(channelId) {
+  const input = document.getElementById('topicInput_' + channelId);
+  if (!input) return;
+  const parts = input.value.split(',').map(s => s.trim());
+  if (parts.length < 2 || !parts[0] || !parts[1]) {
+    alert('Formato: Nome, Thread ID (ex: Robo Alpha, 5)');
+    return;
+  }
+  const name = parts[0];
+  const threadId = parseInt(parts[1]);
+  if (isNaN(threadId)) { alert('Thread ID deve ser um numero.'); return; }
+  const topics = getChannelTopics(channelId);
+  if (topics.find(t => t.threadId === threadId)) { alert('Este Thread ID ja existe.'); return; }
+  topics.push({ name, threadId });
+  saveChannelTopics(channelId, topics);
+  input.value = '';
+  renderChannels();
+  renderRobotLinks();
+}
+
+function removeTopic(channelId, threadId) {
+  const topics = getChannelTopics(channelId).filter(t => t.threadId !== threadId);
+  saveChannelTopics(channelId, topics);
+  renderChannels();
+  renderRobotLinks();
+}
+
+async function createTopicFromBot(channelId) {
+  const token = getToken();
+  if (!token) { alert('Configure o token do bot primeiro.'); return; }
+  const name = prompt('Nome do novo topico:');
+  if (!name || !name.trim()) return;
+  try {
+    const body = JSON.stringify({ chat_id: channelId, name: name.trim() });
+    const r = await fetch('https://api.telegram.org/bot' + token + '/createForumTopic', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body
+    });
+    const d = await r.json();
+    if (d.ok) {
+      const threadId = d.result.message_thread_id;
+      const topics = getChannelTopics(channelId);
+      if (!topics.find(t => t.threadId === threadId)) {
+        topics.push({ name: name.trim(), threadId });
+        saveChannelTopics(channelId, topics);
+      }
+      renderChannels();
+      renderRobotLinks();
+      alert('Topico criado: ' + name.trim() + ' (ID: ' + threadId + ')');
+    } else {
+      alert('Erro: ' + (d.description || 'Falha ao criar topico'));
+    }
+  } catch (e) {
+    alert('Falha: ' + e.message);
+  }
+}
+
+async function detectTopicsFromBot(channelId) {
+  const token = getToken();
+  if (!token) { alert('Configure o token do bot primeiro.'); return; }
+  try {
+    const r = await fetch('https://api.telegram.org/bot' + token + '/getUpdates?offset=-1000');
+    const d = await r.json();
+    if (!d.ok) { alert('Erro ao buscar updates.'); return; }
+    const topics = getChannelTopics(channelId);
+    let found = 0;
+    const seen = new Set();
+    d.result.forEach(u => {
+      const msg = u.message || u.channel_post;
+      if (!msg) return;
+      const threadId = msg.message_thread_id;
+      if (!threadId || seen.has(threadId)) return;
+      seen.add(threadId);
+      let name = 'Topico ' + threadId;
+      if (msg.forum_topic_created && msg.forum_topic_created.name) {
+        name = msg.forum_topic_created.name;
+      } else if (msg.text) {
+        name = msg.text.substring(0, 40);
+      }
+      if (!topics.find(t => t.threadId === threadId)) {
+        topics.push({ name, threadId });
+        found++;
+      } else {
+        const existing = topics.find(t => t.threadId === threadId);
+        if (existing && existing.name.startsWith('Topico ')) {
+          existing.name = name;
+        }
+      }
+    });
+    if (found > 0 || topics.length > 0) {
+      saveChannelTopics(channelId, topics);
+      renderChannels();
+      renderRobotLinks();
+    }
+    alert(found > 0 ? found + ' topico(s) detectado(s)!' : (topics.length > 0 ? topics.length + ' topico(s) ja cadastrados.' : 'Nenhum topico encontrado.'));
+  } catch (e) {
+    alert('Falha: ' + e.message);
+  }
+}
+
 function renderChannels() {
   const channels = getChannels();
   const robots = RobotEngine.getAllStates();
   const el = document.getElementById('channelsList');
   if (!channels.length) { el.innerHTML = '<div style="font-size:13px;color:var(--text3);padding:8px 0">Nenhum canal adicionado.</div>'; return; }
   el.innerHTML = channels.map(c => {
-    const linkedRobots = robots.filter(r => r.telegram?.channelId === c.id).map(r => escapeHtml(r.name));
+    const linkedRobots = robots.filter(r => {
+      const tg = r.telegram || {};
+      if (tg.channelId === c.id) return true;
+      if (Array.isArray(tg.destinations)) {
+        return tg.destinations.some(d => d.channelId === c.id);
+      }
+      return false;
+    }).map(r => escapeHtml(r.name));
     const channelId = escapeAttr(c.id);
     const channelIdJs = escapeAttr(escapeJsString(c.id));
     const usedBy = linkedRobots.length ? `<div class="ch-used">Usado por: ${linkedRobots.join(', ')}</div>` : '';
     const history = getSendHistory(c.id);
     const lastSend = history.length ? `<div class="ch-history">Ultimo envio: ${formatTime(history[0].time)}</div>` : '';
+    const topics = getChannelTopics(c.id);
+    const topicsHtml = topics.length ? topics.map(t => `
+      <div class="topic-item">
+        <div>
+          <span class="topic-name">${escapeHtml(t.name)}</span>
+          <span class="topic-id">#${t.threadId}</span>
+        </div>
+        <button class="btn btn-sm btn-ghost" onclick="removeTopic('${channelIdJs}',${t.threadId})" style="font-size:10px;padding:2px 6px">X</button>
+      </div>`).join('') : '<div style="font-size:10px;color:var(--text3);margin-top:4px">Nenhum topico</div>';
     return `
-    <div class="ch-item">
-      <div>
-        <span>${escapeHtml(c.name)}</span>
-        <div class="ch-id">${channelId}</div>
-        ${usedBy}
-        ${lastSend}
+    <div class="ch-item" style="flex-direction:column;align-items:stretch">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <span>${escapeHtml(c.name)}</span>
+          <div class="ch-id">${channelId}</div>
+          ${usedBy}
+          ${lastSend}
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-sm btn-ghost" onclick="showEditChannel('${channelIdJs}')">Editar</button>
+          <button class="btn btn-sm btn-ghost" onclick="removeChannel('${channelIdJs}')">Remover</button>
+        </div>
       </div>
-      <div style="display:flex;gap:6px">
-        <button class="btn btn-sm btn-ghost" onclick="showEditChannel('${channelIdJs}')">Editar</button>
-        <button class="btn btn-sm btn-ghost" onclick="removeChannel('${channelIdJs}')">Remover</button>
+      <div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <span style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase">Topicos do Forum</span>
+          <div style="display:flex;gap:4px">
+            <button class="btn btn-sm btn-blue" onclick="createTopicFromBot('${channelIdJs}')" style="font-size:9px;padding:2px 6px">+ Criar</button>
+            <button class="btn btn-sm btn-ghost" onclick="detectTopicsFromBot('${channelIdJs}')" style="font-size:9px;padding:2px 6px">Detectar</button>
+          </div>
+        </div>
+        ${topicsHtml}
+        <div class="topic-add-form">
+          <input id="topicInput_${channelId}" placeholder="Nome, Thread ID (ex: Robo Alpha, 5)">
+          <button class="btn btn-sm btn-green" onclick="addTopic('${channelIdJs}')">Add</button>
+        </div>
       </div>
     </div>`;
   }).join('');
@@ -366,23 +522,46 @@ function renderRobotLinks() {
   if (!robots.length) { el.innerHTML = '<div style="font-size:13px;color:var(--text3)">Nenhum robo criado.</div>'; return; }
   el.innerHTML = robots.map(r => {
     const pending = pendingLinks[r.id] || {};
-    const current = pending.channelId !== undefined ? pending.channelId : (r.telegram?.channelId || '');
+    const currentChannel = pending.channelId !== undefined ? pending.channelId : (r.telegram?.channelId || '');
+    const currentTopic = r.telegram?.threadId || '';
     const enabled = pending.enabled !== undefined ? pending.enabled : !!r.telegram?.enabled;
     const robotId = escapeAttr(r.id);
-    return `<div class="robot-link">
-      <div>
-        <strong style="font-size:13px">${escapeHtml(r.name)}</strong>
-        <span style="font-size:11px;color:var(--text3);margin-left:8px">${r.game}</span>
+    const robotIdJs = escapeAttr(escapeJsString(r.id));
+    const channelTopics = currentChannel ? getChannelTopics(currentChannel) : [];
+    const topicOptions = channelTopics.length
+      ? channelTopics.map(t => `<option value="${t.threadId}" ${String(currentTopic) === String(t.threadId) ? 'selected' : ''}>${escapeHtml(t.name)} (#${t.threadId})</option>`).join('')
+      : '<option value="">Sem topicos</option>';
+    return `<div class="robot-link" style="flex-direction:column;align-items:stretch;gap:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <strong style="font-size:13px">${escapeHtml(r.name)}</strong>
+          <span style="font-size:11px;color:var(--text3);margin-left:8px">${r.game}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <label><input type="checkbox" id="tgEnabled_${robotId}" ${enabled ? 'checked' : ''} style="margin-right:4px">Ativar</label>
+          <select id="tgChannel_${robotId}" onchange="updateTopicOptions('${robotIdJs}', this.value)">
+            <option value="">Sem canal</option>
+            ${channels.map(c => `<option value="${escapeAttr(c.id)}" ${currentChannel === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
+          </select>
+        </div>
       </div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <label><input type="checkbox" id="tgEnabled_${robotId}" ${enabled ? 'checked' : ''} style="margin-right:4px">Ativar</label>
-        <select id="tgChannel_${robotId}">
-          <option value="">Sem canal</option>
-          ${channels.map(c => `<option value="${escapeAttr(c.id)}" ${current === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
+      <div style="display:flex;align-items:center;gap:8px;padding-left:12px">
+        <label style="font-size:11px;color:var(--text3);white-space:nowrap">Topico:</label>
+        <select id="tgTopic_${robotId}" style="padding:4px 8px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:11px;flex:1">
+          <option value="">Sem topico (mensagem geral)</option>
+          ${topicOptions}
         </select>
       </div>
     </div>`;
   }).join('');
+}
+
+function updateTopicOptions(robotId, channelId) {
+  const topicSelect = document.getElementById('tgTopic_' + robotId);
+  if (!topicSelect) return;
+  const topics = channelId ? getChannelTopics(channelId) : [];
+  topicSelect.innerHTML = '<option value="">Sem topico (mensagem geral)</option>' +
+    topics.map(t => `<option value="${t.threadId}">${escapeHtml(t.name)} (#${t.threadId})</option>`).join('');
 }
 
 function saveRobotLinks() {
@@ -390,7 +569,10 @@ function saveRobotLinks() {
   robots.forEach(r => {
     const enabled = document.getElementById('tgEnabled_' + r.id)?.checked || false;
     const channelId = document.getElementById('tgChannel_' + r.id)?.value || '';
-    r.telegram = { ...r.telegram, enabled, channelId };
+    const threadId = document.getElementById('tgTopic_' + r.id)?.value || '';
+    const threadIdInt = threadId ? parseInt(threadId) : null;
+    const destinations = channelId ? [{ channelId, threadId: threadIdInt }] : [];
+    r.telegram = { ...r.telegram, enabled, channelId, threadId: threadIdInt, destinations };
   });
   RobotEngine.save();
   renderRobotLinks();

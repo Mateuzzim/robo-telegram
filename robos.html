@@ -68,12 +68,14 @@
     <a href="monitoramento.html">Monitoramento</a>
     <a href="robos.html" class="active">Robos</a>
     <a href="analise.html">Analise</a>
+    <a href="ia-inteligente.html">IA Inteligente</a>
     <a href="configuracoes.html">Config</a>
     <a href="estatisticas.html">Estatisticas</a>
     <a href="logs.html">Logs</a>
     <a href="mensagens.html">Mensagens</a>
   </div>
   <div class="nav-status">
+    <button id="themeToggle" onclick="toggleTheme()" title="Alternar tema" style="width:34px;height:34px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:all .2s"><svg id="themeIconMoon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg><svg id="themeIconSun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg></button>
     <a href="ws-background.html" target="_blank" style="font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text3);margin-right:8px">BG</a>
   </div>
 </nav>
@@ -87,7 +89,15 @@
 
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
     <div class="section-title" style="margin-bottom:0"><span class="dot-accent"></span> Todos os Robos</div>
-    <button class="btn btn-green" onclick="showCreate()">+ Novo Robo</button>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="btn btn-green" onclick="toggleAllRobots()" id="btnToggleAll">▶ Play All</button>
+      <button class="btn btn-orange" onclick="resetAllTelegramMessages()">Reset TG</button>
+      <button class="btn btn-red" onclick="cleanAllRobots()">🧹 Limpar Todos</button>
+      <button class="btn btn-cyan" onclick="exportRobots()">⬇ Exportar</button>
+      <button class="btn btn-orange" onclick="document.getElementById('importRobotsInput').click()">⬆ Importar</button>
+      <input type="file" id="importRobotsInput" accept=".json" style="display:none" onchange="importRobots(event)">
+      <button class="btn btn-green" onclick="showCreate()">+ Novo Robo</button>
+    </div>
   </div>
 
   <div class="card"><div class="table-wrap"><table>
@@ -142,7 +152,7 @@
       <div>
         <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)">Configuracoes</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          <div class="form-group"><label>Resultados para Analisar</label><input id="fResults" type="number" value="40"></div>
+          <div class="form-group"><label>Resultados para Analisar</label><input id="fResults" type="number" value="500"></div>
           <div class="form-group"><label>Confianca Minima (%)</label><input id="fConf" type="number" value="80"></div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -170,6 +180,7 @@
     <div style="margin-top:14px">
       <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)">Estrategias</div>
       <div class="strategy-grid" id="fStrategies" style="max-height:180px">
+        <div class="strategy-item" style="background:linear-gradient(135deg,#1a1a2e,#16213e);border:1px solid #0f3460;border-radius:6px;padding:6px 8px"><label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="fIaInteligente" onchange="toggleIaInteligente()"><span style="color:#e94560;font-weight:700">🧠 IA Inteligente</span></label><span class="strat-tag" style="background:#e94560;color:#fff">AI AUTO</span></div>
         <div class="strategy-item"><label><input type="checkbox" value="todas" checked onchange="togglePatternSize()"><span>Todas (Analise Completa)</span></label><span class="strat-tag">GERAL</span></div>
         <div class="strategy-item"><label><input type="checkbox" value="alternancia" onchange="togglePatternSize()"><span>Alternancia</span></label><span class="strat-tag">GERAL</span></div>
         <div class="strategy-item"><label><input type="checkbox" value="repeticao" onchange="togglePatternSize()"><span>Repeticao</span></label><span class="strat-tag">GERAL</span></div>
@@ -202,6 +213,9 @@
         <div class="strategy-item"><label><input type="checkbox" value="predicaoCondicional" onchange="togglePatternSize()"><span>Predicao Condicional</span></label><span class="strat-tag">ADV</span></div>
         <div class="strategy-item"><label><input type="checkbox" value="entropiaAdaptativa" onchange="togglePatternSize()"><span>Entropia Adaptativa</span></label><span class="strat-tag">ADV</span></div>
         <div class="strategy-item"><label><input type="checkbox" value="volatilidadeAdaptativa" onchange="togglePatternSize()"><span>Volatilidade Adapt.</span></label><span class="strat-tag">ADV</span></div>
+      </div>
+      <div id="iaHint" style="display:none;margin-top:8px;padding:8px 10px;background:linear-gradient(135deg,rgba(233,69,96,0.1),rgba(15,52,96,0.1));border:1px solid rgba(233,69,96,0.3);border-radius:6px;font-size:11px;color:var(--text2)">
+        <strong style="color:#e94560">🧠 IA Inteligente Ativa:</strong> A cada WIN, a IA analisa todas as estrategias para cada cor/multiplicador e escolhe automaticamente a melhor estrategia para a proxima entrada. Nao selecione estrategias manuais quando esta opcao estiver ligada.
       </div>
     </div>
 
@@ -258,16 +272,21 @@
       <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:10px;cursor:pointer">
         <input type="checkbox" id="fTgEnabled"> Enviar sinais para Telegram
       </label>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div class="form-group"><label>Canal Telegram</label><select id="fTgChannel"><option value="">Selecionar canal...</option></select></div>
+      <div id="destList" style="margin-bottom:10px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end">
+        <div class="form-group"><label>Canal/Grupo</label><select id="fTgChannel" onchange="updateDestTopicOptions()"><option value="">Selecionar...</option></select></div>
+        <div class="form-group"><label>Topico</label><select id="fTgTopic"><option value="">Sem topico</option></select></div>
+        <button class="btn btn-sm btn-blue" onclick="addDestination()" style="height:34px;margin-bottom:1px">+ Add</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
         <div class="form-group"><label>Tipo de Mensagem</label>
            <select id="fTgMsgType">
              <option value="live">Live (atualiza a cada resultado)</option>
              <option value="signal">Sinal (entrada, win, loss, gale)</option>
              <option value="both">Live + Sinal</option>
              <option value="normal">Envio Normal (sem editar/excluir)</option>
-             <option value="dynamic">Dinâmico (entrada/gale/win/loss unificada)</option>
-             <option value="live_dynamic">Live + Dinâmico</option>
+             <option value="dynamic">Dinamico (entrada/gale/win/loss unificada)</option>
+             <option value="live_dynamic">Live + Dinamico</option>
            </select>
         </div>
       </div>
@@ -284,16 +303,79 @@
 <script src="ws-source.js"></script>
 <script src="robot.js"></script>
 <script src="robot-engine.js"></script>
+<script src="ia-inteligente.js"></script>
 <script src="filters.js"></script>
 <script src="telegram.js"></script>
 <script src="app.js"></script>
 <script>
 App.init();
+function toggleTheme() {
+  const html = document.documentElement;
+  const isLight = html.getAttribute('data-theme') === 'light';
+  html.setAttribute('data-theme', isLight ? 'dark' : 'light');
+  localStorage.setItem('theme', isLight ? 'dark' : 'light');
+  const moon = document.getElementById('themeIconMoon');
+  const sun = document.getElementById('themeIconSun');
+  if (moon && sun) { moon.style.display = isLight ? 'none' : 'block'; sun.style.display = isLight ? 'block' : 'none'; }
+}
+(function() {
+  const saved = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', saved);
+  const moon = document.getElementById('themeIconMoon');
+  const sun = document.getElementById('themeIconSun');
+  if (moon && sun) { moon.style.display = saved === 'light' ? 'none' : 'block'; sun.style.display = saved === 'light' ? 'block' : 'none'; }
+})();
+function toggleIaInteligente() {
+  const on = document.getElementById('fIaInteligente')?.checked || false;
+  const hint = document.getElementById('iaHint');
+  if (hint) hint.style.display = on ? 'block' : 'none';
+}
 function togglePatternSize() {
   const strategies = getSelectedStrategies();
   document.getElementById('patternSizeGroup').style.display = strategies.includes('padroesCores') ? 'block' : 'none';
 }
 function getChannels() { try { return JSON.parse(localStorage.getItem('telegram-channels') || '[]'); } catch { return []; } }
+function getChannelTopics(channelId) {
+  const channels = getChannels();
+  const ch = channels.find(c => c.id === channelId);
+  return ch?.topics || [];
+}
+function updateDestTopicOptions() {
+  const channelId = document.getElementById('fTgChannel').value;
+  const topicSel = document.getElementById('fTgTopic');
+  const topics = channelId ? getChannelTopics(channelId) : [];
+  topicSel.innerHTML = '<option value="">Sem topico</option>' +
+    topics.map(t => '<option value="' + t.threadId + '">' + t.name + ' (#' + t.threadId + ')</option>').join('');
+}
+let pendingDestinations = [];
+function addDestination() {
+  const channelId = document.getElementById('fTgChannel').value;
+  const threadId = document.getElementById('fTgTopic').value;
+  const threadIdInt = threadId ? parseInt(threadId) : null;
+  if (!channelId) return;
+  if (pendingDestinations.find(d => d.channelId === channelId && d.threadId === threadIdInt)) return;
+  pendingDestinations.push({ channelId, threadId: threadIdInt });
+  renderDestinations();
+}
+function removeDestination(idx) {
+  pendingDestinations.splice(idx, 1);
+  renderDestinations();
+}
+function renderDestinations() {
+  const el = document.getElementById('destList');
+  if (!el) return;
+  if (!pendingDestinations.length) { el.innerHTML = ''; return; }
+  el.innerHTML = pendingDestinations.map((d, i) => {
+    const ch = getChannels().find(c => c.id === d.channelId);
+    const chName = ch?.name || d.channelId;
+    const topic = (ch?.topics || []).find(t => t.threadId === d.threadId);
+    const topicLabel = topic ? ' > ' + topic.name : (d.threadId ? ' > #' + d.threadId : ' (geral)');
+    return '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;margin-bottom:4px;font-size:12px">' +
+      '<span style="flex:1">📢 ' + chName + topicLabel + '</span>' +
+      '<button class="btn btn-sm btn-ghost" onclick="removeDestination(' + i + ')" style="font-size:10px;padding:2px 6px;color:var(--red)">X</button></div>';
+  }).join('');
+}
+function getPendingDestinations() { return pendingDestinations; }
 function getTargetLabel(r) {
   const colorMap = { any:'QUALQUER', red:'VERMELHO', black:'PRETO', grey:'PRETO', green:'VERDE', blue:'AZUL' };
   const color = colorMap[String(r.target?.color || '').toLowerCase()] || String(r.target?.color || '--').toUpperCase();
@@ -385,7 +467,10 @@ function showCreate(){
   setTimeout(() => suggestFilters(), 100);
   const channels = getChannels();
   const sel = document.getElementById('fTgChannel');
-  sel.innerHTML = '<option value="">Selecionar canal...</option>' + channels.map(c => `<option value="${c.id}">${escapeHtml(c.name)} (${c.id})</option>`).join('');
+  sel.innerHTML = '<option value="">Selecionar...</option>' + channels.map(c => `<option value="${c.id}">${escapeHtml(c.name)} (${c.id})</option>`).join('');
+  document.getElementById('fTgTopic').innerHTML = '<option value="">Sem topico</option>';
+  pendingDestinations = [];
+  renderDestinations();
   document.getElementById('modal').style.display='flex';
 }
 function showEdit(id){
@@ -400,7 +485,7 @@ function showEdit(id){
   document.getElementById('fTarget').value = robot.target?.color || 'any';
   const strategies = robot.strategies || [robot.strategy || 'alternancia'];
   setSelectedStrategies(strategies);
-  document.getElementById('fResults').value = robot.resultsToAnalyze || 40;
+  document.getElementById('fResults').value = robot.resultsToAnalyze || 500;
   document.getElementById('fConf').value = robot.minimumConfidence || 80;
   document.getElementById('fMinScore').value = robot.minScore || 52;
   document.getElementById('fInterval').value = robot.intervalMin || 60;
@@ -412,11 +497,18 @@ function showEdit(id){
   }
   const channels = getChannels();
   const sel = document.getElementById('fTgChannel');
-  sel.innerHTML = '<option value="">Selecionar canal...</option>' + channels.map(c => `<option value="${c.id}">${escapeHtml(c.name)} (${c.id})</option>`).join('');
+  sel.innerHTML = '<option value="">Selecionar...</option>' + channels.map(c => `<option value="${c.id}">${escapeHtml(c.name)} (${c.id})</option>`).join('');
   const tg = robot.telegram || {};
   document.getElementById('fTgEnabled').checked = !!tg.enabled;
-  document.getElementById('fTgChannel').value = tg.channelId || '';
   document.getElementById('fTgMsgType').value = tg.msgType || 'both';
+  if (Array.isArray(tg.destinations) && tg.destinations.length) {
+    pendingDestinations = tg.destinations.map(d => ({ channelId: d.channelId, threadId: d.threadId || null }));
+  } else if (tg.channelId) {
+    pendingDestinations = [{ channelId: tg.channelId, threadId: tg.threadId || null }];
+  } else {
+    pendingDestinations = [];
+  }
+  renderDestinations();
   const filters = robot.filters || [];
   setSelectedFilters(filters);
   const greenProtCheckbox = document.getElementById('fGreenProtection');
@@ -587,7 +679,7 @@ function createRobot(){
   const game = document.getElementById('fGame').value;
   const strategies = getSelectedStrategies();
   const strategy = strategies.length === 1 ? strategies[0] : 'multi';
-  const results = parseInt(document.getElementById('fResults').value) || 40;
+  const results = parseInt(document.getElementById('fResults').value) || 500;
   const minConf = parseInt(document.getElementById('fConf').value) || 80;
   const interval = parseInt(document.getElementById('fInterval').value) || 60;
   const mode = document.getElementById('fMode').value;
@@ -595,13 +687,15 @@ function createRobot(){
   const targetMult = TARGETS[game].find(t => t.value === targetColor)?.label.match(/(\d+)X/)?.[1] || null;
   const filterMode = document.getElementById('fFilterMode').value;
   const tgEnabled = document.getElementById('fTgEnabled').checked;
-  const tgChannel = document.getElementById('fTgChannel').value;
   const tgMsgType = document.getElementById('fTgMsgType').value;
+  const destinations = getPendingDestinations();
+  const firstDest = destinations[0] || {};
   const patternSize = strategies.includes('padroesCores') ? parseInt(document.getElementById('fPatternSize').value) || 3 : 3;
   const minScore = parseInt(document.getElementById('fMinScore').value) || 52;
   const filters = getSelectedFilters();
   const greenProtection = document.getElementById('fGreenProtection')?.checked || false;
   const autoPause = parseInt(document.getElementById('fAutoPause').value) || 0;
+  const iaInteligente = document.getElementById('fIaInteligente')?.checked || false;
   const galeByColor = {
     grey: parseInt(document.getElementById('fGaleGrey')?.value) || 1,
     red: parseInt(document.getElementById('fGaleRed')?.value) || 3,
@@ -612,6 +706,14 @@ function createRobot(){
   if (game === 'wheel' && targetColor === 'any') {
     galeMax = Math.max(galeByColor.grey, galeByColor.red, galeByColor.blue, galeByColor.green);
   }
+
+  const tgConfig = {
+    enabled: tgEnabled,
+    destinations: destinations.length ? destinations : (firstDest.channelId ? [firstDest] : []),
+    channelId: firstDest.channelId || '',
+    threadId: firstDest.threadId || null,
+    msgType: tgMsgType
+  };
 
   if (editId) {
     const robot = RobotEngine.getRobot(editId);
@@ -629,11 +731,12 @@ function createRobot(){
       robot.mode = mode;
       robot.target = { color: targetColor, multiplier: targetMult ? parseInt(targetMult) : null };
       robot.filterMode = filterMode;
-      robot.telegram = { enabled: tgEnabled, channelId: tgChannel, msgType: tgMsgType, message: robot.telegram?.message || {} };
+      robot.telegram = { ...tgConfig, message: robot.telegram?.message || {} };
       robot.patternSize = patternSize;
       robot.filters = filters;
       robot.greenProtection = greenProtection;
       robot.autoPause = autoPause;
+      robot.iaInteligente = iaInteligente;
       robot.galeByColor = galeByColor;
       RobotEngine.save();
     }
@@ -647,17 +750,58 @@ function createRobot(){
       minScore,
       intervalMin: interval,
       galeMax, mode,
-      telegram: { enabled: tgEnabled, channelId: tgChannel, msgType: tgMsgType },
+      telegram: tgConfig,
       patternSize,
       filters,
       greenProtection,
       autoPause,
+      iaInteligente,
       galeByColor
     });
     RobotEngine.save();
   }
   document.getElementById('modal').style.display='none';
   loadRobots();
+}
+async function toggleAllRobots(){
+  const robots = RobotEngine.getAllStates();
+  const online = robots.filter(r => r.status === 'online');
+  const offline = robots.filter(r => r.status === 'offline');
+  const btn = document.getElementById('btnToggleAll');
+  if (online.length > 0 && offline.length === 0) {
+    if (btn) { btn.textContent = 'Parando...'; btn.disabled = true; }
+    for (const r of online) {
+      RobotEngine.stopRobot(r.id);
+    }
+  } else {
+    if (btn) { btn.textContent = 'Iniciando...'; btn.disabled = true; }
+    for (const r of offline) {
+      r.currentSignal = null;
+      r.galeCount = 0;
+      r.usedPatterns = { RED: [], BLACK: [], GREY: [] };
+      const robot = RobotEngine.getRobot(r.id);
+      if (robot) {
+        robot.currentSignal = null;
+        robot.galeCount = 0;
+        robot.usedPatterns = { RED: [], BLACK: [], GREY: [] };
+        if (typeof TelegramService !== 'undefined') {
+          await TelegramService.clearAllMessages(robot);
+        }
+      }
+      RobotEngine.startRobot(r.id);
+    }
+  }
+  loadRobots();
+}
+function updateToggleAllBtn(){
+  const robots = RobotEngine.getAllStates();
+  const online = robots.filter(r => r.status === 'online').length;
+  const total = robots.length;
+  const btn = document.getElementById('btnToggleAll');
+  if (!btn) return;
+  if (total === 0) { btn.textContent = '▶ Play All'; btn.className = 'btn btn-green'; return; }
+  if (online === total) { btn.textContent = '■ Stop All'; btn.className = 'btn btn-red'; }
+  else { btn.textContent = '▶ Play All'; btn.className = 'btn btn-green'; }
 }
 function renderStats(){
   const robots = RobotEngine.getAllStates();
@@ -672,6 +816,7 @@ function renderStats(){
 function loadRobots(){
   const robots = RobotEngine.getAllStates();
   renderStats();
+  updateToggleAllBtn();
   const stratLabels = {
     todas:'Todas', alternancia:'Alternancia', repeticao:'Repeticao', frequencia:'Frequencia',
     tendencia:'Tendencia', espelhamento:'Espelhamento', diagonal:'Diagonal', padroesCores:'Padroes',
@@ -742,6 +887,7 @@ function loadRobots(){
         <button class="btn btn-sm btn-cyan" onclick="analyzeRobotAuto('${robotIdJs}')" title="Analise Automatica">Analise</button>
         <button class="btn btn-sm btn-purple" onclick="resetTelegramMessages('${robotIdJs}')" title="Resetar mensagens do Telegram">Reset TG</button>
         <button class="btn btn-sm btn-orange" onclick="showResetStats('${robotIdJs}')" title="Resetar estatisticas">Reset Stats</button>
+        <button class="btn btn-sm btn-red" onclick="cleanRobot('${robotIdJs}')" title="Limpar entradas, gales, win/loss - iniciar do zero">🧹 Limpar</button>
         <button class="btn btn-sm btn-blue" onclick="showSignalHistory('${robotIdJs}')" title="Historico de sinais">Historico</button>
         <button class="btn btn-sm btn-red" onclick="deleteRobot('${robotIdJs}')">Del</button>
       </td>
@@ -754,10 +900,15 @@ function changeRobotPatternSize(id, size) {
   robot.patternSize = size;
   RobotEngine.save();
 }
-function start(id){ 
+async function start(id){ 
   const robot = RobotEngine.getRobot(id);
-  if (robot && typeof TelegramService !== 'undefined') {
-    TelegramService.clearAllMessages(robot);
+  if (robot) {
+    robot.currentSignal = null;
+    robot.galeCount = 0;
+    robot.usedPatterns = { RED: [], BLACK: [], GREY: [] };
+    if (typeof TelegramService !== 'undefined') {
+      await TelegramService.clearAllMessages(robot);
+    }
   }
   RobotEngine.startRobot(id); 
   loadRobots(); 
@@ -928,23 +1079,119 @@ function showSignalHistory(id) {
   `;
   document.body.insertAdjacentHTML('beforeend', html);
 }
+function cleanRobot(id) {
+  const robot = RobotEngine.getRobot(id);
+  if (!robot) return;
+  if (!confirm('Limpar TODO o historico do robo "' + robot.name + '"?\n\nIsso vai apagar:\n- Sinal atual pendente\n- Contador de gales\n- Todas as estatisticas (W/L, streaks)\n- Historico de sinais\n- Logs\n- Diagnosticos\n- Padroes usados\n\nO robo vai recomecar DO ZERO.')) return;
+  robot.currentSignal = null;
+  robot.galeCount = 0;
+  robot.lastSignal = null;
+  robot.lastSignalTime = 0;
+  robot.stats = { signals: 0, wins: 0, losses: 0, winSG: 0, winG1: 0, winG2: 0, currentStreak: 0, maxWinStreak: 0, maxLossStreak: 0, patternsFound: 0, signalsApproved: 0, signalsRejected: 0 };
+  robot.signalHistory = [];
+  robot.usedPatterns = { RED: [], BLACK: [], GREY: [] };
+  robot.logs = [];
+  robot.diagnostic = { status: 'IDLE', analyzedResults: 0, mainPattern: null, confidence: 0, suggestedEntry: null, patternScores: {}, totalScore: 0, filterResults: {}, decision: null, risk: 'BAIXO', signalScore: 0, confluences: 0, signalBlocked: false, blockReason: '' };
+  robot.signalFlow = { step1: 'Aguardando padrao...', step2: 'Nenhuma entrada pendente', step3: 'Aguardando entrada...', step4: 'Placar sera atualizado apos resultado' };
+  robot._lastResolvedTime = 0;
+  robot.iaState = { activeStrategy: null, activeTarget: null, evaluations: [], lastAnalysisTime: 0 };
+  robot.history = [];
+  RobotEngine.save();
+  EventBus.emit('robot:state', robot.getState());
+  alert('Robo limpo! Historico e estatisticas apagados.');
+}
+function cleanAllRobots() {
+  const robots = RobotEngine.getAllRobots();
+  if (!robots.length) { alert('Nenhum robo para limpar.'); return; }
+  if (!confirm('Limpar TODOS os ' + robots.length + ' robos?\n\nIsso vai apagar o historico, estatisticas, sinais e logs de TODOS os robos.\nCada robo vai recomecar DO ZERO.')) return;
+  let count = 0;
+  robots.forEach(robot => {
+    robot.currentSignal = null;
+    robot.galeCount = 0;
+    robot.lastSignal = null;
+    robot.lastSignalTime = 0;
+    robot.stats = { signals: 0, wins: 0, losses: 0, winSG: 0, winG1: 0, winG2: 0, currentStreak: 0, maxWinStreak: 0, maxLossStreak: 0, patternsFound: 0, signalsApproved: 0, signalsRejected: 0 };
+    robot.signalHistory = [];
+    robot.usedPatterns = { RED: [], BLACK: [], GREY: [] };
+    robot.logs = [];
+    robot.diagnostic = { status: 'IDLE', analyzedResults: 0, mainPattern: null, confidence: 0, suggestedEntry: null, patternScores: {}, totalScore: 0, filterResults: {}, decision: null, risk: 'BAIXO', signalScore: 0, confluences: 0, signalBlocked: false, blockReason: '' };
+    robot.signalFlow = { step1: 'Aguardando padrao...', step2: 'Nenhuma entrada pendente', step3: 'Aguardando entrada...', step4: 'Placar sera atualizado apos resultado' };
+    robot._lastResolvedTime = 0;
+    robot.iaState = { activeStrategy: null, activeTarget: null, evaluations: [], lastAnalysisTime: 0 };
+    robot.history = [];
+    count++;
+  });
+  RobotEngine.save();
+  loadRobots();
+  alert(count + ' robos limpos com sucesso!');
+}
+function exportRobots() {
+  const robots = RobotEngine.getAllRobots();
+  if (!robots.length) { alert('Nenhum robo para exportar.'); return; }
+  const data = robots.map(r => r.toJSON());
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'robos-' + new Date().toISOString().slice(0,10) + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  alert('Exportado ' + data.length + ' robos com sucesso!');
+}
+
+function importRobots(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  event.target.value = '';
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const imported = JSON.parse(e.target.result);
+      if (!Array.isArray(imported)) { alert('Formato invalido. Esperado um array de robos.'); return; }
+      const existing = RobotEngine.getAllRobots();
+      const existingIds = new Set(existing.map(r => r.id));
+      let importedCount = 0;
+      let skippedCount = 0;
+      imported.forEach(config => {
+        if (existingIds.has(config.id)) {
+          const overwrite = confirm('O robo "' + (config.name || config.id) + '" ja existe. Sobrescrever?\n\nClique OK para sobrescrever ou Cancelar para pular.');
+          if (!overwrite) { skippedCount++; return; }
+        }
+        RobotEngine.createRobotFromStorage(config, { emitStarted: false });
+        importedCount++;
+      });
+      RobotEngine.save();
+      loadRobots();
+      alert('Importacao concluida!\nImportados: ' + importedCount + '\nIgnorados: ' + skippedCount);
+    } catch (err) {
+      alert('Erro ao importar: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
 async function resetTelegramMessages(id) {
-  if (!confirm('Resetar todas as mensagens do Telegram deste robo? Isso vai deletar as mensagens de live e entrada do chat.')) return;
+  if (!confirm('Resetar todas as mensagens do Telegram deste robo? Isso vai deletar as mensagens de live, entrada e manutencao do chat.')) return;
   const robot = RobotEngine.getRobot(id);
   if (!robot) { alert('Robo nao encontrado.'); return; }
   const token = localStorage.getItem('telegram-bot-token') || '';
-  const chatId = robot.telegram?.channelId || '';
-  if (!token || !chatId) { alert('Token do bot ou canal nao configurado.'); return; }
+  if (!token) { alert('Token do bot nao configurado.'); return; }
   let deletedCount = 0;
+  const prefix = id + ':';
   try {
     const liveRaw = JSON.parse(localStorage.getItem('telegram-live-messages-v1') || '{}');
     for (const [key, msg] of Object.entries(liveRaw)) {
-      if (key.startsWith(id + ':') && msg.messageId) {
-        await fetch('https://api.telegram.org/bot' + token + '/deleteMessage', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chat_id: chatId, message_id: msg.messageId })
-        }).catch(() => {});
+      if (key.startsWith(prefix) && msg.messageId) {
+        const chatId = key.split(':')[1] || '';
+        if (chatId) {
+          await fetch('https://api.telegram.org/bot' + token + '/deleteMessage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, message_id: msg.messageId })
+          }).catch(() => {});
+        }
         delete liveRaw[key];
         deletedCount++;
       }
@@ -954,12 +1201,15 @@ async function resetTelegramMessages(id) {
   try {
     const entryRaw = JSON.parse(localStorage.getItem('telegram-entry-messages-v1') || '{}');
     for (const [key, msg] of Object.entries(entryRaw)) {
-      if (key.startsWith(id + ':') && msg.messageId) {
-        await fetch('https://api.telegram.org/bot' + token + '/deleteMessage', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chat_id: chatId, message_id: msg.messageId })
-        }).catch(() => {});
+      if (key.startsWith(prefix) && msg.messageId) {
+        const chatId = msg.chatId || key.split(':')[1] || '';
+        if (chatId) {
+          await fetch('https://api.telegram.org/bot' + token + '/deleteMessage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, message_id: msg.messageId })
+          }).catch(() => {});
+        }
         delete entryRaw[key];
         deletedCount++;
       }
@@ -967,13 +1217,105 @@ async function resetTelegramMessages(id) {
     localStorage.setItem('telegram-entry-messages-v1', JSON.stringify(entryRaw));
   } catch {}
   try {
+    const maintRaw = JSON.parse(localStorage.getItem('telegram-maintenance-messages-v1') || '{}');
+    for (const [key, msg] of Object.entries(maintRaw)) {
+      if (key.startsWith(prefix) && msg.messageId) {
+        const chatId = key.split(':')[1] || '';
+        if (chatId) {
+          await fetch('https://api.telegram.org/bot' + token + '/deleteMessage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, message_id: msg.messageId })
+          }).catch(() => {});
+        }
+        delete maintRaw[key];
+        deletedCount++;
+      }
+    }
+    localStorage.setItem('telegram-maintenance-messages-v1', JSON.stringify(maintRaw));
+  } catch {}
+  try {
     const events = JSON.parse(localStorage.getItem('telegram-entry-events-v1') || '{}');
     for (const key of Object.keys(events)) {
-      if (key.startsWith(id + ':')) delete events[key];
+      if (key.startsWith(prefix)) delete events[key];
     }
     localStorage.setItem('telegram-entry-events-v1', JSON.stringify(events));
   } catch {}
   alert('Mensagens resetadas! ' + deletedCount + ' mensagem(ns) deletada(s) do Telegram.');
+  loadRobots();
+}
+async function resetAllTelegramMessages() {
+  if (!confirm('Resetar TODAS as mensagens do Telegram de TODOS os robos? Isso vai deletar todas as mensagens de live e entrada do chat.')) return;
+  const token = localStorage.getItem('telegram-bot-token') || '';
+  if (!token) { alert('Token do bot nao configurado.'); return; }
+  let deletedCount = 0;
+  const robots = RobotEngine.getAllStates();
+  const channels = new Map();
+  for (const r of robots) {
+    const chatId = r.telegram?.channelId || '';
+    if (!chatId) continue;
+    if (!channels.has(chatId)) channels.set(chatId, []);
+    channels.get(chatId).push(r);
+  }
+  try {
+    const liveRaw = JSON.parse(localStorage.getItem('telegram-live-messages-v1') || '{}');
+    for (const [key, msg] of Object.entries(liveRaw)) {
+      if (msg.messageId) {
+        const chatId = key.split(':')[1] || '';
+        if (chatId) {
+          await fetch('https://api.telegram.org/bot' + token + '/deleteMessage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, message_id: msg.messageId })
+          }).catch(() => {});
+        }
+        delete liveRaw[key];
+        deletedCount++;
+      }
+    }
+    localStorage.setItem('telegram-live-messages-v1', JSON.stringify(liveRaw));
+  } catch {}
+  try {
+    const entryRaw = JSON.parse(localStorage.getItem('telegram-entry-messages-v1') || '{}');
+    for (const [key, msg] of Object.entries(entryRaw)) {
+      if (msg.messageId) {
+        const parts = key.split(':');
+        const chatId = parts[1] || '';
+        if (chatId) {
+          await fetch('https://api.telegram.org/bot' + token + '/deleteMessage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, message_id: msg.messageId })
+          }).catch(() => {});
+        }
+        delete entryRaw[key];
+        deletedCount++;
+      }
+    }
+    localStorage.setItem('telegram-entry-messages-v1', JSON.stringify(entryRaw));
+  } catch {}
+  try {
+    localStorage.removeItem('telegram-entry-events-v1');
+  } catch {}
+  try {
+    const maintRaw = JSON.parse(localStorage.getItem('telegram-maintenance-messages-v1') || '{}');
+    for (const [key, msg] of Object.entries(maintRaw)) {
+      if (msg.messageId) {
+        const chatId = key.split(':')[1] || '';
+        if (chatId) {
+          await fetch('https://api.telegram.org/bot' + token + '/deleteMessage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, message_id: msg.messageId })
+          }).catch(() => {});
+        }
+        delete maintRaw[key];
+        deletedCount++;
+      }
+    }
+    localStorage.setItem('telegram-maintenance-messages-v1', JSON.stringify(maintRaw));
+  } catch {}
+  alert('Todas as mensagens resetadas! ' + deletedCount + ' mensagem(ns) deletada(s) do Telegram.');
   loadRobots();
 }
 let autoAnaliseSnapshot = null;
@@ -1003,7 +1345,7 @@ function analyzeRobotAuto(robotId) {
   autoAnaliseSnapshot = JSON.parse(JSON.stringify({
     strategies: robot.strategies || [robot.strategy || 'todas'],
     filters: robot.filters || [],
-    resultsToAnalyze: robot.resultsToAnalyze || 40,
+    resultsToAnalyze: robot.resultsToAnalyze || 500,
     minimumConfidence: robot.minimumConfidence || 80,
     minScore: robot.minScore || 52,
     gale: robot.gale?.max || 2,

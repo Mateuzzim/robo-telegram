@@ -71,28 +71,29 @@ const TelegramService = {
 
   async recalibrateRobot(robot) {
     const token = this.getToken();
-    const chatId = robot.telegram?.channelId;
-    if (!token || !chatId) return;
-    const prefix = robot.id + ':' + chatId + ':entry';
-    const allEntries = this.getEntryMessages();
-    const robotEntries = Object.entries(allEntries)
-      .filter(([k]) => k.startsWith(prefix) || k === prefix)
-      .sort((a, b) => (b[1].updatedAt || b[1].createdAt || 0) - (a[1].updatedAt || a[1].createdAt || 0));
+    if (!token) return;
+    const destinations = this.getDestinations(robot);
+    for (const dest of destinations) {
+      const chatId = dest.channelId;
+      if (!chatId) continue;
+      const prefix = this.entryMessageKey(robot, dest);
+      const allEntries = this.getEntryMessages();
+      const robotEntries = Object.entries(allEntries)
+        .filter(([k]) => k.startsWith(prefix + ':') || k === prefix)
+        .sort((a, b) => (b[1].updatedAt || b[1].createdAt || 0) - (a[1].updatedAt || a[1].createdAt || 0));
 
-    if (robotEntries.length <= 1) {
-      await this.enqueueLiveMessage(robot);
-      return;
-    }
+      if (robotEntries.length <= 1) continue;
 
-    const keep = robotEntries[0];
-    const toDelete = robotEntries.slice(1);
-    for (const [key, msg] of toDelete) {
-      if (msg.messageId) {
-        await this.api(token, 'deleteMessage', { chat_id: chatId, message_id: msg.messageId }).catch(() => {});
+      const keep = robotEntries[0];
+      const toDelete = robotEntries.slice(1);
+      for (const [key, msg] of toDelete) {
+        if (msg.messageId) {
+          await this.api(token, 'deleteMessage', { chat_id: chatId, message_id: msg.messageId }).catch(() => {});
+        }
+        delete allEntries[key];
       }
-      delete allEntries[key];
+      this.saveEntryMessages(allEntries);
     }
-    this.saveEntryMessages(allEntries);
     await this.enqueueLiveMessage(robot);
   },
 
@@ -172,16 +173,33 @@ const TelegramService = {
     localStorage.setItem(this.maintenanceStoreKey, JSON.stringify(data));
   },
 
-  messageKey(robot) {
-    return [robot.id, robot.telegram?.channelId || ''].join(':');
+  getDestinations(robot) {
+    const tg = robot?.telegram || {};
+    if (Array.isArray(tg.destinations) && tg.destinations.length > 0) {
+      return tg.destinations.filter(d => d.channelId);
+    }
+    if (tg.channelId) {
+      return [{ channelId: tg.channelId, threadId: tg.threadId || null }];
+    }
+    return [];
   },
 
-  entryMessageKey(robot) {
-    return [robot.id, robot.telegram?.channelId || '', 'entry'].join(':');
+  messageKey(robot, dest) {
+    const chatId = dest?.channelId || robot.telegram?.channelId || '';
+    return [robot.id, chatId].join(':');
+  },
+
+  entryMessageKey(robot, dest) {
+    return this.messageKey(robot, dest) + ':entry';
+  },
+
+  maintenanceKey(robot, dest) {
+    return this.messageKey(robot, dest) + ':maint';
   },
 
   isTelegramEnabled(robot) {
-    return !!(robot?.telegram?.enabled && robot.telegram.channelId);
+    if (!robot?.telegram?.enabled) return false;
+    return this.getDestinations(robot).length > 0;
   },
 
   shouldSendLive(robot) {
@@ -251,11 +269,17 @@ const TelegramService = {
       robot.telegram?.msgType !== 'live_dynamic' &&
       robot.currentSignal &&
       !robot.currentSignal.entrySending &&
-      (!robot.currentSignal.entrySent || !this.hasEntryMessageForSignal(robot, robot.currentSignal))
+      (!robot.currentSignal.entrySent || !this.hasEntryMessageForAnyDest(robot, robot.currentSignal))
     ));
     for (const robot of robots) {
       const snapshot = { ...robot.currentSignal };
-      if (!this.shouldProcessEntryEvent(robot, snapshot)) {
+      const destinations = this.getDestinations(robot);
+      let anyProcessed = false;
+      for (const dest of destinations) {
+        if (!this.shouldProcessEntryEvent(robot, snapshot, dest)) continue;
+        anyProcessed = true;
+      }
+      if (!anyProcessed) {
         robot.currentSignal.entrySent = true;
         continue;
       }
@@ -282,28 +306,34 @@ const TelegramService = {
       result: signal.result ? { ...signal.result } : null,
       pattern: Array.isArray(signal.pattern) ? [...signal.pattern] : signal.pattern
     };
-    if (!this.shouldProcessEntryEvent(robot, snapshot)) {
-      if (robot.currentSignal?.id === signal.id) robot.currentSignal.entrySent = true;
-      return;
-    }
-    if (robot.currentSignal?.id === signal.id) robot.currentSignal.entrySending = true;
-    try {
-      if (this.isDynamicMode(robot)) {
-        await this.updateDynamicMessage(robot);
-        if (robot.currentSignal?.id === snapshot.id) robot.currentSignal.entrySent = true;
-      } else if (robot.telegram?.msgType === 'live_dynamic') {
-        await this.sendFreshEntryMessage(robot, snapshot);
-      } else {
-        const sent = await this.enqueueEntryMessage(robot, snapshot);
-        if (sent && robot.currentSignal?.id === snapshot.id) {
-          robot.currentSignal.entrySent = true;
-        } else if (!sent) {
-          if (robot.currentSignal?.id === snapshot.id) robot.currentSignal.entrySent = false;
-          this.forgetEntryEvent(snapshot.entryEventKey);
-        }
+    const destinations = this.getDestinations(robot);
+    for (const dest of destinations) {
+      if (!this.shouldProcessEntryEvent(robot, snapshot, dest)) {
+        if (robot.currentSignal?.id === signal.id) robot.currentSignal.entrySent = true;
+        continue;
       }
-    } finally {
-      if (robot.currentSignal?.id === snapshot.id) robot.currentSignal.entrySending = false;
+      if (robot.currentSignal?.id === signal.id) robot.currentSignal.entrySending = true;
+      try {
+        if (this.isDynamicMode(robot)) {
+          await this.updateDynamicMessage(robot, dest);
+          if (robot.currentSignal?.id === snapshot.id) robot.currentSignal.entrySent = true;
+        } else if (robot.telegram?.msgType === 'live_dynamic') {
+          await this.sendFreshEntryMessage(robot, snapshot);
+        } else {
+          const sent = await this.enqueueEntryMessage(robot, snapshot);
+          if (sent && robot.currentSignal?.id === snapshot.id) {
+            robot.currentSignal.entrySent = true;
+          } else if (!sent) {
+            if (robot.currentSignal?.id === snapshot.id) robot.currentSignal.entrySent = false;
+            this.forgetEntryEvent(snapshot.entryEventKey);
+          }
+          if (this.shouldSendLive(robot)) {
+            this.enqueueLiveMessage(robot);
+          }
+        }
+      } finally {
+        if (robot.currentSignal?.id === snapshot.id) robot.currentSignal.entrySending = false;
+      }
     }
   },
 
@@ -318,25 +348,28 @@ const TelegramService = {
     ));
 
     for (const robot of robots) {
-      const messages = this.getEntryMessages();
-      const key = this.entryMessageKey(robot);
-      const current = messages[key];
-      const status = String(current?.status || '').toLowerCase();
-      if (status !== 'win' && status !== 'loss') continue;
+      const destinations = this.getDestinations(robot);
+      for (const dest of destinations) {
+        const messages = this.getEntryMessages();
+        const key = this.entryMessageKey(robot, dest);
+        const current = messages[key];
+        const status = String(current?.status || '').toLowerCase();
+        if (status !== 'win' && status !== 'loss') continue;
 
-      const historyResultKey = this.getRobotResultKey(robot, result);
-      if (historyResultKey && current.historyResultKey === historyResultKey) continue;
+        const historyResultKey = this.getRobotResultKey(robot, result);
+        if (historyResultKey && current.historyResultKey === historyResultKey) continue;
 
-      const lastSignal = robot.lastSignal || {};
-      const snapshot = {
-        id: current.signalId || lastSignal.id || key,
-        status,
-        gale: current.gale || lastSignal.gale || 0,
-        result: current.result || lastSignal.result || null,
-        entryEventKey: 'refresh|' + key + '|' + status + '|' + (historyResultKey || Date.now()),
-        historyResultKey
-      };
-      await this.enqueueEntryMessage(robot, snapshot);
+        const lastSignal = robot.lastSignal || {};
+        const snapshot = {
+          id: current.signalId || lastSignal.id || key,
+          status,
+          gale: current.gale || lastSignal.gale || 0,
+          result: current.result || lastSignal.result || null,
+          entryEventKey: 'refresh|' + key + '|' + status + '|' + (historyResultKey || Date.now()),
+          historyResultKey
+        };
+        await this.enqueueEntryMessage(robot, snapshot);
+      }
     }
   },
 
@@ -352,12 +385,18 @@ const TelegramService = {
     const shouldSend = status === 'win' || status === 'loss' || status === 'gale_pending';
     if (!shouldSend) return;
 
-    if (!this.shouldProcessEntryEvent(robot, snapshot)) return;
+    const destinations = this.getDestinations(robot);
+    for (const dest of destinations) {
+      if (!this.shouldProcessEntryEvent(robot, snapshot, dest)) continue;
 
-    if (robot.telegram?.msgType === 'live_dynamic') {
-      await this.sendFreshEntryMessage(robot, snapshot);
-    } else {
-      await this.enqueueEntryMessage(robot, snapshot);
+      if (robot.telegram?.msgType === 'live_dynamic') {
+        await this.sendFreshEntryMessage(robot, snapshot);
+      } else {
+        await this.enqueueEntryMessage(robot, snapshot);
+      }
+      if (this.shouldSendLive(robot)) {
+        this.enqueueLiveMessage(robot);
+      }
     }
   },
 
@@ -381,14 +420,15 @@ const TelegramService = {
     }
   },
 
-  entryEventKey(robot, signal) {
+  entryEventKey(robot, signal, dest) {
     if (!robot || !signal?.id) return '';
     const result = signal.result || {};
     const resultKey = signal.lastCheckedResultKey || signal.waitingAfterResultKey || signal.sourceResultKey ||
       [result.color || '', result.number ?? '', result.multiplier || ''].join(':');
+    const chatId = dest?.channelId || robot.telegram?.channelId || '';
     return [
       robot.id,
-      robot.telegram?.channelId || '',
+      chatId,
       signal.id,
       signal.status || 'approved',
       signal.gale || 0,
@@ -406,19 +446,25 @@ const TelegramService = {
     return color + ':' + number;
   },
 
-  hasEntryMessageForSignal(robot, signal) {
+  hasEntryMessageForSignal(robot, signal, dest) {
     if (!robot || !signal?.id) return false;
     const messages = this.getEntryMessages();
-    const current = messages[this.entryMessageKey(robot)];
+    const current = messages[this.entryMessageKey(robot, dest)];
     return current?.signalId === signal.id && !!current.messageId;
   },
 
-  shouldProcessEntryEvent(robot, signal) {
-    const eventKey = this.entryEventKey(robot, signal);
+  hasEntryMessageForAnyDest(robot, signal) {
+    if (!robot || !signal?.id) return false;
+    const destinations = this.getDestinations(robot);
+    return destinations.some(dest => this.hasEntryMessageForSignal(robot, signal, dest));
+  },
+
+  shouldProcessEntryEvent(robot, signal, dest) {
+    const eventKey = this.entryEventKey(robot, signal, dest);
     if (!eventKey) return true;
     const events = this.getEntryEvents();
     if (events[eventKey]) {
-      const current = this.getEntryMessages()[this.entryMessageKey(robot)];
+      const current = this.getEntryMessages()[this.entryMessageKey(robot, dest)];
       if (current?.eventKey === eventKey && current.messageId) return false;
       delete events[eventKey];
     }
@@ -454,23 +500,34 @@ const TelegramService = {
   },
 
   async enqueueEntryMessage(robot, signal) {
-    const key = 'entry:' + this.entryMessageKey(robot);
-    if (this.isNormalMode(robot)) {
-      if (this.isNormalProcessed(robot.id, signal.id, signal.status, signal.gale)) {
-        return false;
+    const destinations = this.getDestinations(robot);
+    let anySent = false;
+    for (const dest of destinations) {
+      const key = 'entry:' + this.entryMessageKey(robot, dest);
+      if (this.isNormalMode(robot)) {
+        if (this.isNormalProcessed(robot.id, signal.id, signal.status, signal.gale)) {
+          continue;
+        }
+        this.markNormalProcessed(robot.id, signal.id, signal.status, signal.gale);
+        const sent = await this.enqueue(key, () => this.sendEntryNormal(robot, signal, dest));
+        if (sent) anySent = true;
+      } else {
+        const sent = await this.enqueue(key, () => this.withLock(key, () => this.sendEntryMessage(robot, signal, dest)));
+        if (sent) anySent = true;
       }
-      this.markNormalProcessed(robot.id, signal.id, signal.status, signal.gale);
-      return this.enqueue(key, () => this.sendEntryNormal(robot, signal));
     }
-    return this.enqueue(key, () => this.withLock(key, () => this.sendEntryMessage(robot, signal)));
+    return anySent;
   },
 
   async enqueueLiveMessage(robot) {
-    const key = 'live:' + this.messageKey(robot);
-    const task = this.isNormalMode(robot)
-      ? () => this.sendLiveNormal(robot)
-      : () => this.withLock(key, () => this.sendOrEditLiveMessage(robot));
-    return this.enqueue(key, task);
+    const destinations = this.getDestinations(robot);
+    for (const dest of destinations) {
+      const key = 'live:' + this.messageKey(robot, dest);
+      const task = this.isNormalMode(robot)
+        ? () => this.sendLiveNormal(robot, dest)
+        : () => this.withLock(key, () => this.sendOrEditLiveMessage(robot, dest));
+      this.enqueue(key, task);
+    }
   },
 
   async enqueue(key, task) {
@@ -507,27 +564,30 @@ const TelegramService = {
     catch { return null; }
   },
 
-  async sendOrEditLiveMessage(robot) {
+  async sendOrEditLiveMessage(robot, dest) {
     const token = this.getToken();
-    const chatId = robot.telegram?.channelId || '';
+    const chatId = dest?.channelId || '';
+    const threadId = dest?.threadId ?? null;
     if (!token || !chatId) return false;
 
     const text = this.prepareTelegramText(this.buildLiveMessage(robot));
     const messages = this.getLiveMessages();
-    const key = this.messageKey(robot);
+    const key = this.messageKey(robot, dest);
     const current = messages[key];
     if (current?.sending && Date.now() - (current.updatedAt || 0) < this.liveSendingTimeoutMs) return false;
     if (current?.messageId && current?.text === text) return true;
     if (current?.updatedAt && Date.now() - current.updatedAt < 5000 && !current?.messageId) return false;
 
     if (current?.messageId) {
-      const edited = await this.api(token, 'editMessageText', {
+      const editPayload = {
         chat_id: chatId,
         message_id: current.messageId,
         text,
         parse_mode: 'HTML',
         disable_web_page_preview: true
-      });
+      };
+      if (threadId) editPayload.message_thread_id = threadId;
+      const edited = await this.api(token, 'editMessageText', editPayload);
       if (edited.ok) {
         messages[key].text = text;
         messages[key].updatedAt = Date.now();
@@ -572,12 +632,14 @@ const TelegramService = {
     };
     this.saveLiveMessages(pending);
 
-    const sent = await this.api(token, 'sendMessage', {
+    const sendPayload = {
       chat_id: chatId,
       text,
       parse_mode: 'HTML',
       disable_web_page_preview: true
-    });
+    };
+    if (threadId) sendPayload.message_thread_id = threadId;
+    const sent = await this.api(token, 'sendMessage', sendPayload);
     if (sent.ok && sent.result?.message_id) {
       const latest = this.getLiveMessages();
       latest[key] = { messageId: sent.result.message_id, text, updatedAt: Date.now() };
@@ -594,19 +656,22 @@ const TelegramService = {
     }
   },
 
-  async sendLiveNormal(robot) {
+  async sendLiveNormal(robot, dest) {
     const token = this.getToken();
-    const chatId = robot.telegram?.channelId || '';
+    const chatId = dest?.channelId || '';
+    const threadId = dest?.threadId ?? null;
     if (!token || !chatId) return false;
 
     const text = this.prepareTelegramText(this.buildLiveMessage(robot));
 
-    const sent = await this.api(token, 'sendMessage', {
+    const sendPayload = {
       chat_id: chatId,
       text,
       parse_mode: 'HTML',
       disable_web_page_preview: true
-    });
+    };
+    if (threadId) sendPayload.message_thread_id = threadId;
+    const sent = await this.api(token, 'sendMessage', sendPayload);
     if (sent.ok && sent.result?.message_id) {
       return true;
     } else {
@@ -615,19 +680,22 @@ const TelegramService = {
     }
   },
 
-  async sendEntryNormal(robot, signal) {
+  async sendEntryNormal(robot, signal, dest) {
     const token = this.getToken();
-    const chatId = robot.telegram?.channelId || '';
+    const chatId = dest?.channelId || '';
+    const threadId = dest?.threadId ?? null;
     if (!token || !chatId) return false;
 
     const text = this.prepareTelegramText(this.buildEntryMessage(robot, signal));
 
-    const sent = await this.api(token, 'sendMessage', {
+    const sendPayload = {
       chat_id: chatId,
       text,
       parse_mode: 'HTML',
       disable_web_page_preview: true
-    });
+    };
+    if (threadId) sendPayload.message_thread_id = threadId;
+    const sent = await this.api(token, 'sendMessage', sendPayload);
     if (sent.ok && sent.result?.message_id) {
       return true;
     } else {
@@ -636,12 +704,13 @@ const TelegramService = {
     }
   },
 
-  async sendEntryMessage(robot, signal) {
+  async sendEntryMessage(robot, signal, dest) {
     const token = this.getToken();
-    const chatId = robot.telegram?.channelId || '';
+    const chatId = dest?.channelId || '';
+    const threadId = dest?.threadId ?? null;
     if (!token || !chatId) return false;
 
-    const key = this.entryMessageKey(robot);
+    const key = this.entryMessageKey(robot, dest);
     const text = this.prepareTelegramText(this.buildEntryMessage(robot, signal));
     const messages = this.getEntryMessages();
     const current = messages[key];
@@ -650,13 +719,15 @@ const TelegramService = {
     if (current?.updatedAt && Date.now() - current.updatedAt < 3000 && !messageId) return false;
 
     if (messageId) {
-      const edited = await this.api(token, 'editMessageText', {
+      const editPayload = {
         chat_id: chatId,
         message_id: messageId,
         text,
         parse_mode: 'HTML',
         disable_web_page_preview: true
-      });
+      };
+      if (threadId) editPayload.message_thread_id = threadId;
+      const edited = await this.api(token, 'editMessageText', editPayload);
       if (edited.ok) {
         const latest = this.getEntryMessages();
         latest[key] = {
@@ -695,16 +766,35 @@ const TelegramService = {
         this.saveEntryMessages(latest);
         return true;
       }
-      delete messages[key];
-      this.saveEntryMessages(messages);
+      if (this.isEditMessageNotFound(edited)) {
+        delete messages[key];
+        this.saveEntryMessages(messages);
+      } else if (this.isMessageCantBeEdited(edited)) {
+        const deleted = await this.api(token, 'deleteMessage', {
+          chat_id: chatId,
+          message_id: messageId
+        });
+        if (!deleted.ok && !this.isAlreadyDeleted(deleted)) {
+          this.logApiError('editMessageText/entry', edited);
+          this.logApiError('deleteMessage/entry', deleted);
+          return false;
+        }
+        delete messages[key];
+        this.saveEntryMessages(messages);
+      } else {
+        this.logApiError('editMessageText/entry', edited);
+        return false;
+      }
     }
 
-    const sent = await this.api(token, 'sendMessage', {
+    const sendPayload = {
       chat_id: chatId,
       text,
       parse_mode: 'HTML',
       disable_web_page_preview: true
-    });
+    };
+    if (threadId) sendPayload.message_thread_id = threadId;
+    const sent = await this.api(token, 'sendMessage', sendPayload);
     if (sent.ok && sent.result?.message_id) {
       const latest = this.getEntryMessages();
       latest[key] = {
@@ -735,8 +825,7 @@ const TelegramService = {
     const messages = this.getEntryMessages();
     const matching = Object.entries(messages).filter(([key, msg]) => (
       key === exactKey ||
-      this.isEntryMessageKeyForRobot(key, robot) ||
-      msg?.robotId === robot.id
+      this.isEntryMessageKeyForRobot(key, robot)
     ));
     if (!matching.length) return true;
 
@@ -770,7 +859,9 @@ const TelegramService = {
     const prefix = robot.id + ':';
     const suffix = ':entry';
     if (!value.startsWith(prefix) || !value.endsWith(suffix)) return '';
-    return value.slice(prefix.length, -suffix.length);
+    const middle = value.slice(prefix.length, -suffix.length);
+    const parts = middle.split(':');
+    return parts[0] || '';
   },
 
   isNotModified(response) {
@@ -959,7 +1050,7 @@ const TelegramService = {
       '{greenProtection}': greenProtLabel,
       '{greenProtectionLabel}': greenProt ? '<b>PROTEÇÃO VERDE ATIVA</b>' : '',
       '{galeLine}': galeLine,
-      '{galeLevels}': galeLevels.join(', '),
+      '{galeLevels}': this.formatGaleInstruction(robot),
       '{confidence}': '<b>' + (signal.confidence || 0) + '%</b>',
       '{gale}': '<b>G' + (signal.gale || 0) + '</b>',
       '{galeMax}': '<b>G' + galeMax + '</b>',
@@ -1365,18 +1456,23 @@ const TelegramService = {
 
   async sendFreshEntryMessage(robot, signal) {
     const token = this.getToken();
-    const chatId = robot.telegram?.channelId || '';
-    if (!token || !chatId) return false;
-    const key = 'entry:' + this.entryMessageKey(robot);
-    const task = () => this._sendFreshEntryMessage(robot, signal);
-    return this.enqueue(key, task);
+    const destinations = this.getDestinations(robot);
+    if (!token || destinations.length === 0) return false;
+    const destResults = [];
+    for (const dest of destinations) {
+      const key = 'entry:' + this.entryMessageKey(robot, dest);
+      const task = () => this._sendFreshEntryMessage(robot, signal, dest);
+      destResults.push(await this.enqueue(key, task));
+    }
+    return destResults.some(r => r);
   },
 
-  async _sendFreshEntryMessage(robot, signal) {
+  async _sendFreshEntryMessage(robot, signal, dest) {
     const token = this.getToken();
-    const chatId = robot.telegram?.channelId || '';
+    const chatId = dest?.channelId || '';
+    const threadId = dest?.threadId ?? null;
     if (!token || !chatId) return false;
-    const key = this.entryMessageKey(robot);
+    const key = this.entryMessageKey(robot, dest);
     const text = signal && signal.id !== 'cleanup' ? this.prepareTelegramText(this.buildEntryMessage(robot, signal)) : '';
     const messages = this.getEntryMessages();
     const current = messages[key];
@@ -1386,7 +1482,9 @@ const TelegramService = {
     delete messages[key];
     this.saveEntryMessages(messages);
     if (!text) return false;
-    const sent = await this.api(token, 'sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true });
+    const sendPayload = { chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true };
+    if (threadId) sendPayload.message_thread_id = threadId;
+    const sent = await this.api(token, 'sendMessage', sendPayload);
     if (sent.ok && sent.result?.message_id) {
       const latest = this.getEntryMessages();
       latest[key] = { messageId: sent.result.message_id, text, robotId: robot.id, chatId, signalId: signal.id, status: signal.status || 'approved', gale: signal.gale || 0, result: signal.result || null, eventKey: signal.entryEventKey || '', historyResultKey: signal.historyResultKey || signal.lastCheckedResultKey || signal.waitingAfterResultKey || signal.sourceResultKey || '', createdAt: Date.now(), updatedAt: Date.now() };
@@ -1407,11 +1505,19 @@ const TelegramService = {
     return 'Aguardando próximo\npadrão confirmado...';
   },
 
-  async updateDynamicMessage(robot) {
+  async updateDynamicMessage(robot, dest) {
+    if (!dest) {
+      const destinations = this.getDestinations(robot);
+      for (const d of destinations) {
+        await this.updateDynamicMessage(robot, d);
+      }
+      return;
+    }
     const token = this.getToken();
-    const chatId = robot.telegram?.channelId || '';
+    const chatId = dest?.channelId || '';
+    const threadId = dest?.threadId ?? null;
     if (!token || !chatId) return;
-    const key = this.messageKey(robot);
+    const key = this.messageKey(robot, dest);
     const text = this.prepareTelegramText(this.buildDynamicMessage(robot));
     const messages = this.getLiveMessages();
     const current = messages[key];
@@ -1421,7 +1527,9 @@ const TelegramService = {
     if (robot.currentSignal) {
       if (current?.messageId && current?.text === text) return;
       if (current?.messageId) {
-        const edited = await this.api(token, 'editMessageText', { chat_id: chatId, message_id: current.messageId, text, parse_mode: 'HTML', disable_web_page_preview: true });
+        const editPayload = { chat_id: chatId, message_id: current.messageId, text, parse_mode: 'HTML', disable_web_page_preview: true };
+        if (threadId) editPayload.message_thread_id = threadId;
+        const edited = await this.api(token, 'editMessageText', editPayload);
         if (edited.ok || this.isNotModified(edited)) {
           const latest = this.getLiveMessages();
           latest[key] = { messageId: current.messageId, text, updatedAt: Date.now() };
@@ -1437,7 +1545,9 @@ const TelegramService = {
       const pending = this.getLiveMessages();
       pending[key] = { sending: true, text, robotId: robot.id, chatId, owner: this.clientId, updatedAt: Date.now() };
       this.saveLiveMessages(pending);
-      const sent = await this.api(token, 'sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true });
+      const sendPayload = { chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true };
+      if (threadId) sendPayload.message_thread_id = threadId;
+      const sent = await this.api(token, 'sendMessage', sendPayload);
       if (sent.ok && sent.result?.message_id) {
         const latest = this.getLiveMessages();
         latest[key] = { messageId: sent.result.message_id, text, updatedAt: Date.now() };
@@ -1502,9 +1612,17 @@ const TelegramService = {
     ].join('\n');
   },
 
-  async sendMaintenanceMessage(robot, type) {
+  async sendMaintenanceMessage(robot, type, dest) {
+    if (!dest) {
+      const destinations = this.getDestinations(robot);
+      for (const d of destinations) {
+        await this.sendMaintenanceMessage(robot, type, d);
+      }
+      return;
+    }
     const token = this.getToken();
-    const chatId = robot?.telegram?.channelId || '';
+    const chatId = dest?.channelId || '';
+    const threadId = dest?.threadId ?? null;
     if (!token || !chatId) return;
     await this.clearAllMessages(robot);
     const name = robot?.name || 'Robô';
@@ -1550,9 +1668,11 @@ const TelegramService = {
       ].join('\n')
     };
     const text = this.prepareTelegramText(messages[type] || messages.maintenance);
-    const sent = await this.api(token, 'sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true });
+    const sendPayload = { chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true };
+    if (threadId) sendPayload.message_thread_id = threadId;
+    const sent = await this.api(token, 'sendMessage', sendPayload);
     if (sent.ok && sent.result?.message_id) {
-      const key = this.messageKey(robot);
+      const key = this.maintenanceKey(robot, dest);
       const latest = this.getMaintenanceMessages();
       latest[key] = { messageId: sent.result.message_id, chatId, robotId: robot.id, type, createdAt: Date.now() };
       this.saveMaintenanceMessages(latest);
@@ -1561,33 +1681,61 @@ const TelegramService = {
 
   async clearAllMessages(robot) {
     const token = this.getToken();
-    const chatId = robot?.telegram?.channelId || '';
-    if (!token || !chatId) return;
+    if (!token || !robot) return;
     const liveMessages = this.getLiveMessages();
     const entryMessages = this.getEntryMessages();
     const maintenanceMessages = this.getMaintenanceMessages();
-    const liveKey = this.messageKey(robot);
-    const entryKey = this.entryMessageKey(robot);
-    const live = liveMessages[liveKey];
-    if (live?.messageId) {
-      await this.api(token, 'deleteMessage', { chat_id: chatId, message_id: live.messageId }).catch(() => {});
-      delete liveMessages[liveKey];
-      this.saveLiveMessages(liveMessages);
+    const robotId = robot.id || '';
+    const prefix = robotId + ':';
+    const liveToDelete = [];
+    for (const [key, msg] of Object.entries(liveMessages)) {
+      if (key.startsWith(prefix) && msg?.messageId) {
+        const chatId = key.split(':')[1] || robot.telegram?.channelId || '';
+        if (chatId) {
+          liveToDelete.push({ chatId, messageId: msg.messageId });
+        }
+        delete liveMessages[key];
+      }
     }
+    this.saveLiveMessages(liveMessages);
+    for (const { chatId, messageId } of liveToDelete) {
+      await this.api(token, 'deleteMessage', { chat_id: chatId, message_id: messageId }).catch(() => {});
+    }
+    const entryToDelete = [];
     for (const [key, msg] of Object.entries(entryMessages)) {
-      if (key === entryKey || key.startsWith(entryKey + ':')) {
-        if (msg.messageId) {
-          await this.api(token, 'deleteMessage', { chat_id: chatId, message_id: msg.messageId }).catch(() => {});
+      if (key.startsWith(prefix) && msg?.messageId) {
+        const chatId = msg.chatId || key.split(':')[1] || robot.telegram?.channelId || '';
+        if (chatId) {
+          entryToDelete.push({ chatId, messageId: msg.messageId });
         }
         delete entryMessages[key];
       }
     }
     this.saveEntryMessages(entryMessages);
-    const maintenance = maintenanceMessages[liveKey];
-    if (maintenance?.messageId) {
-      await this.api(token, 'deleteMessage', { chat_id: chatId, message_id: maintenance.messageId }).catch(() => {});
-      delete maintenanceMessages[liveKey];
-      this.saveMaintenanceMessages(maintenanceMessages);
+    for (const { chatId, messageId } of entryToDelete) {
+      await this.api(token, 'deleteMessage', { chat_id: chatId, message_id: messageId }).catch(() => {});
     }
+    const maintToDelete = [];
+    for (const [key, msg] of Object.entries(maintenanceMessages)) {
+      if (key.startsWith(prefix) && msg?.messageId) {
+        const chatId = key.split(':')[1] || robot.telegram?.channelId || '';
+        if (chatId) {
+          maintToDelete.push({ chatId, messageId: msg.messageId });
+        }
+        delete maintenanceMessages[key];
+      }
+    }
+    this.saveMaintenanceMessages(maintenanceMessages);
+    for (const { chatId, messageId } of maintToDelete) {
+      await this.api(token, 'deleteMessage', { chat_id: chatId, message_id: messageId }).catch(() => {});
+    }
+    try {
+      const events = JSON.parse(localStorage.getItem(this.entryEventStoreKey) || '{}');
+      let changed = false;
+      for (const key of Object.keys(events)) {
+        if (key.startsWith(prefix)) { delete events[key]; changed = true; }
+      }
+      if (changed) localStorage.setItem(this.entryEventStoreKey, JSON.stringify(events));
+    } catch {}
   }
 };

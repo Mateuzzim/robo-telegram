@@ -11,6 +11,16 @@
   --radius:12px;
   --font:'Segoe UI',system-ui,-apple-system,sans-serif;
 }
+html[data-theme="light"]{
+  --bg:#f0f2f5;--bg2:#ffffff;--bg3:#e8eaef;--bg4:#dce0e7;
+  --text:#1a1d26;--text2:#555b6e;--text3:#8b93a7;
+  --green:#16a34a;--green2:#15803d;
+  --red:#dc2626;--red2:#b91c1c;
+  --blue:#2563eb;--blue2:#1d4ed8;
+  --yellow:#ca8a04;
+  --border:rgba(0,0,0,.08);
+  --shadow:0 4px 24px rgba(0,0,0,.08);
+}
 html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.5}
 a{color:var(--green);text-decoration:none}
 a:hover{text-decoration:underline}
@@ -154,6 +164,7 @@ tr:hover{background:var(--bg3)}
   .robot-link select{min-width:0;flex:1}
   #addChannelForm>div{flex-wrap:wrap}
   #addChannelForm input{min-width:135px}
+  .container>.robo-page{gap:6px}
 }
 
 @media(max-width:480px){
@@ -185,3 +196,17 @@ tr:hover{background:var(--bg3)}
 ::-webkit-scrollbar-thumb:hover{background:linear-gradient(180deg,var(--green),var(--blue));box-shadow:0 0 6px var(--green)}
 ::-webkit-scrollbar-button{display:none}
 *{scrollbar-width:thin;scrollbar-color:var(--blue) transparent}
+
+/* LIGHT THEME OVERRIDES */
+html[data-theme="light"] .modal-overlay{background:rgba(0,0,0,.3)}
+html[data-theme="light"] .hero{background:linear-gradient(135deg,rgba(35,104,255,.08),rgba(41,217,120,.06));border-color:rgba(0,0,0,.06)}
+html[data-theme="light"] .hero::before{background:radial-gradient(circle,rgba(35,104,255,.05),transparent 70%)}
+html[data-theme="light"] .hero::after{background:radial-gradient(circle,rgba(41,217,120,.04),transparent 70%)}
+html[data-theme="light"] .stat-card{background:var(--bg2);border-color:rgba(0,0,0,.06)}
+html[data-theme="light"] .stat-card:hover{box-shadow:0 8px 24px rgba(0,0,0,.06)}
+html[data-theme="light"] .badge-online{background:rgba(22,163,74,.12)}
+html[data-theme="light"] .badge-offline{background:rgba(220,38,38,.1)}
+html[data-theme="light"] .badge-signal{background:rgba(37,99,235,.1)}
+html[data-theme="light"] .feed{background:var(--bg3)}
+html[data-theme="light"] .robo-console{background:var(--bg3)}
+html[data-theme="light"] ::-webkit-scrollbar-thumb{background:linear-gradient(180deg,var(--blue),var(--green))}

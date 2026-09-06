@@ -8,7 +8,7 @@ const CONFIG = {
     label: 'double'
   },
   robotDefaults: {
-    resultsToAnalyze: 40,
+    resultsToAnalyze: 500,
     minimumConfidence: 80,
     confirmations: 2,
     intervalMin: 60,

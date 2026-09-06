@@ -13,12 +13,33 @@
   .modal h3{margin:0 0 10px}
   .modal select{width:100%;padding:8px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;margin-bottom:12px}
   .modal-actions{display:flex;gap:8px;justify-content:flex-end}
+  .cfg-section{margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)}
+  .cfg-section:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
+  .cfg-section-title{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+  .cfg-row{display:grid;gap:8px;margin-bottom:8px}
+  .cfg-row:last-child{margin-bottom:0}
+  .cfg-cols-2{grid-template-columns:1fr 1fr}
+  .cfg-cols-3{grid-template-columns:1fr 1fr 1fr}
+  .cfg-cols-4{grid-template-columns:1fr 1fr 1fr 1fr}
+  .cfg-cols-5{grid-template-columns:1fr 1fr 1fr 1fr 1fr}
+  .cfg-field{display:flex;flex-direction:column}
+  .cfg-field label{font-size:10px;color:var(--text3);margin-bottom:2px}
+  .cfg-field input,.cfg-field select{width:100%;padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px}
+  .cfg-field input:focus,.cfg-field select:focus{outline:none;border-color:var(--blue)}
+  .cfg-hint{font-size:9px;color:var(--text3);margin-top:1px}
+  .cfg-checkbox{display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;padding:6px 8px;background:var(--bg2);border:1px solid var(--border);border-radius:5px}
+  .cfg-checkbox input{cursor:pointer}
+  .cfg-chips{display:flex;flex-wrap:wrap;gap:4px;max-height:140px;overflow-y:auto;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:6px}
+  .cfg-chip{display:flex;align-items:center;gap:4px;padding:3px 6px;background:var(--bg2);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:10px;transition:border-color .15s}
+  .cfg-chip:hover{border-color:var(--blue)}
+  .cfg-chip input{cursor:pointer}
+  .cfg-chip-tag{font-size:8px;padding:1px 3px;border-radius:2px;background:var(--bg);color:var(--text3)}
 </style>
 </head>
 <body>
 <nav class="nav">
   <span class="nav-brand">ROBOS</span>
-  <div class="nav-links"><a href="index.html">Dashboard</a><a href="monitoramento.html">Monitoramento</a><a href="robos.html">Robos</a><a href="analise.html">Analise</a></div>
+  <div class="nav-links"><a href="index.html">Dashboard</a><a href="monitoramento.html">Monitoramento</a><a href="robos.html">Robos</a><a href="analise.html">Analise</a><a href="ia-inteligente.html">IA Inteligente</a></div>
   <div class="nav-status"><a href="ws-background.html" target="_blank" style="font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text3);margin-right:8px">BG</a><div class="dot" id="connDot"></div></div>
 </nav>
 <div class="container">
@@ -26,11 +47,11 @@
   <div class="robo-page">
     <div>
       <div class="robo-section"><div class="robo-section-title">Status do Robo</div><div id="robotStatus"></div></div>
-      <div class="robo-section" style="margin-top:16px"><div class="robo-section-title">Diagnostico da IA</div><div id="diagnostico" style="max-height:350px;overflow-y:auto"></div></div>
-      <div class="robo-section" style="margin-top:16px"><div class="robo-section-title">Estrategias da IA</div><div id="estrategiasIA" style="max-height:none;overflow:visible"></div></div>
-      <div class="robo-section" style="margin-top:16px;display:none" id="analisesSection"><div class="robo-section-title">Analises Padroes Cores</div><div id="analisesContent" style="max-height:300px;overflow-y:auto"></div></div>
+      <div class="robo-section" style="margin-top:16px"><div class="robo-section-title">Diagnostico da IA</div><div id="diagnostico"></div></div>
+      <div class="robo-section" style="margin-top:16px"><div class="robo-section-title">Estrategias da IA</div><div id="estrategiasIA"></div></div>
+      <div class="robo-section" style="margin-top:16px;display:none" id="analisesSection"><div class="robo-section-title">Analises Padroes Cores</div><div id="analisesContent"></div></div>
       <div class="robo-section" style="margin-top:16px"><div class="robo-section-title">Filtro de Sinal</div><div id="filtro"></div></div>
-      <div class="robo-section" style="margin-top:16px"><div class="robo-section-title">Placar e Estatisticas</div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px" id="placar"></div></div>
+      <div class="robo-section" style="margin-top:16px"><div class="robo-section-title">Placar e Estatisticas</div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px" id="placar"></div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px" id="placarExtra"></div></div>
     </div>
     <div>
       <div class="robo-section"><div class="robo-section-title">Historico</div><div id="historyGrid" style="max-height:500px;overflow-y:auto"></div></div>
@@ -44,7 +65,7 @@
         <div id="consoleLogs" class="robo-console"></div>
         <div id="consoleHistory" style="display:none"></div>
       </div>
-      <div class="robo-section" style="margin-top:16px"><div class="robo-section-title">Configuracao</div><div class="config-form" id="configForm"></div></div>
+      <div class="robo-section" style="margin-top:16px"><div class="robo-section-title">Configuracao</div><div id="configForm"></div></div>
       <div class="robo-section" style="margin-top:16px">
         <div class="robo-section-title">Telegram</div>
         <div id="telegramConfig"></div>
@@ -79,6 +100,7 @@
 <script src="ws-source.js"></script>
 <script src="robot.js"></script>
 <script src="robot-engine.js"></script>
+<script src="ia-inteligente.js"></script>
 <script src="filters.js"></script>
 <script src="telegram.js"></script>
 <script src="app.js"></script>
@@ -90,6 +112,50 @@ let robotData = null;
 let tgFormRendered = false;
 let configFormRendered = false;
 function getChannels() { try { return JSON.parse(localStorage.getItem('telegram-channels') || '[]'); } catch { return []; } }
+function getChannelTopics(channelId) {
+  const channels = getChannels();
+  const ch = channels.find(c => c.id === channelId);
+  return ch?.topics || [];
+}
+function updateCfgTgTopicOptions() {
+  const channelId = document.getElementById('tgChannel').value;
+  const topicSel = document.getElementById('tgTopic');
+  if (!topicSel) return;
+  const topics = channelId ? getChannelTopics(channelId) : [];
+  topicSel.innerHTML = '<option value="">Sem topico</option>' +
+    topics.map(t => '<option value="' + t.threadId + '">' + t.name + ' (#' + t.threadId + ')</option>').join('');
+}
+let cfgDestinations = [];
+function addCfgDestination() {
+  const channelId = document.getElementById('tgChannel').value;
+  const threadId = document.getElementById('tgTopic').value;
+  const threadIdInt = threadId ? parseInt(threadId) : null;
+  if (!channelId) return;
+  if (cfgDestinations.find(d => d.channelId === channelId && d.threadId === threadIdInt)) return;
+  cfgDestinations.push({ channelId, threadId: threadIdInt });
+  renderCfgDestinations();
+}
+function removeCfgDestination(idx) {
+  cfgDestinations.splice(idx, 1);
+  renderCfgDestinations();
+}
+function renderCfgDestinations() {
+  const el = document.getElementById('tgDestList');
+  if (!el) return;
+  if (!cfgDestinations.length) { el.innerHTML = ''; return; }
+  el.innerHTML = cfgDestinations.map((d, i) => {
+    const ch = getChannels().find(c => c.id === d.channelId);
+    const chName = ch?.name || d.channelId;
+    const topic = (ch?.topics || []).find(t => t.threadId === d.threadId);
+    const topicLabel = topic ? ' > ' + topic.name : (d.threadId ? ' > #' + d.threadId : ' (geral)');
+    return '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;margin-bottom:4px;font-size:12px">' +
+      '<span style="flex:1">📢 ' + chName + topicLabel + '</span>' +
+      '<button class="btn btn-sm btn-ghost" onclick="removeCfgDestination(' + i + ')" style="font-size:10px;padding:2px 6px;color:var(--red)">X</button></div>';
+  }).join('');
+}
+function updateRoboTopicOptions() {
+  updateCfgTgTopicOptions();
+}
 function getHistory(key) { try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch { return []; } }
 function getEntryMessages() { try { return JSON.parse(localStorage.getItem('telegram-entry-messages-v1') || '{}'); } catch { return {}; } }
 const TARGETS = {
@@ -98,13 +164,15 @@ const TARGETS = {
     { value: 'grey', label: 'Preto 2X' },
     { value: 'red', label: 'Vermelho 3X' },
     { value: 'blue', label: 'Azul 5X' },
-    { value: 'green', label: 'Verde 50X' }
+    { value: 'green', label: 'Verde 50X' },
+    { value: 'red+grey', label: 'Vermelho / Preto' }
   ],
   double: [
     { value: 'any', label: 'Qualquer cor' },
     { value: 'red', label: 'Vermelho 2X' },
     { value: 'black', label: 'Preto 2X' },
-    { value: 'green', label: 'Verde 14X' }
+    { value: 'green', label: 'Verde 14X' },
+    { value: 'red+black', label: 'Vermelho / Preto' }
   ]
 };
 
@@ -134,12 +202,42 @@ function switchConsole() {
   document.getElementById('consoleHistory').style.display = 'none';
 }
 
+function renderHistory() {
+  const el = document.getElementById('historyGrid');
+  if (!el || !robotData) return;
+  const history = robotData.history || [];
+  if (!history.length) {
+    el.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:8px">Aguardando resultados...</div>';
+    return;
+  }
+  const colorMap = {
+    RED: { bg: '#ef4444', label: 'V', name: 'Vermelho' },
+    BLACK: { bg: '#1f2937', label: 'P', name: 'Preto' },
+    GREY: { bg: '#374151', label: 'P', name: 'Preto' },
+    GREEN: { bg: '#22c55e', label: 'Vd', name: 'Verde' },
+    BLUE: { bg: '#3b82f6', label: 'Az', name: 'Azul' },
+    WHITE: { bg: '#e5e7eb', label: 'B', name: 'Branco' }
+  };
+  const isDbl = robotData.game === 'double';
+  const displayed = history.slice(0, 200);
+  el.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:3px">' + displayed.map((r, i) => {
+    const c = colorMap[r.color] || { bg: '#666', label: '?', name: r.color };
+    const num = r.number !== undefined && r.number !== null ? r.number : '';
+    const mult = r.multiplier ? ' ' + r.multiplier + 'X' : '';
+    const isFirst = i === 0;
+    const border = isFirst ? 'border:2px solid #fff;box-shadow:0 0 6px rgba(255,255,255,.3);' : '';
+    const size = isDbl ? 'width:28px;height:28px' : 'width:26px;height:26px';
+    return '<span title="' + c.name + (num !== '' ? ' #' + num : '') + mult + '" style="display:inline-flex;align-items:center;justify-content:center;border-radius:50%;font-size:9px;font-weight:700;color:#fff;cursor:default;' + size + ';background:' + c.bg + ';' + border + '">' + (num !== '' ? num : c.label) + '</span>';
+  }).join('') + '</div>';
+}
+
 function renderAll() {
   if (!robotData) return;
   const r = robotData;
   renderAnalises();
   renderEstrategias();
   renderLogs();
+  renderHistory();
 
   const targetColorLabel = { any: 'QUALQUER', red: 'VERMELHO', black: 'PRETO', green: 'VERDE', blue: 'AZUL', grey: 'PRETO', gray: 'PRETO', white: 'BRANCO' };
   const formatColorLabel = color => targetColorLabel[String(color || '').toLowerCase()] || String(color || '--').toUpperCase();
@@ -166,7 +264,6 @@ function renderAll() {
   const d = r.diagnostic || {};
   const suggestedEntryLabel = d.suggestedEntry ? formatColorLabel(d.suggestedEntry) : '--';
   const decisionTargetLabel = d.decision?.target ? formatColorLabel(d.decision.target) : '--';
-  const entrySendState = getEntrySendState(r);
   const diagStatus = d.status || 'IDLE';
   const diagColor = diagStatus === 'ACTIVE' ? 'var(--green)' : diagStatus === 'ANALYZING' ? 'var(--yellow)' : diagStatus === 'LOADING' ? 'var(--blue)' : 'var(--text3)';
   const diagBg = diagStatus === 'ACTIVE' ? 'rgba(41,217,120,.08)' : diagStatus === 'ANALYZING' ? 'rgba(224,197,64,.08)' : diagStatus === 'LOADING' ? 'rgba(35,104,255,.08)' : 'transparent';
@@ -189,14 +286,46 @@ function renderAll() {
       <span><span style="color:var(--text3)">Risco:</span> <strong style="color:${(d.risk||'BAIXO')==='ALTO'?'var(--red)':(d.risk||'BAIXO')==='MEDIO'?'var(--yellow)':'var(--green)'}">${d.risk || 'BAIXO'}</strong></span>
       <span><span style="color:var(--text3)">Sinal:</span> <strong>${d.signalScore || 0}/100</strong></span>
     </div>
-    <div class="pattern-list" style="margin-bottom:4px">${Object.entries(d.patternScores || {}).map(([k,v]) => `<div class="pattern-item"><span>${k}</span><div class="pattern-bar"><div class="pattern-bar-fill" style="width:${v}%;background:${v>=80?'var(--green)':v>=60?'var(--yellow)':'var(--red)'}"></div></div><span>${v}%</span></div>`).join('')}</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px 8px;margin-bottom:4px">${Object.entries(d.patternScores || {}).map(([k,v]) => {
+      const c = v>=80?'var(--green)':v>=60?'var(--yellow)':'var(--red)';
+      return `<div style="display:flex;align-items:center;gap:4px;font-size:10px;padding:3px 4px;background:var(--bg2);border:1px solid var(--border);border-radius:4px;overflow:hidden"><span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0;max-width:90px;color:var(--text2)">${k}</span><div style="flex:1;min-width:0;height:4px;background:var(--bg);border-radius:2px;overflow:hidden"><div style="height:100%;width:${v}%;background:${c};border-radius:2px"></div></div><span style="font-weight:700;color:${c};min-width:24px;text-align:right;flex-shrink:0">${v}%</span></div>`;
+    }).join('')}</div>
+    ${d.numberAnalysis ? (() => {
+      const na = d.numberAnalysis;
+      const maxNum = r.game === 'double' ? 14 : 13;
+      const topNums = na.distribution ? na.distribution.filter(d => d.count > 0).sort((a,b) => b.count - a.count).slice(0, 6) : [];
+      const hotNums = (na.hotNumbers || []).slice(0, 4);
+      const hotColor = 'var(--orange,#f97316)';
+      return `<div style="padding:6px 8px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;margin-bottom:6px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:10px;font-weight:700;color:var(--text3)">ANALISE NUMERICA <span style="font-weight:400;color:${na.isChaotic?'var(--yellow)':'var(--green)'}">(${na.isChaotic?'Caotico':'Padronizado'})</span></div>
+        <div style="display:flex;gap:8px;font-size:9px;margin-bottom:4px;flex-wrap:wrap">
+          <span>Low/High: <strong style="color:var(--blue)">${na.lowHigh.low}%</strong>/<strong style="color:var(--red)">${na.lowHigh.high}%</strong></span>
+          <span>Green: <strong style="color:var(--green)">${na.greenFrequency}%</strong></span>
+          <span>Chi2: <strong style="color:${na.isChaotic?'var(--yellow)':'var(--green)'}">${na.chiSquare}</strong></span>
+          ${na.streakDetected ? `<span style="color:${hotColor}">Sequencia: ${na.streakInfo.count}x ${na.streakInfo.color}</span>` : ''}
+        </div>
+        ${hotNums.length > 0 ? `<div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:3px">${hotNums.map(h => `<span style="font-size:8px;padding:1px 4px;border-radius:3px;background:${hotColor}22;color:${hotColor};border:1px solid ${hotColor}44">#${h.number} (${h.recent}x)</span>`).join('')}</div>` : ''}
+        <div style="display:flex;gap:3px;flex-wrap:wrap">${topNums.map(n => `<span style="font-size:8px;padding:1px 3px;border-radius:2px;background:var(--bg);color:var(--text3)">${n.num}:${n.pct}%</span>`).join('')}</div>
+      </div>`;
+    })() : ''}
     ${d.decision ? `<div style="padding:4px 8px;border-radius:4px;font-size:11px;margin-bottom:6px;background:${d.decision.approved?'rgba(41,217,120,.1)':'rgba(255,68,68,.1)'};border:1px solid ${d.decision.approved?'rgba(41,217,120,.3)':'rgba(255,68,68,.3)'};color:${d.decision.approved?'var(--green)':'var(--red)'}">${d.decision.approved?'SINAL APROVADO':'REJEITADO'}: ${d.decision.reason||''}</div>` : ''}
     ${Object.keys(r.usedPatterns||{}).some(k => r.usedPatterns[k]?.length > 0) ? `<div style="font-size:9px;color:var(--text3);padding:4px 8px;background:var(--bg2);border:1px solid var(--border);border-radius:4px">Ciclo: ${r.strategyIndex || 0}/6 | Usados: ${Object.entries(r.usedPatterns||{}).filter(([k,v]) => v?.length > 0).map(([k,v]) => `${k}:${v.length}`).join(' ')}</div>` : ''}`;
   const s = r.stats || {};
   const histKey = r.game === 'double' ? 'historico-double-v1' : 'historico-wheel-v1';
   const histData = getHistory(histKey);
   const isDbl = r.game === 'double';
+  const filterModeLabels = { desligado: 'Desligado', conservador: 'Conservador', moderado: 'Moderado', agressivo: 'Agressivo' };
+  const filterMode = r.filterMode || 'moderado';
+  const activeFilters = (r.filters || []).length;
   document.getElementById('filtro').innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:10px">
+      <span style="color:var(--text3)">Modo:</span>
+      <span style="font-weight:700;color:var(--blue)">${filterModeLabels[filterMode] || filterMode}</span>
+      <span style="color:var(--text3)">|</span>
+      <span style="color:var(--text3)">Filtros ativos:</span>
+      <span style="font-weight:700;color:${activeFilters>0?'var(--green)':'var(--text3)'}">${activeFilters}</span>
+      ${r.greenProtection ? '<span style="color:var(--text3)">|</span><span style="color:var(--green)">Protecao Verde</span>' : ''}
+    </div>
     <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px;font-size:10px">
       <div style="padding:4px 6px;background:var(--bg2);border:1px solid var(--border);border-radius:4px;text-align:center">
         <div style="color:var(--text3);font-size:9px">1. Padrao</div>
@@ -218,162 +347,158 @@ function renderAll() {
         <div style="color:var(--text3);font-size:9px">5. Placar</div>
         <div style="font-weight:700;font-size:11px">${s.wins||0}W ${s.losses||0}L</div>
       </div>
-    </div>`;
-  document.getElementById('placar').innerHTML = [['Sinais',s.signals||0,'blue'],['Wins',s.wins||0,'green'],['Loss',s.losses||0,'red'],['Assertividade',(s.signals||0)>0?Math.round(((s.wins||0)/s.signals)*100)+'%':'--%','blue']].map(([l,v,c])=>`<div class="stat-card ${c}"><div class="stat-label">${l}</div><div class="stat-value">${v}</div></div>`).join('');
+    </div>
+    ${d.decision?.reason ? `<div style="margin-top:6px;padding:4px 8px;border-radius:4px;font-size:10px;background:${d.decision.approved?'rgba(41,217,120,.08)':'rgba(255,68,68,.08)'};border:1px solid ${d.decision.approved?'rgba(41,217,120,.25)':'rgba(255,68,68,.25)'};color:${d.decision.approved?'var(--green)':'var(--red)'}">${escapeHtml(d.decision.reason)}</div>` : ''}`;
+  const assertividade = (s.signals||0)>0 ? Math.round(((s.wins||0)/s.signals)*100) : 0;
+  const assertividadeColor = assertividade >= 70 ? 'var(--green)' : assertividade >= 50 ? 'var(--yellow)' : 'var(--red)';
+  document.getElementById('placar').innerHTML = [
+    ['Sinais',s.signals||0,'blue'],
+    ['Wins',s.wins||0,'green'],
+    ['Loss',s.losses||0,'red'],
+    ['Assertividade',assertividade+'%',assertividade>=70?'green':assertividade>=50?'yellow':'red']
+  ].map(([l,v,c])=>`<div class="stat-card ${c}"><div class="stat-label">${l}</div><div class="stat-value">${v}</div></div>`).join('');
+  
+  const seqWins = s.sequenceWins || 0;
+  const seqLosses = s.sequenceLosses || 0;
+  const currentStreak = s.currentStreak || 0;
+  const streakLabel = currentStreak > 0 ? currentStreak + 'W' : currentStreak < 0 ? Math.abs(currentStreak) + 'L' : '--';
+  const streakColor = currentStreak > 0 ? 'var(--green)' : currentStreak < 0 ? 'var(--red)' : 'var(--text3)';
+  document.getElementById('placarExtra').innerHTML = [
+    ['Win SG',s.winSG||0,'green'],
+    ['Win G1',s.winG1||0,'blue'],
+    ['Win G2',s.winG2||0,'blue'],
+    ['Sequencia',streakLabel,currentStreak>0?'green':currentStreak<0?'red':'blue'],
+    ['Max Win Seq',s.maxWinStreak||0,'green'],
+    ['Max Loss Seq',s.maxLossStreak||0,'red'],
+    ['Aprovados',s.signalsApproved||0,'green'],
+    ['Rejeitados',s.signalsRejected||0,'red']
+  ].map(([l,v,c])=>`<div class="stat-card ${c}"><div class="stat-label">${l}</div><div class="stat-value">${v}</div></div>`).join('');
+  const tgPre = r.telegram || {};
+  const tgDestinations = Array.isArray(tgPre.destinations) && tgPre.destinations.length ? tgPre.destinations : (tgPre.channelId ? [{ channelId: tgPre.channelId, threadId: tgPre.threadId || null }] : []);
+  const tg = tgPre;
   if (!configFormRendered) {
     const tgOpts = (TARGETS[r.game] || TARGETS.double).map(t => `<option value="${t.value}" ${r.target?.color === t.value ? 'selected' : ''}>${t.label}</option>`).join('');
+    const showGaleByColor = r.game === 'wheel' && r.target?.color === 'any';
+    const galeByColor = r.galeByColor || {};
+    const strategies = r.strategies || [r.strategy || 'alternancia'];
+    const allStrats = ['todas','alternancia','repeticao','frequencia','tendencia','espelhamento','diagonal','padroesCores','cicloVerde','convergencia','cicloZero','padraoNumerico','sequenciaNegra','momentumPreto','sequenciaVermelha','momentumVermelho','cicloPreto','reacaoPreto','cicloVermelho','convergenciaVermelha','cicloAzul','sequenciaAzul','divergenciaTemporal','markovTransicao','bayesiano','regressaoReversao','suavizacaoExponencial','detectorAnomalias','convergenciaMultiEscala','predicaoCondicional','entropiaAdaptativa','volatilidadeAdaptativa'];
+    const stratTags = {todas:'GERAL',alternancia:'GERAL',repeticao:'GERAL',frequencia:'GERAL',tendencia:'GERAL',espelhamento:'GERAL',diagonal:'GERAL',padroesCores:'GERAL',cicloVerde:'WHEEL',convergencia:'WHEEL',cicloZero:'DOUBLE',padraoNumerico:'DOUBLE',sequenciaNegra:'DOUBLE',momentumPreto:'DOUBLE',sequenciaVermelha:'DOUBLE',momentumVermelho:'DOUBLE',cicloPreto:'WHEEL',reacaoPreto:'WHEEL',cicloVermelho:'WHEEL',convergenciaVermelha:'WHEEL',cicloAzul:'WHEEL',sequenciaAzul:'WHEEL',divergenciaTemporal:'ADV',markovTransicao:'ADV',bayesiano:'ADV',regressaoReversao:'ADV',suavizacaoExponencial:'ADV',detectorAnomalias:'ADV',convergenciaMultiEscala:'ADV',predicaoCondicional:'ADV',entropiaAdaptativa:'ADV',volatilidadeAdaptativa:'ADV'};
+    const filters = r.filters || [];
+    const allFilters = ['frequencia','repeticaoExcessiva','sequenciaEsticada','recencia','distanciaOcorrencias','janelaCurtaLonga','tendencia','quebraTendencia','alternancia','concentracao','dispersao','atraso','padraoRecorrente','transicao','matrizTransicao','probabilidadeCondicional','entropia','volatilidade','consensoEstrategias','divergenciaEstrategias','scoreMinimo','confiancaMinima','diferencaCandidatos','confirmacaoMultipla','cooldownSinal','posWin','posLoss','lossConsecutivo','qualidadeAmostra','antiOverfitting'];
+    const filterTags = {frequencia:'STATS',repeticaoExcessiva:'STATS',sequenciaEsticada:'STATS',recencia:'STATS',distanciaOcorrencias:'STATS',janelaCurtaLonga:'STATS',tendencia:'TREND',quebraTendencia:'TREND',alternancia:'PATTERN',concentracao:'DISTRIB',dispersao:'DISTRIB',atraso:'STATS',padraoRecorrente:'PATTERN',transicao:'TRANS',matrizTransicao:'TRANS',probabilidadeCondicional:'TRANS',entropia:'MATH',volatilidade:'MATH',consensoEstrategias:'FILTER',divergenciaEstrategias:'FILTER',scoreMinimo:'FILTER',confiancaMinima:'FILTER',diferencaCandidatos:'FILTER',confirmacaoMultipla:'FILTER',cooldownSinal:'COOLDOWN',posWin:'COOLDOWN',posLoss:'COOLDOWN',lossConsecutivo:'COOLDOWN',qualidadeAmostra:'QUALITY',antiOverfitting:'QUALITY'};
+    const channels = getChannels();
+    cfgDestinations = tgDestinations.map(d => ({ channelId: d.channelId, threadId: d.threadId || null }));
+    
     document.getElementById('configForm').innerHTML = `
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
-        <div><label style="font-size:10px;color:var(--text3);display:block;margin-bottom:2px">Estrategia</label>
-          <select id="cfgStrategy" style="width:100%;padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px" onchange="document.getElementById('cfgPatternSizeGroup').style.display=this.value==='padroesCores'?'block':'none'">
-            <option value="todas" ${r.strategy==='todas'?'selected':''}>Todas</option>
-            <option value="alternancia" ${r.strategy==='alternancia'?'selected':''}>Alternancia</option>
-            <option value="repeticao" ${r.strategy==='repeticao'?'selected':''}>Repeticao</option>
-            <option value="frequencia" ${r.strategy==='frequencia'?'selected':''}>Frequencia</option>
-            <option value="tendencia" ${r.strategy==='tendencia'?'selected':''}>Tendencia</option>
-            <option value="espelhamento" ${r.strategy==='espelhamento'?'selected':''}>Espelhamento</option>
-            <option value="diagonal" ${r.strategy==='diagonal'?'selected':''}>Diagonal</option>
-            <option value="padroesCores" ${r.strategy==='padroesCores'?'selected':''}>Padroes Cores</option>
-          </select>
+      <div class="cfg-section">
+        <div class="cfg-section-title">Dados Basicos</div>
+        <div class="cfg-row cfg-cols-3">
+          <div class="cfg-field"><label>Nome</label><input id="cfgName" type="text" value="${escapeAttr(r.name||'')}"></div>
+          <div class="cfg-field"><label>Jogo</label>
+            <select id="cfgGame" onchange="updateCfgTargets();updateCfgGaleByColor()">
+              <option value="wheel" ${r.game==='wheel'?'selected':''}>Wheel</option>
+              <option value="double" ${r.game==='double'?'selected':''}>Double</option>
+            </select>
+          </div>
+          <div class="cfg-field"><label>Alvo</label><select id="cfgTarget" onchange="updateCfgGaleByColor()">${tgOpts}</select></div>
         </div>
-        <div id="cfgPatternSizeGroup" style="display:${r.strategy==='padroesCores'?'block':'none'}"><label style="font-size:10px;color:var(--text3);display:block;margin-bottom:2px">Tam Padrao</label>
-          <select id="cfgPatternSize" style="width:100%;padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px">
-            ${[1,2,3,4,5,6].map(n => `<option value="${n}" ${(r.patternSize||3)===n?'selected':''}>${n} cor${n>1?'es':''}</option>`).join('')}
-          </select>
+        <div id="cfgGreenProtection" style="display:${r.game==='double'?'block':'none'}">
+          <label class="cfg-checkbox"><input type="checkbox" id="cfgGreenProt" ${r.greenProtection?'checked':''}> Protecao Verde (GREEN conta como WIN)</label>
         </div>
-        <div><label style="font-size:10px;color:var(--text3);display:block;margin-bottom:2px">Alvo</label><select id="cfgTarget" style="width:100%;padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px">${tgOpts}</select></div>
-        <div><label style="font-size:10px;color:var(--text3);display:block;margin-bottom:2px">Filtro</label>
-          <select id="cfgFilterMode" style="width:100%;padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px">
-            <option value="desligado" ${r.filterMode==='desligado'?'selected':''}>Desligado</option>
-            <option value="conservador" ${r.filterMode==='conservador'?'selected':''}>Conservador</option>
-            <option value="moderado" ${r.filterMode==='moderado'||!r.filterMode?'selected':''}>Moderado</option>
-            <option value="agressivo" ${r.filterMode==='agressivo'?'selected':''}>Agressivo</option>
-          </select>
+        <div class="cfg-row cfg-cols-2">
+          <div class="cfg-field"><label>Modo</label>
+            <select id="cfgMode">
+              <option value="monitoramento" ${r.mode==='monitoramento'?'selected':''}>Monitoramento</option>
+              <option value="telegram" ${r.mode==='telegram'?'selected':''}>Telegram</option>
+            </select>
+          </div>
+          <div class="cfg-field"><label>Filtro de Sinal</label>
+            <select id="cfgFilterMode">
+              <option value="desligado" ${r.filterMode==='desligado'?'selected':''}>Desligado</option>
+              <option value="conservador" ${r.filterMode==='conservador'?'selected':''}>Conservador</option>
+              <option value="moderado" ${(!r.filterMode||r.filterMode==='moderado')?'selected':''}>Moderado</option>
+              <option value="agressivo" ${r.filterMode==='agressivo'?'selected':''}>Agressivo</option>
+            </select>
+          </div>
         </div>
-        <div><label style="font-size:10px;color:var(--text3);display:block;margin-bottom:2px">Conf Min</label><input id="cfgConf" type="number" value="${r.minimumConfidence||80}" style="width:100%;padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px"></div>
-        <div><label style="font-size:10px;color:var(--text3);display:block;margin-bottom:2px">Intervalo(s)</label><input id="cfgInterval" type="number" value="${r.intervalMin||60}" style="width:100%;padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px"></div>
-        <div><label style="font-size:10px;color:var(--text3);display:block;margin-bottom:2px">Gale Max</label><input id="cfgGale" type="number" value="${r.gale?.max||0}" style="width:100%;padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px"></div>
+      </div>
+
+      <div class="cfg-section">
+        <div class="cfg-section-title">Parametros</div>
+        <div class="cfg-row cfg-cols-4">
+          <div class="cfg-field"><label>Resultados</label><input id="cfgResults" type="number" value="${r.resultsToAnalyze||500}"></div>
+          <div class="cfg-field"><label>Conf Min (%)</label><input id="cfgConf" type="number" value="${r.minimumConfidence||80}"></div>
+          <div class="cfg-field"><label>Score Min</label><input id="cfgMinScore" type="number" value="${r.minScore||52}"></div>
+          <div class="cfg-field"><label>Intervalo(s)</label><input id="cfgInterval" type="number" value="${r.intervalMin||60}"></div>
+        </div>
+        <div id="cfgGaleMaxGroup" style="display:${showGaleByColor?'none':'block'}">
+          <div class="cfg-row cfg-cols-3">
+            <div class="cfg-field"><label>Gale Maximo</label><input id="cfgGale" type="number" value="${r.gale?.max||0}"></div>
+            <div class="cfg-field"><label>Auto-Pausar apos</label><input id="cfgAutoPause" type="number" value="${r.autoPause||0}" min="0" placeholder="0=desligado"><div class="cfg-hint">0 = desligado</div></div>
+          </div>
+        </div>
+        <div id="cfgGaleByColor" style="display:${showGaleByColor?'block':'none'}">
+          <div class="cfg-row cfg-cols-5">
+            <div class="cfg-field"><label>Preto</label><input id="cfgGaleGrey" type="number" value="${galeByColor.grey??1}" min="0"></div>
+            <div class="cfg-field"><label>Vermelho</label><input id="cfgGaleRed" type="number" value="${galeByColor.red??3}" min="0"></div>
+            <div class="cfg-field"><label>Azul</label><input id="cfgGaleBlue" type="number" value="${galeByColor.blue??5}" min="0"></div>
+            <div class="cfg-field"><label>Verde</label><input id="cfgGaleGreen" type="number" value="${galeByColor.green??10}" min="0"></div>
+            <div class="cfg-field"><label>Auto-Pausar</label><input id="cfgAutoPauseColor" type="number" value="${r.autoPause||0}" min="0" placeholder="0=off"><div class="cfg-hint">0 = off</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="cfg-section">
+        <div class="cfg-section-title">Estrategias</div>
+        <div style="margin-bottom:10px;padding:8px 10px;background:linear-gradient(135deg,rgba(233,69,96,0.1),rgba(15,52,96,0.1));border:1px solid rgba(233,69,96,0.3);border-radius:6px">
+          <label class="cfg-checkbox" style="margin:0"><input type="checkbox" id="cfgIaInteligente" ${r.iaInteligente?'checked':''}> <strong style="color:#e94560">🧠 IA Inteligente</strong> - Troca estrategia automaticamente a cada WIN</label>
+        </div>
+        <div class="cfg-chips">${allStrats.map(s => {
+          const checked = strategies.includes(s) ? 'checked' : '';
+          const tag = stratTags[s] || 'GERAL';
+          return `<label class="cfg-chip"><input type="checkbox" value="cfgStrat_${s}" ${checked} onchange="toggleCfgStrategy('${s}',this.checked)"><span>${s}</span><span class="cfg-chip-tag">${tag}</span></label>`;
+        }).join('')}</div>
+      </div>
+
+      <div class="cfg-section">
+        <div class="cfg-section-title">Filtros de Qualidade</div>
+        <div class="cfg-chips">${allFilters.map(f => {
+          const checked = filters.includes(f) ? 'checked' : '';
+          const tag = filterTags[f] || 'FILTER';
+          return `<label class="cfg-chip"><input type="checkbox" value="cfgFilter_${f}" ${checked}><span>${f}</span><span class="cfg-chip-tag">${tag}</span></label>`;
+        }).join('')}</div>
+      </div>
+
+      <div class="cfg-section">
+        <div class="cfg-section-title">Telegram</div>
+        <label class="cfg-checkbox"><input type="checkbox" id="tgEnabled" ${tg.enabled?'checked':''}> Enviar sinais para Telegram</label>
+        <div id="tgDestList" style="margin-top:8px"></div>
+        <div class="cfg-row cfg-cols-3" style="margin-top:8px">
+          <div class="cfg-field"><label>Canal/Grupo</label><select id="tgChannel" onchange="updateCfgTgTopicOptions()"><option value="">Selecionar...</option>${channels.map(c => '<option value="'+c.id+'"'+(tg.channelId===c.id?' selected':'')+'>'+c.name+'</option>').join('')}</select></div>
+          <div class="cfg-field"><label>Topico</label><select id="tgTopic"><option value="">Sem topico</option></select></div>
+          <div style="display:flex;align-items:flex-end"><button class="btn btn-sm btn-blue" onclick="addCfgDestination()" style="height:34px">+ Add</button></div>
+        </div>
+        <div class="cfg-row cfg-cols-2" style="margin-top:8px">
+          <div class="cfg-field"><label>Tipo Mensagem</label><select id="tgMsgType"><option value="live" ${tg.msgType==='live'?'selected':''}>Live</option><option value="signal" ${tg.msgType==='signal'?'selected':''}>Sinal</option><option value="both" ${(!tg.msgType||tg.msgType==='both')?'selected':''}>Live + Sinal</option><option value="normal" ${tg.msgType==='normal'?'selected':''}>Normal</option><option value="dynamic" ${tg.msgType==='dynamic'?'selected':''}>Dinamico</option><option value="live_dynamic" ${tg.msgType==='live_dynamic'?'selected':''}>Live + Dinamico</option></select></div>
+        </div>
+        <div class="cfg-row cfg-cols-2" style="margin-top:8px">
+          <div class="cfg-field"><label>Mensagem Live (vazio=padrao)</label><div style="display:flex;gap:4px"><textarea id="tgMessageLive" rows="3" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:11px;font-family:monospace;resize:vertical">${escapeAttr(tg.message?.live||'')}</textarea></div><button class="btn btn-sm btn-ghost" onclick="insertLiveVars()" style="font-size:9px;margin-top:2px">+ Variaveis</button></div>
+          <div class="cfg-field"><label>Mensagem Sinal (vazio=padrao)</label><textarea id="tgMessageEntry" rows="3" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:11px;font-family:monospace;resize:vertical">${escapeAttr(tg.message?.entry||'')}</textarea><button class="btn btn-sm btn-ghost" onclick="insertEntryVars()" style="font-size:9px;margin-top:2px">+ Variaveis</button></div>
+        </div>
+        <div style="margin-top:8px"><button class="btn btn-sm btn-blue" id="btnTestTg" onclick="testTelegramChannel()">Testar Conexao</button> <span id="testTgResult" style="font-size:11px;margin-left:8px"></span></div>
       </div>`;
     configFormRendered = true;
-  }
-
-  if (!tgFormRendered) {
-    const channels = getChannels();
-    const tg = r.telegram || { enabled: false, channelId: '' };
-    const tgMessage = tg.message || {};
-    document.getElementById('telegramConfig').innerHTML = `
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap">
-        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
-          <input type="checkbox" id="tgEnabled" ${tg.enabled ? 'checked' : ''}> Telegram
-        </label>
-        <select id="tgChannel" style="padding:4px 8px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:11px;min-width:140px">
-          <option value="">Canal...</option>
-          ${channels.map(c => `<option value="${c.id}" ${tg.channelId === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
-        </select>
-        <select id="tgMsgType" style="padding:4px 8px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:11px">
-           <option value="live" ${tg.msgType === 'live' ? 'selected' : ''}>Live</option>
-           <option value="signal" ${tg.msgType === 'signal' ? 'selected' : ''}>Sinal</option>
-           <option value="both" ${tg.msgType === 'both' || !tg.msgType ? 'selected' : ''}>Live+Sinal</option>
-           <option value="normal" ${tg.msgType === 'normal' ? 'selected' : ''}>Normal</option>
-           <option value="dynamic" ${tg.msgType === 'dynamic' ? 'selected' : ''}>Dinâmico</option>
-           <option value="live_dynamic" ${tg.msgType === 'live_dynamic' ? 'selected' : ''}>Live + Dinâmico</option>
-        </select>
-        <button class="btn btn-sm btn-blue" onclick="testTelegramChannel()" id="btnTestTg">Testar</button>
-        <span id="testTgResult" style="font-size:10px"></span>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <div>
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
-            <span style="font-size:10px;color:var(--text3)">Msg Live</span>
-            <button type="button" class="btn btn-sm btn-ghost" onclick="insertLiveVars()" style="font-size:9px;padding:1px 4px">+var</button>
-          </div>
-          <textarea id="tgMessageLive" rows="3" style="width:100%;padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:11px;font-family:monospace;resize:vertical" placeholder="Padrao. Use {variaveis}.">${escapeHtml(tgMessage.live || '')}</textarea>
-        </div>
-        <div>
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
-            <span style="font-size:10px;color:var(--text3)">Msg Sinal</span>
-            <button type="button" class="btn btn-sm btn-ghost" onclick="insertEntryVars()" style="font-size:9px;padding:1px 4px">+var</button>
-          </div>
-          <textarea id="tgMessageEntry" rows="3" style="width:100%;padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:11px;font-family:monospace;resize:vertical" placeholder="Padrao. Use {variaveis}.">${escapeHtml(tgMessage.entry || '')}</textarea>
-        </div>
-      </div>
-      <div style="font-size:9px;color:var(--text3);margin-top:4px">Live: {robotName} {game} {strategy} {status} {lastResult} {history} {wins} {losses} {rate} | Sinal: {target} {confidence} {gale} {historyEmojis}</div>
-      <div style="font-size:9px;color:var(--text3);margin-top:2px">Canais em Configuracoes > Canais / Grupos</div>`;
-    tgFormRendered = true;
-  }
-  renderTelegramMessagePreview(r);
-  document.getElementById('historyGrid').innerHTML = histData.length
-    ? `<div class="history-grid">${histData.map(h => {
-        const color = isDbl ? h.color : h.cellColor;
-        const num = isDbl ? h.number : h.cellIndex;
-        const mult = !isDbl && h.multiplier ? h.multiplier + 'X' : '';
-        return `<div class="history-cell ${(color||'').toLowerCase()}">${mult || num || ''}</div>`;
-      }).join('')}</div>`
-    : '<div style="color:var(--text3);font-size:12px;padding:8px">Nenhum resultado. Abra ws-background.html</div>';
-}
-
-function getEntrySendState(r) {
-  const tg = r.telegram || {};
-  const current = r.currentSignal || null;
-  const message = tg.channelId ? getEntryMessages()[[r.id, tg.channelId, 'entry'].join(':')] : null;
-  const messageStatus = String(message?.status || '').toLowerCase();
-  const currentStatus = String(current?.status || '').toLowerCase();
-  const sameSignal = !!(current && message?.signalId === current.id);
-
-  if (!tg.enabled || !tg.channelId) {
-    return { badge: 'LOCAL', badgeClass: 'sf-badge-ok', color: 'var(--yellow)', label: 'Entrada gerada no robo', detail: 'Telegram desligado ou sem canal', messageId: '' };
-  }
-
-  if (sameSignal && currentStatus === 'approved' && messageStatus === 'approved') {
-    return { badge: 'ENVIADA', badgeClass: 'sf-badge-pass', color: 'var(--green)', label: 'Entrada enviada', detail: 'Mensagem atualizada no Telegram', messageId: message.messageId || '' };
-  }
-
-  if (sameSignal && currentStatus === 'gale_pending' && messageStatus === 'gale_pending') {
-    return { badge: 'GALE', badgeClass: 'sf-badge-ok', color: 'var(--yellow)', label: 'Gale em andamento', detail: 'Mensagem editada para G' + (current.gale || 1), messageId: message.messageId || '' };
-  }
-
-  if (!current && (messageStatus === 'win' || messageStatus === 'loss')) {
-    return { badge: messageStatus.toUpperCase(), badgeClass: messageStatus === 'win' ? 'sf-badge-pass' : 'sf-badge-fail', color: messageStatus === 'win' ? 'var(--green)' : 'var(--red)', label: 'Resultado final enviado', detail: 'Historico atualiza a cada nova cor ate surgir outra entrada', messageId: message.messageId || '' };
-  }
-
-  if (current && message && message.signalId !== current.id && (messageStatus === 'win' || messageStatus === 'loss')) {
-    return { badge: 'LIMPAR', badgeClass: 'sf-badge-ok', color: 'var(--yellow)', label: 'Preparando nova entrada', detail: 'Resultado anterior sera excluido antes do novo envio', messageId: message.messageId || '' };
-  }
-
-  if (current) {
-    return { badge: 'PENDENTE', badgeClass: 'sf-badge-ok', color: 'var(--yellow)', label: 'Entrada gerada', detail: 'Aguardando registro da mensagem no Telegram', messageId: message?.messageId || '' };
-  }
-
-  return { badge: 'PRONTO', badgeClass: 'sf-badge-ok', color: 'var(--text3)', label: 'Aguardando nova entrada', detail: 'Sem sinal ativo no momento', messageId: message?.messageId || '' };
-}
-
-function findEntryMessage(robotId) {
-  const all = getEntryMessages();
-  const exactKey = Object.keys(all).find(k => k.startsWith(robotId + ':') && k.endsWith(':entry'));
-  if (exactKey) return all[exactKey];
-  const looseKey = Object.keys(all).find(k => k.startsWith(robotId + ':'));
-  return looseKey ? all[looseKey] : null;
-}
-
-function renderTelegramMessagePreview(r) {
-  const el = document.getElementById('telegramMessagePreview');
-  if (!el) return;
-  const tg = r.telegram || {};
-  if (!tg.enabled || !tg.channelId) {
-    el.innerHTML = `<div style="padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:8px">
-      <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:4px">Telegram Desconfigurado</div>
-      <div style="font-size:11px;color:var(--text3)">Enabled: ${tg.enabled ? 'SIM' : 'NAO'} | ChannelId: ${tg.channelId || 'VAZIO'} | MsgType: ${tg.msgType || 'both'}</div>
-      <div style="font-size:11px;color:var(--text3);margin-top:4px">Configure em: Editar > Telegram > Ativar + Selecionar canal</div>
-    </div>`;
+    setTimeout(() => { renderCfgDestinations(); updateCfgTgTopicOptions(); }, 10);
     return;
   }
 
-  const liveKey = [r.id, tg.channelId].join(':');
-  const entryKey = [r.id, tg.channelId, 'entry'].join(':');
+  const firstDest = tgDestinations[0] || {};
+  const liveKey = [r.id, firstDest.channelId || '', firstDest.threadId ? 't' + firstDest.threadId : ''].filter(Boolean).join(':');
+  const entryKey = liveKey + ':entry';
   const allLiveMessages = (function() { try { return JSON.parse(localStorage.getItem('telegram-live-messages-v1') || '{}'); } catch { return {}; } })();
   const allEntryMessages = getEntryMessages();
   const liveMsg = allLiveMessages[liveKey];
-  const entryMsg = allEntryMessages[entryKey] || findEntryMessage(r.id);
+  const entryMsg = allEntryMessages[entryKey] || Object.entries(allEntryMessages).find(([k]) => k.startsWith(r.id + ':'))?.[1] || null;
   const current = r.currentSignal;
   const msgType = tg.msgType || 'both';
   const showLive = msgType === 'live' || msgType === 'both';
@@ -422,7 +547,8 @@ function renderTelegramMessagePreview(r) {
     </div>`;
   }
 
-  el.innerHTML = html;
+  const tgPreviewEl = document.getElementById('telegramMessagePreview');
+  if (tgPreviewEl) tgPreviewEl.innerHTML = html;
 }
 
 function insertAtCursor(textareaId, value) {
@@ -445,6 +571,55 @@ function insertEntryVars() {
   const choice = prompt('Variavel para Sinal (cole no campo):\n' + list.join(' '));
   if (choice) insertAtCursor('tgMessageEntry', choice);
 }
+
+function updateCfgTargets() {
+  const game = document.getElementById('cfgGame').value;
+  const sel = document.getElementById('cfgTarget');
+  const prev = sel.value;
+  sel.innerHTML = (TARGETS[game] || TARGETS.double).map(t => `<option value="${t.value}" ${prev===t.value?'selected':''}>${t.label}</option>`).join('');
+  const gp = document.getElementById('cfgGreenProtection');
+  if (gp) gp.style.display = game === 'double' ? 'block' : 'none';
+  updateCfgGaleByColor();
+}
+
+function updateCfgGaleByColor() {
+  const game = document.getElementById('cfgGame').value;
+  const target = document.getElementById('cfgTarget').value;
+  const show = game === 'wheel' && target === 'any';
+  const gbc = document.getElementById('cfgGaleByColor');
+  const gm = document.getElementById('cfgGaleMaxGroup');
+  if (gbc) gbc.style.display = show ? 'block' : 'none';
+  if (gm) gm.style.display = show ? 'none' : 'block';
+}
+
+function getCfgSelectedStrategies() {
+  const strats = [];
+  document.querySelectorAll('#configForm input[type="checkbox"][id^="cfgStrat_"]').forEach(cb => {
+    if (cb.checked) strats.push(cb.id.replace('cfgStrat_', ''));
+  });
+  return strats.length ? strats : ['todas'];
+}
+
+function getCfgSelectedFilters() {
+  const filters = [];
+  document.querySelectorAll('#configForm input[type="checkbox"][value^="cfgFilter_"]').forEach(cb => {
+    if (cb.checked) filters.push(cb.value.replace('cfgFilter_', ''));
+  });
+  return filters;
+}
+
+function toggleCfgStrategy(name, checked) {
+  const strats = getCfgSelectedStrategies();
+  if (checked && !strats.includes(name)) strats.push(name);
+  if (!checked) {
+    const idx = strats.indexOf(name);
+    if (idx >= 0) strats.splice(idx, 1);
+  }
+  if (strats.length === 0) {
+    const cb = document.getElementById('cfgStrat_todas');
+    if (cb) cb.checked = true;
+  }
+}
 function clearTelegramMessages() {
   const live = document.getElementById('tgMessageLive');
   const entry = document.getElementById('tgMessageEntry');
@@ -458,7 +633,7 @@ function loadRobot() {
   if (robot && robot.history.length < robot.resultsToAnalyze) {
     RobotEngine.loadHistoryFromStorage(robot);
   }
-  if (robot && robot.status === 'online' && robot.history.length > 0 && (!robot.diagnostic || !robot.diagnostic.strategyDetails || Object.keys(robot.diagnostic.strategyDetails).length === 0)) {
+  if (robot && robot.history.length > 0 && (!robot.diagnostic || !robot.diagnostic.strategyDetails || Object.keys(robot.diagnostic.strategyDetails).length === 0)) {
     robot.analyze();
   }
   robotData = robot?.getState();
@@ -532,23 +707,47 @@ async function testTelegramChannel() {
 function saveConfig() {
   const robot = RobotEngine.getRobot(robotId);
   if (!robot) return;
+  const game = document.getElementById('cfgGame')?.value || robot.game;
+  const name = document.getElementById('cfgName')?.value || robot.name;
+  const strategies = getCfgSelectedStrategies();
+  const strategy = strategies.length === 1 ? strategies[0] : 'multi';
+  robot.name = name;
+  robot.game = game;
+  robot.strategy = strategy;
+  robot.strategies = strategies;
   robot.minimumConfidence = parseInt(document.getElementById('cfgConf').value) || 80;
+  robot.minScore = parseInt(document.getElementById('cfgMinScore')?.value) || 52;
+  robot.resultsToAnalyze = parseInt(document.getElementById('cfgResults')?.value) || 500;
   robot.intervalMin = parseInt(document.getElementById('cfgInterval').value) || 60;
-  robot.gale.max = parseInt(document.getElementById('cfgGale').value) || 0;
-  robot.gale.enabled = robot.gale.max > 0;
+  robot.mode = document.getElementById('cfgMode')?.value || 'monitoramento';
+  robot.filterMode = document.getElementById('cfgFilterMode')?.value || 'moderado';
+  robot.greenProtection = document.getElementById('cfgGreenProt')?.checked || false;
+  robot.autoPause = parseInt(document.getElementById('cfgAutoPause')?.value || document.getElementById('cfgAutoPauseColor')?.value) || 0;
+  robot.iaInteligente = document.getElementById('cfgIaInteligente')?.checked || false;
+  robot.filters = getCfgSelectedFilters();
   const targetColor = document.getElementById('cfgTarget')?.value || 'any';
-  const tgOpts = TARGETS[robot.game] || TARGETS.double;
+  const tgOpts = TARGETS[game] || TARGETS.double;
   const targetMult = tgOpts.find(t => t.value === targetColor)?.label.match(/(\d+)X/)?.[1] || null;
   robot.target = { color: targetColor, multiplier: targetMult ? parseInt(targetMult) : null };
   if (typeof robot.normalizeSavedSignalTargets === 'function') robot.normalizeSavedSignalTargets();
-  robot.filterMode = document.getElementById('cfgFilterMode')?.value || 'moderado';
-  const newStrategy = document.getElementById('cfgStrategy')?.value;
-  if (newStrategy) robot.strategy = newStrategy;
-  const newPatternSize = document.getElementById('cfgPatternSize')?.value;
-  if (newPatternSize) robot.patternSize = parseInt(newPatternSize) || 3;
+  const showGaleByColor = game === 'wheel' && targetColor === 'any';
+  if (showGaleByColor) {
+    robot.galeByColor = {
+      grey: parseInt(document.getElementById('cfgGaleGrey')?.value) || 1,
+      red: parseInt(document.getElementById('cfgGaleRed')?.value) || 3,
+      blue: parseInt(document.getElementById('cfgGaleBlue')?.value) || 5,
+      green: parseInt(document.getElementById('cfgGaleGreen')?.value) || 10
+    };
+    robot.gale.max = Math.max(robot.galeByColor.grey, robot.galeByColor.red, robot.galeByColor.blue, robot.galeByColor.green);
+  } else {
+    robot.gale.max = parseInt(document.getElementById('cfgGale')?.value) || 0;
+  }
+  robot.gale.enabled = robot.gale.max > 0;
   robot.telegram = {
     enabled: document.getElementById('tgEnabled')?.checked || false,
+    destinations: cfgDestinations.length ? cfgDestinations : (document.getElementById('tgChannel')?.value ? [{ channelId: document.getElementById('tgChannel').value, threadId: document.getElementById('tgTopic')?.value ? parseInt(document.getElementById('tgTopic').value) : null }] : []),
     channelId: document.getElementById('tgChannel')?.value || '',
+    threadId: document.getElementById('tgTopic')?.value ? parseInt(document.getElementById('tgTopic').value) : null,
     msgType: document.getElementById('tgMsgType')?.value || 'both',
     message: {
       live: document.getElementById('tgMessageLive')?.value || '',
@@ -571,12 +770,15 @@ function renameRobot() {
   RobotEngine.save();
   loadRobot();
 }
-function toggleRobotPower() {
+async function toggleRobotPower() {
   const robot = RobotEngine.getRobot(robotId);
   if (!robot) return;
   if (robot.status === 'offline') {
+    robot.currentSignal = null;
+    robot.galeCount = 0;
+    robot.usedPatterns = { RED: [], BLACK: [], GREY: [] };
     if (typeof TelegramService !== 'undefined') {
-      TelegramService.clearAllMessages(robot);
+      await TelegramService.clearAllMessages(robot);
     }
     RobotEngine.startRobot(robotId);
     loadRobot();
@@ -727,7 +929,75 @@ function renderEstrategias() {
   if (!robotData) { el.innerHTML = ''; return; }
   const d = robotData.diagnostic || {};
   const details = d.strategyDetails || {};
-  const names = Object.keys(details);
+  const robotStrategies = robotData.strategies || [robotData.strategy || 'todas'];
+  const allNames = Object.keys(details);
+
+  let iaHtml = '';
+  if (robotData.iaInteligente) {
+    const ia = robotData.iaState || {};
+    const activeStrat = ia.activeStrategy || '--';
+    const activeTarget = ia.activeTarget || '--';
+    const activeMult = ia.activeMultiplier || '--';
+    const activeConf = ia.activeConfidence || 0;
+    const activeWinRate = ia.activeWinRate || 0;
+    const evaluations = ia.evaluations || [];
+    const lastAnalysis = ia.lastAnalysisTime ? new Date(ia.lastAnalysisTime).toLocaleTimeString('pt-BR') : '--';
+    const colorEmoji = { GREY: '⚫️', RED: '🔴', BLUE: '🔵', GREEN: '🟢', BLACK: '⚫️' };
+
+    iaHtml = `<div style="margin-bottom:12px;padding:10px;background:linear-gradient(135deg,rgba(233,69,96,0.08),rgba(15,52,96,0.08));border:1px solid rgba(233,69,96,0.3);border-radius:8px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span style="font-size:16px">🧠</span>
+        <strong style="color:#e94560;font-size:13px">IA Inteligente - Estrategia Ativa</strong>
+        <span style="padding:2px 8px;border-radius:10px;font-size:9px;font-weight:700;background:rgba(233,69,96,0.2);color:#e94560">ATIVO</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:8px">
+        <div style="text-align:center;padding:6px;background:var(--bg);border-radius:6px;border:1px solid var(--border)">
+          <div style="font-size:9px;color:var(--text3);text-transform:uppercase">Estrategia</div>
+          <div style="font-size:12px;font-weight:700;color:var(--text);margin-top:2px">${activeStrat}</div>
+        </div>
+        <div style="text-align:center;padding:6px;background:var(--bg);border-radius:6px;border:1px solid var(--border)">
+          <div style="font-size:9px;color:var(--text3);text-transform:uppercase">Cor</div>
+          <div style="font-size:12px;font-weight:700;color:var(--text);margin-top:2px">${colorEmoji[activeTarget] || ''} ${activeTarget}</div>
+        </div>
+        <div style="text-align:center;padding:6px;background:var(--bg);border-radius:6px;border:1px solid var(--border)">
+          <div style="font-size:9px;color:var(--text3);text-transform:uppercase">Multiplicador</div>
+          <div style="font-size:12px;font-weight:700;color:#e94560;margin-top:2px">${activeMult}X</div>
+        </div>
+        <div style="text-align:center;padding:6px;background:var(--bg);border-radius:6px;border:1px solid var(--border)">
+          <div style="font-size:9px;color:var(--text3);text-transform:uppercase">Confianca</div>
+          <div style="font-size:12px;font-weight:700;color:${activeConf>=70?'var(--green)':activeConf>=50?'var(--yellow)':'var(--red)'};margin-top:2px">${activeConf}%</div>
+        </div>
+        <div style="text-align:center;padding:6px;background:var(--bg);border-radius:6px;border:1px solid var(--border)">
+          <div style="font-size:9px;color:var(--text3);text-transform:uppercase">Win Rate</div>
+          <div style="font-size:12px;font-weight:700;color:${activeWinRate>=60?'var(--green)':activeWinRate>=40?'var(--yellow)':'var(--red)'};margin-top:2px">${activeWinRate}%</div>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text3)">Ultima analise: ${lastAnalysis}</div>`;
+
+    if (evaluations.length > 0) {
+      iaHtml += `<div style="margin-top:8px;font-size:10px;color:var(--text3);font-weight:600">Top 5 Avaliacoes:</div>
+      <div style="margin-top:4px;display:flex;flex-direction:column;gap:3px">
+        ${evaluations.slice(0, 5).map((ev, i) => {
+          const rank = i + 1;
+          const barWidth = Math.max(10, ev.multiplierScore);
+          const barColor = rank === 1 ? '#e94560' : rank <= 3 ? 'var(--yellow)' : 'var(--text3)';
+          return `<div style="display:flex;align-items:center;gap:6px;font-size:10px">
+            <span style="width:14px;text-align:center;font-weight:700;color:${barColor}">${rank}º</span>
+            <span style="width:100px;color:var(--text)">${ev.strategy}</span>
+            <span style="width:40px;color:var(--text2)">${colorEmoji[ev.targetColor] || ''} ${ev.targetColor}</span>
+            <span style="width:30px;color:#e94560;font-weight:700">${ev.multiplier}X</span>
+            <div style="flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+              <div style="height:100%;width:${barWidth}%;background:${barColor};border-radius:3px"></div>
+            </div>
+            <span style="width:25px;text-align:right;font-weight:700;color:var(--text)">${ev.multiplierScore}</span>
+          </div>`;
+        }).join('')}
+      </div>`;
+    }
+    iaHtml += `</div>`;
+  }
+
+  const names = robotStrategies.includes('todas') ? allNames : allNames.filter(n => robotStrategies.includes(n));
   if (names.length === 0) { el.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:8px">Nenhuma estrategia analisada ainda.</div>'; return; }
 
   const strategyLabels = {
@@ -795,7 +1065,7 @@ function renderEstrategias() {
     </div>`;
   }).join('');
 
-  el.innerHTML = html;
+  el.innerHTML = iaHtml + html;
 }
 
 function changePatternSize(name, delta) {

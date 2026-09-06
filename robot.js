@@ -7,7 +7,7 @@ class Robot {
     this.strategies = Array.isArray(config.strategies) ? config.strategies : [config.strategy || 'alternancia'];
     this.status = 'offline';
     this.mode = config.mode || 'monitoramento';
-    this.resultsToAnalyze = config.resultsToAnalyze || 10;
+    this.resultsToAnalyze = config.resultsToAnalyze || 500;
     this.minimumConfidence = config.minimumConfidence || 80;
     this.minScore = config.minScore || 52;
     this.confirmations = config.confirmations || 2;
@@ -52,6 +52,8 @@ class Robot {
     this.filters = config.filters || [];
     this.galeByColor = config.galeByColor || { grey: 1, red: 3, blue: 5, green: 10 };
     this.autoPause = config.autoPause || 0;
+    this.iaInteligente = config.iaInteligente || false;
+    this.iaState = config.iaState || { activeStrategy: null, activeTarget: null, evaluations: [], colorAnalyses: {}, lastAnalysisTime: 0 };
   }
 
   getGaleMaxForTarget(targetColor) {
@@ -173,7 +175,7 @@ class Robot {
     this.lastHeartbeat = Date.now();
     if (!isDuplicate) {
       this.history.unshift({ color, number: normalized.number, multiplier: normalized.multiplier, roundId: normalized.roundId, storageId: normalized.storageId, resultKey: key, timestamp: normalized.time || Date.now() });
-      if (this.history.length > 400) this.history.pop();
+      if (this.history.length > 500) this.history.pop();
       this.addLog('Resultado: ' + (color || normalized.number));
       this.analyze();
     }
@@ -181,7 +183,8 @@ class Robot {
   }
 
   analyze() {
-    if (this.status !== 'online') {
+    const isOffline = this.status !== 'online';
+    if (isOffline) {
       this.diagnostic.status = 'IDLE';
       this.diagnostic.mainPattern = 'Robo offline';
       this.diagnostic.confidence = 0;
@@ -194,20 +197,18 @@ class Robot {
         step3: '---',
         step4: '---'
       };
-      EventBus.emit('robot:state', this.getState());
-      return;
     }
-    if (this.startDelayUntil && Date.now() < this.startDelayUntil) {
+    if (!isOffline && this.startDelayUntil && Date.now() < this.startDelayUntil) {
       this.diagnostic.status = 'LOADING';
       this.diagnostic.mainPattern = 'Aguardando delay inicial...';
       this.diagnostic.confidence = 0;
       this.diagnostic.suggestedEntry = null;
       this.diagnostic.signalBlocked = true;
-      this.diagnostic.blockReason = 'Delay inicial de 10s';
+      this.diagnostic.blockReason = 'Delay inicial de 30s';
       this.signalFlow = {
         step1: 'Robo iniciando...',
         step2: 'Enviando live...',
-        step3: 'Aguardando 10s...',
+        step3: 'Aguardando 30s...',
         step4: 'Depois inicia analises'
       };
       EventBus.emit('robot:state', this.getState());
@@ -246,8 +247,15 @@ class Robot {
 
     this.diagnostic.status = 'ANALYZING';
 
+    const reavaliationInterval = (typeof IAConfig !== 'undefined') ? IAConfig.settings.reavaliationInterval : 30000;
+    if (this.iaInteligente && (!this.iaState.activeStrategy || Date.now() - (this.iaState.lastAnalysisTime || 0) > reavaliationInterval)) {
+      this.analyzeIntelligentStrategy();
+    }
+
     const fixedTarget = this.getFixedTargetColor();
-    if (fixedTarget) {
+    if (this.iaInteligente && this.iaState.activeTarget) {
+      this.diagnostic.suggestedEntry = this.iaState.activeTarget;
+    } else if (fixedTarget) {
       this.diagnostic.suggestedEntry = fixedTarget;
     } else {
       const allowed = this.getAllowedTargets();
@@ -283,6 +291,8 @@ class Robot {
     this.diagnostic.patternScores = scores;
     this.diagnostic.totalScore = activeCount > 0 ? Math.round(total / activeCount) : 0;
     this.diagnostic.strategyDetails = strategyDetails;
+    this.diagnostic.analyzedResults = this.history.length;
+    this.diagnostic.numberAnalysis = this.analyzeNumbers(this.history);
 
     if (this.currentSignal) {
       const stratFn = strategies[this.strategy || 'todas'] || strategies[Object.keys(strategies)[0]];
@@ -314,7 +324,11 @@ class Robot {
     let signal = null;
     const isAll = this.strategy === 'todas';
     const robotStrategies = this.strategies || [this.strategy || 'todas'];
-    const namesToTry = isAll ? strategyNames : robotStrategies.filter(s => s !== 'todas');
+    let namesToTry = isAll ? strategyNames : robotStrategies.filter(s => s !== 'todas');
+
+    if (this.iaInteligente && this.iaState.activeStrategy && strategies[this.iaState.activeStrategy]) {
+      namesToTry = [this.iaState.activeStrategy];
+    }
 
     let bestConfidence = 0;
     let bestPattern = null;
@@ -368,7 +382,9 @@ class Robot {
       }
 
       const fixedTarget = this.getFixedTargetColor();
-      if (fixedTarget) {
+      if (this.iaInteligente && this.iaState.activeTarget) {
+        result.target = this.iaState.activeTarget;
+      } else if (fixedTarget) {
         result.target = fixedTarget;
       } else {
         const allowed = this.getAllowedTargets();
@@ -381,8 +397,13 @@ class Robot {
       signal = RobotEngine.evaluate(this, result);
       if (signal) {
         this.markPatternUsed(name, signal.target);
-        this.addLog('SINAL APROVADO: ' + signal.target + ' (' + signal.confidence + '%) via ' + name);
+        this.addLog('SINAL APROVADO: ' + signal.target + ' (' + signal.confidence + '%) via ' + name + (this.iaInteligente ? ' [IA]' : ''));
         signal.strategy = name;
+        if (this.iaInteligente) {
+          signal.iaDriven = true;
+          signal.iaTarget = this.iaState.activeTarget;
+          signal.iaMultiplier = this.iaState.activeMultiplier;
+        }
         EventBus.emit('signal:created', signal);
         break;
       }
@@ -420,6 +441,385 @@ class Robot {
   resetUsedPatterns() {
     this.usedPatterns = { RED: [], BLACK: [], GREY: [] };
     this.strategyIndex = 0;
+  }
+
+  analyzeNumbers(history) {
+    if (!history || history.length < 10) return null;
+    const sample = history.slice(0, Math.min(history.length, 500));
+    const maxNumber = this.game === 'double' ? 14 : 13;
+    const freq = new Array(maxNumber + 1).fill(0);
+    const recent = sample.slice(0, 50);
+    const recentFreq = new Array(maxNumber + 1).fill(0);
+    const colorNumbers = {};
+    for (let i = 0; i < sample.length; i++) {
+      const num = sample[i].number;
+      if (num !== undefined && num !== null && num >= 0 && num <= maxNumber) {
+        freq[num]++;
+      }
+      if (i < recent.length && num !== undefined && num !== null && num >= 0 && num <= maxNumber) {
+        recentFreq[num]++;
+      }
+      const color = String(sample[i].color || '').toUpperCase();
+      if (!colorNumbers[color]) colorNumbers[color] = [];
+      if (num !== undefined && num !== null) colorNumbers[color].push(num);
+    }
+    const total = sample.length;
+    const expected = total / (maxNumber + 1);
+    let chiSquare = 0;
+    for (let i = 0; i <= maxNumber; i++) {
+      const diff = freq[i] - expected;
+      chiSquare += (diff * diff) / expected;
+    }
+    const chiThreshold = maxNumber * 1.5;
+    const isChaotic = chiSquare > chiThreshold;
+    const lowHalf = this.game === 'double' ? [1, 2, 3, 4, 5, 6, 7] : [0, 1, 2, 3, 4, 5, 6];
+    const highHalf = this.game === 'double' ? [8, 9, 10, 11, 12, 13, 14] : [7, 8, 9, 10, 11, 12, 13];
+    let lowCount = 0, highCount = 0;
+    for (const n of lowHalf) lowCount += freq[n];
+    for (const n of highHalf) highCount += freq[n];
+    const lowPct = total > 0 ? Math.round(lowCount / total * 100) : 50;
+    const highPct = total > 0 ? Math.round(highCount / total * 100) : 50;
+    const zeros = freq[0] || 0;
+    const greenNums = this.game === 'double' ? [0] : [0];
+    const greenCount = greenNums.reduce((s, n) => s + freq[n], 0);
+    const greenPct = total > 0 ? Math.round(greenCount / total * 100) : 0;
+    let hotNumbers = [];
+    for (let i = 0; i <= maxNumber; i++) {
+      const deviation = expected > 0 ? ((recentFreq[i] / 50) - (freq[i] / total)) / (freq[i] / total || 1) : 0;
+      if (deviation > 0.3 && recentFreq[i] >= 3) hotNumbers.push({ number: i, recent: recentFreq[i], overall: freq[i], trend: 'hot' });
+    }
+    hotNumbers.sort((a, b) => b.recent - a.recent);
+    hotNumbers = hotNumbers.slice(0, 5);
+    const colorAvgNumbers = {};
+    for (const [color, nums] of Object.entries(colorNumbers)) {
+      if (nums.length < 5) continue;
+      const avg = nums.reduce((s, n) => s + n, 0) / nums.length;
+      colorAvgNumbers[color] = Math.round(avg * 10) / 10;
+    }
+    const recentColors = sample.slice(0, 10).map(h => String(h.color || '').toUpperCase());
+    const lastColor = recentColors[0] || '';
+    const sameColorCount = recentColors.filter(c => c === lastColor).length;
+    const streakDetected = sameColorCount >= 4;
+    const consecutiveNumbers = [];
+    for (let i = 0; i < Math.min(recent.length - 2, 10); i++) {
+      const n1 = recent[i]?.number;
+      const n2 = recent[i + 1]?.number;
+      const n3 = recent[i + 2]?.number;
+      if (n1 !== undefined && n2 !== undefined && n3 !== undefined) {
+        if (n2 - n1 === n3 - n2 && Math.abs(n2 - n1) <= 3) {
+          consecutiveNumbers.push({ start: n1, step: n2 - n1, length: 3 });
+        }
+      }
+    }
+    const score = Math.round(
+      (100 - Math.min(chiSquare / chiThreshold * 100, 50)) * 0.3 +
+      (streakDetected ? 20 : 0) * 0.2 +
+      (hotNumbers.length > 0 ? 30 : 0) * 0.2 +
+      (greenPct > 5 ? 25 : 10) * 0.15 +
+      (Math.abs(lowPct - highPct) > 15 ? 20 : 10) * 0.15
+    );
+    return {
+      totalNumbers: total,
+      distribution: freq.map((count, num) => ({ num, count, pct: total > 0 ? Math.round(count / total * 100) : 0 })),
+      lowHigh: { low: lowPct, high: highPct },
+      greenFrequency: greenPct,
+      chiSquare: Math.round(chiSquare),
+      isChaotic,
+      hotNumbers,
+      colorAvgNumbers,
+      streakDetected,
+      streakInfo: streakDetected ? { color: lastColor, count: sameColorCount } : null,
+      consecutiveNumbers: consecutiveNumbers.slice(0, 3),
+      score
+    };
+  }
+
+  analyzeTargetColor(targetColor) {
+    const color = String(targetColor || '').toUpperCase();
+    const history = this.history;
+    if (!history || history.length < 10) return null;
+    const sample = history.slice(0, Math.min(history.length, 500));
+    const maxNumber = this.game === 'double' ? 14 : 13;
+
+    const colorMap = this.game === 'double'
+      ? { RED: [1,2,3,4,5,6,7], BLACK: [8,9,10,11,12,13,14], GREEN: [0] }
+      : { RED: [1,3,5,7,9,11,13], BLACK: [2,4,6,8,10,12], GREY: [0], BLUE: [10,11,12,13], GREEN: [0] };
+    const numbersOnColor = colorMap[color] || [];
+
+    let totalCount = sample.length;
+    let colorCount = 0;
+    let lastColorIndex = -1;
+    const colorIndices = [];
+    const numberFreq = {};
+    numbersOnColor.forEach(n => numberFreq[n] = 0);
+
+    for (let i = 0; i < sample.length; i++) {
+      const c = String(sample[i].color || '').toUpperCase();
+      if (c === color || (color === 'BLACK' && c === 'GREY')) {
+        colorCount++;
+        colorIndices.push(i);
+        if (lastColorIndex === -1) lastColorIndex = i;
+        const num = sample[i].number;
+        if (num !== undefined && num !== null && numberFreq[num] !== undefined) {
+          numberFreq[num]++;
+        }
+      }
+    }
+
+    const frequency = totalCount > 0 ? Math.round(colorCount / totalCount * 100) : 0;
+    const expectedFreq = numbersOnColor.length / (maxNumber + 1) * 100;
+    const lastOccurrence = lastColorIndex >= 0 ? lastColorIndex : totalCount;
+
+    let avgGap = 0;
+    if (colorIndices.length >= 2) {
+      let gapSum = 0;
+      for (let i = 1; i < colorIndices.length; i++) {
+        gapSum += colorIndices[i] - colorIndices[i - 1];
+      }
+      avgGap = Math.round((gapSum / (colorIndices.length - 1)) * 10) / 10;
+    }
+
+    const recentWindow = sample.slice(0, 30);
+    let recentColorCount = 0;
+    for (const r of recentWindow) {
+      const c = String(r.color || '').toUpperCase();
+      if (c === color || (color === 'BLACK' && c === 'GREY')) recentColorCount++;
+    }
+    const recentFreq = Math.round(recentColorCount / recentWindow.length * 100);
+    const trendDiff = recentFreq - frequency;
+    let trend = 'stable';
+    if (trendDiff > 8) trend = 'hot';
+    else if (trendDiff < -8) trend = 'cold';
+
+    const hotNumbers = [];
+    const totalOnColor = Object.values(numberFreq).reduce((s, v) => s + v, 0);
+    for (const [num, count] of Object.entries(numberFreq)) {
+      if (count > 0) {
+        const numPct = totalOnColor > 0 ? Math.round(count / totalOnColor * 100) : 0;
+        const expectedPct = numbersOnColor.length > 0 ? Math.round(100 / numbersOnColor.length) : 0;
+        if (numPct > expectedPct + 5) {
+          hotNumbers.push({ number: parseInt(num), count, pct: numPct, trend: 'hot' });
+        }
+      }
+    }
+    hotNumbers.sort((a, b) => b.count - a.count);
+
+    let streakCount = 0;
+    let streakColor = '';
+    for (let i = 0; i < Math.min(sample.length, 20); i++) {
+      const c = String(sample[i].color || '').toUpperCase();
+      if (i === 0) { streakColor = c; streakCount = 1; }
+      else if (c === streakColor) streakCount++;
+      else break;
+    }
+    const streakDetected = streakCount >= 3 && streakColor === color;
+
+    let reverseScore = 0;
+    if (lastOccurrence <= 2 && recentFreq > frequency + 5) {
+      reverseScore = Math.min(30, 10 + (lastOccurrence * 5) + Math.round(trendDiff));
+    } else if (lastOccurrence >= avgGap * 2 && avgGap > 0) {
+      reverseScore = Math.min(25, Math.round((lastOccurrence / avgGap) * 8));
+    }
+
+    let patternScore = Math.round(
+      (frequency > expectedFreq ? 15 : 0) +
+      (trend === 'hot' ? 20 : trend === 'cold' ? -10 : 0) +
+      (hotNumbers.length > 0 ? 15 : 0) +
+      (streakDetected ? 10 : 0) +
+      reverseScore +
+      (lastOccurrence <= avgGap ? 10 : 0)
+    );
+    patternScore = Math.max(0, Math.min(100, 50 + patternScore));
+
+    let suggestedEntry = null;
+    let entryConfidence = 0;
+    if (trend === 'hot' && recentFreq > expectedFreq + 10) {
+      suggestedEntry = color;
+      entryConfidence = Math.min(85, 60 + Math.round(trendDiff));
+    } else if (streakDetected) {
+      const others = Object.keys(colorMap).filter(c => c !== color);
+      suggestedEntry = others.length ? others[0] : 'RED';
+      entryConfidence = Math.min(80, 55 + streakCount * 3);
+    } else if (reverseScore > 15) {
+      suggestedEntry = color;
+      entryConfidence = Math.min(75, 50 + Math.round(reverseScore));
+    } else if (trend === 'cold' && lastOccurrence > avgGap * 1.5) {
+      suggestedEntry = color;
+      entryConfidence = Math.min(70, 45 + Math.round(lastOccurrence - avgGap) * 3);
+    }
+
+    const sortedNumberFreq = Object.entries(numberFreq)
+      .map(([num, count]) => ({ num: parseInt(num), count, pct: totalOnColor > 0 ? Math.round(count / totalOnColor * 100) : 0 }))
+      .sort((a, b) => b.count - a.count);
+
+    return {
+      color,
+      frequency,
+      expectedFrequency: Math.round(expectedFreq),
+      colorCount,
+      totalCount,
+      lastOccurrence,
+      currentGap: lastOccurrence,
+      avgGap,
+      recentFrequency: recentFreq,
+      trend,
+      trendDiff: Math.round(trendDiff),
+      numbersOnColor,
+      numberFreq: sortedNumberFreq,
+      hotNumbers: hotNumbers.slice(0, 5),
+      totalNumbersOnColor: totalOnColor,
+      streakDetected,
+      streakInfo: streakDetected ? { color: streakColor, count: streakCount } : null,
+      reverseScore,
+      patternScore,
+      suggestedEntry,
+      entryConfidence
+    };
+  }
+
+  analyzeIntelligentStrategy() {
+    if (!this.iaInteligente) return;
+    const strategies = RobotEngine.strategies;
+    if (!strategies || Object.keys(strategies).length === 0) return;
+    const history = this.history;
+    const minHistory = (typeof IAConfig !== 'undefined') ? IAConfig.settings.minHistoryRequired : 50;
+    if (history.length < minHistory) return;
+    const game = this.game;
+    const colorTargets = game === 'wheel'
+      ? [{ color: 'GREY', mult: 2 }, { color: 'RED', mult: 3 }, { color: 'BLUE', mult: 5 }, { color: 'GREEN', mult: 50 }]
+      : [{ color: 'RED', mult: 2 }, { color: 'BLACK', mult: 2 }, { color: 'GREEN', mult: 14 }];
+    const windowSize = (typeof IAConfig !== 'undefined') ? IAConfig.settings.windowSize : 30;
+    const evals = [];
+    for (const [name, fn] of Object.entries(strategies)) {
+      if (name === 'todas' || name === 'iaInteligente') continue;
+      const sc = (this.strategyConfig || {})[name] || {};
+      if (sc.enabled === false) continue;
+      for (const t of colorTargets) {
+        try {
+          const result = fn(history, { color: t.color, multiplier: t.mult });
+          if (!result || !result.matched) continue;
+          const confidence = result.confidence || 0;
+          const confluences = result.confluences || 0;
+          let winsInWindow = 0;
+          let totalInWindow = 0;
+          const wSize = Math.min(this.signalHistory.length, windowSize);
+          for (let i = 0; i < wSize; i++) {
+            const sh = this.signalHistory[this.signalHistory.length - 1 - i];
+            if (!sh) continue;
+            if (sh.target === t.color || (sh.target || '').includes(t.color)) {
+              totalInWindow++;
+              if (sh.type === 'win') winsInWindow++;
+            }
+          }
+          const winRate = totalInWindow > 0 ? winsInWindow / totalInWindow : 0.5;
+          let score;
+          if (typeof IAConfig !== 'undefined') {
+            score = IAConfig.evaluateScore({
+              confidence,
+              confluences,
+              winRate: Math.round(winRate * 100),
+              matched: result.matched,
+              multiplier: t.mult,
+              penalty: 0,
+              winStreak: this.stats?.currentStreak || 0
+            });
+          } else {
+            const recentWeight = Math.max(0.3, 1 - (this.signalHistory.length > 0 ? Math.min(20, this.signalHistory.length) * 0.03 : 0));
+            score = Math.round(
+              confidence * 0.35 +
+              confluences * 8 * 0.20 +
+              winRate * 100 * 0.30 +
+              (result.matched ? 15 : 0) * recentWeight * 0.15
+            );
+          }
+          let evaluation = {
+            strategy: name,
+            targetColor: t.color,
+            multiplier: t.mult,
+            confidence,
+            confluences,
+            winRate: Math.round(winRate * 100),
+            totalSignals: totalInWindow,
+            score,
+            multiplierScore: Math.round(score * (t.mult / 50)),
+            reason: result.reason || '',
+            matched: result.matched,
+            penalty: 0,
+            boost: 0,
+            ignored: false,
+            appliedRules: [],
+            colorAnalysis: null
+          };
+          const colorAnalysis = this.analyzeTargetColor(t.color);
+          if (colorAnalysis) {
+            evaluation.colorAnalysis = colorAnalysis;
+            const colorBoost = Math.round(
+              (colorAnalysis.trend === 'hot' ? 8 : colorAnalysis.trend === 'cold' ? -5 : 0) +
+              (colorAnalysis.hotNumbers.length > 0 ? 5 : 0) +
+              (colorAnalysis.streakDetected ? 5 : 0) +
+              (colorAnalysis.reverseScore > 15 ? 8 : 0) +
+              (colorAnalysis.patternScore - 50) * 0.3
+            );
+            evaluation.score = Math.max(0, Math.min(100, evaluation.score + colorBoost));
+            evaluation.multiplierScore = Math.round(evaluation.score * (t.mult / 50));
+            if (colorAnalysis.suggestedEntry === t.color && colorAnalysis.entryConfidence > 60) {
+              evaluation.boost += Math.round(colorAnalysis.entryConfidence * 0.1);
+              evaluation.score = Math.min(100, evaluation.score + evaluation.boost);
+              evaluation.multiplierScore = Math.round(evaluation.score * (t.mult / 50));
+            }
+          }
+          if (typeof IAConfig !== 'undefined') {
+            evaluation = IAConfig.applyRules(evaluation, this.getState());
+            evaluation.multiplierScore = Math.round(evaluation.score * (t.mult / 50));
+          }
+          if (!evaluation.ignored) {
+            evals.push(evaluation);
+          }
+        } catch (e) { /* skip strategy error */ }
+      }
+    }
+    if (typeof IAConfig !== 'undefined') {
+      evals.sort((a, b) => b.multiplierScore - a.multiplierScore || b.score - a.score);
+      const prioritized = IAConfig.runCustomPrioritize(evals);
+      evals.length = 0;
+      evals.push(...prioritized);
+    } else {
+      evals.sort((a, b) => b.multiplierScore - a.multiplierScore || b.score - a.score);
+    }
+    this.iaState.evaluations = evals.slice(0, (typeof IAConfig !== 'undefined' ? IAConfig.settings.maxEvaluations : 20));
+    this.iaState.lastAnalysisTime = Date.now();
+    const colorAnalyses = {};
+    for (const ev of evals) {
+      if (ev.colorAnalysis && !colorAnalyses[ev.targetColor]) {
+        colorAnalyses[ev.targetColor] = ev.colorAnalysis;
+      }
+    }
+    this.iaState.colorAnalyses = colorAnalyses;
+    if (evals.length > 0) {
+      const best = evals[0];
+      this.iaState.activeStrategy = best.strategy;
+      this.iaState.activeTarget = best.targetColor;
+      this.iaState.activeConfidence = best.confidence;
+      this.iaState.activeWinRate = best.winRate;
+      this.iaState.activeMultiplier = best.multiplier;
+      this.iaState.activeReason = best.reason;
+      const logMsg = 'IA: Estrategia alterada para ' + best.strategy + ' -> ' + this.colorLabel(best.targetColor) + ' (' + best.multiplier + 'X) score:' + best.multiplierScore;
+      this.addLog(logMsg);
+      if (typeof IAConfig !== 'undefined') {
+        IAConfig.addDecisionLog({
+          robotId: this.id,
+          robotName: this.name,
+          strategy: best.strategy,
+          target: this.colorLabel(best.targetColor),
+          multiplier: best.multiplier,
+          score: best.multiplierScore,
+          confidence: best.confidence,
+          winRate: best.winRate,
+          appliedRules: best.appliedRules || [],
+          reason: best.reason
+        });
+      }
+    }
   }
 
   colorLabel(color) {
@@ -473,6 +873,10 @@ class Robot {
       EventBus.emit('signal:resolved', { ...signal, robotId: this.id, type: 'win' });
       this.signalHistory.push({ type: 'win', target: targetColor, result: rColor, gale: resolvedGale, time: Date.now(), greenProtection: isGreenProtection });
       if (this.signalHistory.length > 100) this.signalHistory.shift();
+      if (typeof IAConfig !== 'undefined') {
+        IAConfig.runOnWin({ strategy: this.strategy, target: targetColor, gale: resolvedGale, confidence: signal.confidence || 0 });
+      }
+      if (this.iaInteligente) this.analyzeIntelligentStrategy();
     } else {
       this.galeCount++;
       const maxGale = this.getGaleMaxForTarget(targetColor);
@@ -520,6 +924,10 @@ class Robot {
         EventBus.emit('signal:resolved', { ...signal, robotId: this.id, type: 'loss' });
         this.signalHistory.push({ type: 'loss', target: targetColor, result: rColor, gale: maxGale, time: Date.now() });
         if (this.signalHistory.length > 100) this.signalHistory.shift();
+        if (typeof IAConfig !== 'undefined') {
+          IAConfig.runOnLoss({ strategy: this.strategy, target: targetColor, gale: maxGale, confidence: signal.confidence || 0 });
+        }
+        if (this.iaInteligente) this.analyzeIntelligentStrategy();
         if (this.autoPause > 0 && Math.abs(this.stats.currentStreak) >= this.autoPause) {
           this.status = 'offline';
           this.addLog('AUTO-PAUSE: ' + Math.abs(this.stats.currentStreak) + ' losses seguidos');
@@ -698,10 +1106,10 @@ class Robot {
   }
 
   getState() {
-    return { id: this.id, name: this.name, game: this.game, strategy: this.strategy, strategies: this.strategies, status: this.status, mode: this.mode, target: this.target, filterMode: this.filterMode, patternSize: this.patternSize, lastPatternAnalysisTime: this.lastPatternAnalysisTime, telegram: { ...this.telegram, message: { ...(this.telegram.message || {}) } }, lastHeartbeat: this.lastHeartbeat, stats: { ...this.stats }, lastResult: this.lastResult, lastSignal: this.lastSignal, currentSignal: this.currentSignal, diagnostic: { ...this.diagnostic }, signalFlow: { ...this.signalFlow }, logs: [...this.logs], signalHistory: [...this.signalHistory], minimumConfidence: this.minimumConfidence, minScore: this.minScore, intervalMin: this.intervalMin, gale: { ...this.gale }, resultsToAnalyze: this.resultsToAnalyze, confirmations: this.confirmations, strategyIndex: this.strategyIndex, usedPatterns: JSON.parse(JSON.stringify(this.usedPatterns)), startedAt: this.startedAt, strategyConfig: JSON.parse(JSON.stringify(this.strategyConfig || {})), greenProtection: this.greenProtection, filters: this.filters, galeByColor: { ...this.galeByColor }, autoPause: this.autoPause, startDelayUntil: this.startDelayUntil };
+    return { id: this.id, name: this.name, game: this.game, strategy: this.strategy, strategies: this.strategies, status: this.status, mode: this.mode, target: this.target, filterMode: this.filterMode, patternSize: this.patternSize, lastPatternAnalysisTime: this.lastPatternAnalysisTime, telegram: { ...this.telegram, message: { ...(this.telegram.message || {}) } }, lastHeartbeat: this.lastHeartbeat, stats: { ...this.stats }, lastResult: this.lastResult, lastSignal: this.lastSignal, currentSignal: this.currentSignal, diagnostic: { ...this.diagnostic }, signalFlow: { ...this.signalFlow }, logs: [...this.logs], history: [...this.history], signalHistory: [...this.signalHistory], minimumConfidence: this.minimumConfidence, minScore: this.minScore, intervalMin: this.intervalMin, gale: { ...this.gale }, resultsToAnalyze: this.resultsToAnalyze, confirmations: this.confirmations, strategyIndex: this.strategyIndex, usedPatterns: JSON.parse(JSON.stringify(this.usedPatterns)), startedAt: this.startedAt, strategyConfig: JSON.parse(JSON.stringify(this.strategyConfig || {})), greenProtection: this.greenProtection, filters: this.filters, galeByColor: { ...this.galeByColor }, autoPause: this.autoPause, startDelayUntil: this.startDelayUntil, iaInteligente: this.iaInteligente, iaState: { ...this.iaState, evaluations: (this.iaState.evaluations || []).slice(0, 10) } };
   }
 
   toJSON() {
-    return { id: this.id, name: this.name, game: this.game, strategy: this.strategy, strategies: this.strategies, status: this.status, mode: this.mode, target: this.target, filterMode: this.filterMode, patternSize: this.patternSize, lastPatternAnalysisTime: this.lastPatternAnalysisTime, history: this.history.slice(0, 400), resultsToAnalyze: this.resultsToAnalyze, minimumConfidence: this.minimumConfidence, minScore: this.minScore, confirmations: this.confirmations, intervalMin: this.intervalMin, galeMax: this.gale.max, telegram: { ...this.telegram, message: { ...(this.telegram.message || {}) } }, stats: this.stats, lastHeartbeat: this.lastHeartbeat, lastResult: this.lastResult, lastSignal: this.lastSignal, currentSignal: this.currentSignal, galeCount: this.galeCount, lastSignalTime: this.lastSignalTime, diagnostic: this.diagnostic, signalFlow: this.signalFlow, logs: this.logs, signalHistory: this.signalHistory, strategyIndex: this.strategyIndex, usedPatterns: this.usedPatterns, startedAt: this.startedAt, strategyConfig: this.strategyConfig || {}, greenProtection: this.greenProtection, filters: this.filters, galeByColor: this.galeByColor, autoPause: this.autoPause, startDelayUntil: this.startDelayUntil };
+    return { id: this.id, name: this.name, game: this.game, strategy: this.strategy, strategies: this.strategies, status: this.status, mode: this.mode, target: this.target, filterMode: this.filterMode, patternSize: this.patternSize, lastPatternAnalysisTime: this.lastPatternAnalysisTime, history: this.history.slice(0, 500), resultsToAnalyze: this.resultsToAnalyze, minimumConfidence: this.minimumConfidence, minScore: this.minScore, confirmations: this.confirmations, intervalMin: this.intervalMin, galeMax: this.gale.max, telegram: { ...this.telegram, message: { ...(this.telegram.message || {}) } }, stats: this.stats, lastHeartbeat: this.lastHeartbeat, lastResult: this.lastResult, lastSignal: this.lastSignal, currentSignal: this.currentSignal, galeCount: this.galeCount, lastSignalTime: this.lastSignalTime, diagnostic: this.diagnostic, signalFlow: this.signalFlow, logs: this.logs, signalHistory: this.signalHistory, strategyIndex: this.strategyIndex, usedPatterns: this.usedPatterns, startedAt: this.startedAt, strategyConfig: this.strategyConfig || {}, greenProtection: this.greenProtection, filters: this.filters, galeByColor: this.galeByColor, autoPause: this.autoPause, startDelayUntil: this.startDelayUntil, iaInteligente: this.iaInteligente, iaState: this.iaState };
   }
 }
