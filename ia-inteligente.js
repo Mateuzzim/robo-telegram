@@ -36,6 +36,36 @@ const IAConfig = {
     confidenceAbove90: 10
   },
 
+  scoreboard: {
+    losingStreakPause: 3,
+    losingStreakPauseMinutes: 15,
+    recentLossStreakPause: 4,
+    recentLossStreakPauseMinutes: 10,
+    lowWinRateThreshold: 30,
+    lowWinRateMinSignals: 5,
+    lowWinRateConfidenceAdj: 10,
+    lowWinRateGaleAdj: -1,
+    winningStreakThreshold: 3,
+    winningStreakGaleAdj: 1,
+    winningStreakConfidenceAdj: -5,
+    decliningTrendWinRateThreshold: 40,
+    decliningTrendConfidenceAdj: 8,
+    lowGaleEfficiencyThreshold: 30,
+    lowGaleEfficiencyMinSignals: 10,
+    lowGaleEfficiencyGaleAdj: -1,
+    improvingTrendWinRateThreshold: 60,
+    improvingTrendGaleAdj: 1,
+    pauseScorePenalty: 20,
+    cautionScorePenalty: 10,
+    actWinStreakBoost: 5,
+    goodColorWinRate: 60,
+    goodColorBoost: 5,
+    badColorWinRate: 35,
+    badColorPenalty: 5,
+    improvingTrendBoost: 3,
+    decliningTrendPenalty: 3
+  },
+
   rules: [
     { id: 1, name: 'WinRate Baixo', enabled: true, condition: 'winRate < 40', action: 'penalty', value: 20, description: 'Penaliza quando winRate cai abaixo de 40%' },
     { id: 2, name: 'Confiança Alta', enabled: true, condition: 'confidence > 85', action: 'boost', value: 15, description: 'Boost quando confiança supera 85%' },
@@ -123,6 +153,7 @@ function onLoss(result) {
       if (saved.settings) Object.assign(this.settings, saved.settings);
       if (saved.penalty) Object.assign(this.penalty, saved.penalty);
       if (saved.boost) Object.assign(this.boost, saved.boost);
+      if (saved.scoreboard) Object.assign(this.scoreboard, saved.scoreboard);
       if (saved.rules) this.rules = saved.rules;
       if (saved.customFunctions) Object.assign(this.customFunctions, saved.customFunctions);
       if (saved.decisionLog) this.decisionLog = saved.decisionLog;
@@ -137,6 +168,7 @@ function onLoss(result) {
         settings: { ...this.settings },
         penalty: { ...this.penalty },
         boost: { ...this.boost },
+        scoreboard: { ...this.scoreboard },
         rules: this.rules.map(r => ({ ...r })),
         customFunctions: { ...this.customFunctions },
         decisionLog: this.decisionLog.slice(-this._maxLogSize),
@@ -165,6 +197,35 @@ function onLoss(result) {
     this.settings = { reavaliationInterval: 30000, minHistoryRequired: 50, minConfidenceToAct: 60, maxEvaluations: 20, windowSize: 30, enableMultiplierBoost: true, enablePenalty: true, enableWinStreakBoost: true };
     this.penalty = { onLoss: 5, onRejection: 3, maxPenalty: 50, decayPerWin: 2, resetOnStrategyChange: true };
     this.boost = { onWinStreak: 10, streakThreshold: 3, maxBoost: 30, confidenceAbove80: 5, confidenceAbove90: 10 };
+    this.scoreboard = {
+      losingStreakPause: 3,
+      losingStreakPauseMinutes: 15,
+      recentLossStreakPause: 4,
+      recentLossStreakPauseMinutes: 10,
+      lowWinRateThreshold: 30,
+      lowWinRateMinSignals: 5,
+      lowWinRateConfidenceAdj: 10,
+      lowWinRateGaleAdj: -1,
+      winningStreakThreshold: 3,
+      winningStreakGaleAdj: 1,
+      winningStreakConfidenceAdj: -5,
+      decliningTrendWinRateThreshold: 40,
+      decliningTrendConfidenceAdj: 8,
+      lowGaleEfficiencyThreshold: 30,
+      lowGaleEfficiencyMinSignals: 10,
+      lowGaleEfficiencyGaleAdj: -1,
+      improvingTrendWinRateThreshold: 60,
+      improvingTrendGaleAdj: 1,
+      pauseScorePenalty: 20,
+      cautionScorePenalty: 10,
+      actWinStreakBoost: 5,
+      goodColorWinRate: 60,
+      goodColorBoost: 5,
+      badColorWinRate: 35,
+      badColorPenalty: 5,
+      improvingTrendBoost: 3,
+      decliningTrendPenalty: 3
+    };
     this.rules = [];
     this.customFunctions = { evaluate: '', filter: '', prioritize: '', onWin: '', onLoss: '' };
     this.decisionLog = [];
@@ -328,6 +389,7 @@ function onLoss(result) {
       settings: { ...this.settings },
       penalty: { ...this.penalty },
       boost: { ...this.boost },
+      scoreboard: { ...this.scoreboard },
       rules: this.rules.map(r => ({ ...r })),
       customFunctions: { ...this.customFunctions }
     }, null, 2);
@@ -340,6 +402,7 @@ function onLoss(result) {
       if (data.settings) Object.assign(this.settings, data.settings);
       if (data.penalty) Object.assign(this.penalty, data.penalty);
       if (data.boost) Object.assign(this.boost, data.boost);
+      if (data.scoreboard) Object.assign(this.scoreboard, data.scoreboard);
       if (data.rules) this.rules = data.rules;
       if (data.customFunctions) Object.assign(this.customFunctions, data.customFunctions);
       this.save();

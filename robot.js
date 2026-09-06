@@ -53,7 +53,7 @@ class Robot {
     this.galeByColor = config.galeByColor || { grey: 1, red: 3, blue: 5, green: 10 };
     this.autoPause = config.autoPause || 0;
     this.iaInteligente = config.iaInteligente || false;
-    this.iaState = config.iaState || { activeStrategy: null, activeTarget: null, evaluations: [], colorAnalyses: {}, lastAnalysisTime: 0 };
+    this.iaState = config.iaState || { activeStrategy: null, activeTarget: null, evaluations: [], colorAnalyses: {}, scoreboard: null, lastAnalysisTime: 0 };
   }
 
   getGaleMaxForTarget(targetColor) {
@@ -677,6 +677,135 @@ class Robot {
     };
   }
 
+  analyzeScoreboard() {
+    const stats = this.stats || {};
+    const signalHistory = this.signalHistory || [];
+    const history = this.history || [];
+    const totalSignals = stats.signals || 0;
+    const wins = stats.wins || 0;
+    const losses = stats.losses || 0;
+    const totalDecided = wins + losses;
+    const overallWinRate = totalDecided > 0 ? Math.round((wins / totalDecided) * 100) : 0;
+    const currentStreak = stats.currentStreak || 0;
+    const maxWinStreak = stats.maxWinStreak || 0;
+    const maxLossStreak = stats.maxLossStreak || 0;
+    const winSG = stats.winSG || 0;
+    const winG1 = stats.winG1 || 0;
+    const winG2 = stats.winG2 || 0;
+    const galeEfficiency = totalDecided > 0 ? Math.round((winSG / totalDecided) * 100) : 0;
+
+    const sb = (typeof IAConfig !== 'undefined' && IAConfig.scoreboard) ? IAConfig.scoreboard : {};
+
+    const recentWindow = 20;
+    const recentSignals = signalHistory.slice(-recentWindow);
+    const recentWins = recentSignals.filter(s => s.type === 'win').length;
+    const recentTotal = recentSignals.length;
+    const recentWinRate = recentTotal > 0 ? Math.round((recentWins / recentTotal) * 100) : 0;
+
+    const last30 = signalHistory.slice(-30);
+    const last30Wins = last30.filter(s => s.type === 'win').length;
+    const last30Rate = last30.length > 0 ? Math.round((last30Wins / last30.length) * 100) : 0;
+
+    const last10 = signalHistory.slice(-10);
+    const last10Wins = last10.filter(s => s.type === 'win').length;
+    const last10Rate = last10.length > 0 ? Math.round((last10Wins / last10.length) * 100) : 0;
+
+    const trend = recentWinRate > overallWinRate + 5 ? 'improving'
+      : recentWinRate < overallWinRate - 5 ? 'declining'
+      : 'stable';
+
+    const losingStreakThreshold = sb.losingStreakPause || 3;
+    const winningStreakThreshold = sb.winningStreakThreshold || 3;
+    const isLosingStreak = currentStreak <= -losingStreakThreshold;
+    const isWinningStreak = currentStreak >= winningStreakThreshold;
+    const recentLossStreak = recentSignals.reduce((max, s) => {
+      if (s.type === 'loss') return max + 1;
+      return 0;
+    }, 0);
+    const worstRecentLossStreak = recentSignals.reduce((acc, s) => {
+      if (s.type === 'loss') { acc.current++; acc.worst = Math.max(acc.worst, acc.current); }
+      else acc.current = 0;
+      return acc;
+    }, { current: 0, worst: 0 }).worst;
+
+    const perColor = {};
+    for (const sh of signalHistory) {
+      const c = sh.target;
+      if (!perColor[c]) perColor[c] = { wins: 0, losses: 0 };
+      if (sh.type === 'win') perColor[c].wins++;
+      else perColor[c].losses++;
+    }
+    for (const c of Object.keys(perColor)) {
+      const p = perColor[c];
+      p.winRate = (p.wins + p.losses) > 0 ? Math.round((p.wins / (p.wins + p.losses)) * 100) : 0;
+    }
+
+    let decision = 'act';
+    let decisionReason = 'Placar saudavel';
+    let galeAdjustment = 0;
+    let confidenceAdjustment = 0;
+    let pauseMinutes = 0;
+
+    if (isLosingStreak && Math.abs(currentStreak) >= losingStreakThreshold) {
+      decision = 'pause';
+      decisionReason = 'Sequencia de ' + Math.abs(currentStreak) + ' losses - pausa recomendada';
+      pauseMinutes = sb.losingStreakPauseMinutes || 15;
+    } else if (worstRecentLossStreak >= (sb.recentLossStreakPause || 4)) {
+      decision = 'pause';
+      decisionReason = 'Loss streak de ' + worstRecentLossStreak + ' nos ultimos sinais';
+      pauseMinutes = sb.recentLossStreakPauseMinutes || 10;
+    } else if (recentWinRate < (sb.lowWinRateThreshold || 30) && recentTotal >= (sb.lowWinRateMinSignals || 5)) {
+      decision = 'caution';
+      decisionReason = 'Win rate recente baixo (' + recentWinRate + '%) - reduzir gale';
+      galeAdjustment = sb.lowWinRateGaleAdj || -1;
+      confidenceAdjustment = sb.lowWinRateConfidenceAdj || 10;
+    } else if (isWinningStreak && currentStreak >= winningStreakThreshold) {
+      decision = 'act';
+      decisionReason = 'Sequencia de ' + currentStreak + ' wins - momento favoravel';
+      galeAdjustment = sb.winningStreakGaleAdj || 1;
+      confidenceAdjustment = sb.winningStreakConfidenceAdj || -5;
+    } else if (trend === 'declining' && last10Rate < (sb.decliningTrendWinRateThreshold || 40)) {
+      decision = 'caution';
+      decisionReason = 'Tendencia descendente - WIN rate ' + last10Rate + '% nos ultimos 10';
+      confidenceAdjustment = sb.decliningTrendConfidenceAdj || 8;
+    } else if (galeEfficiency < (sb.lowGaleEfficiencyThreshold || 30) && totalDecided >= (sb.lowGaleEfficiencyMinSignals || 10)) {
+      decision = 'caution';
+      decisionReason = 'Eficiencia gale baixa (' + galeEfficiency + '%) - apostar sem gale';
+      galeAdjustment = sb.lowGaleEfficiencyGaleAdj || -1;
+    } else if (recentWinRate >= (sb.improvingTrendWinRateThreshold || 60) && trend === 'improving') {
+      decision = 'act';
+      decisionReason = 'Performance melhorando (' + recentWinRate + '%) - aumentar exposicao';
+      galeAdjustment = sb.improvingTrendGaleAdj || 1;
+    }
+
+    return {
+      overallWinRate,
+      recentWinRate,
+      last30Rate,
+      last10Rate,
+      totalSignals,
+      wins,
+      losses,
+      currentStreak,
+      maxWinStreak,
+      maxLossStreak,
+      winSG,
+      winG1,
+      winG2,
+      galeEfficiency,
+      trend,
+      worstRecentLossStreak,
+      isLosingStreak,
+      isWinningStreak,
+      perColor,
+      decision,
+      decisionReason,
+      galeAdjustment,
+      confidenceAdjustment,
+      pauseMinutes
+    };
+  }
+
   analyzeIntelligentStrategy() {
     if (!this.iaInteligente) return;
     const strategies = RobotEngine.strategies;
@@ -684,6 +813,10 @@ class Robot {
     const history = this.history;
     const minHistory = (typeof IAConfig !== 'undefined') ? IAConfig.settings.minHistoryRequired : 50;
     if (history.length < minHistory) return;
+
+    const scoreboard = this.analyzeScoreboard();
+    this.iaState.scoreboard = scoreboard;
+
     const game = this.game;
     const colorTargets = game === 'wheel'
       ? [{ color: 'GREY', mult: 2 }, { color: 'RED', mult: 3 }, { color: 'BLUE', mult: 5 }, { color: 'GREEN', mult: 50 }]
@@ -770,6 +903,27 @@ class Robot {
           }
           if (typeof IAConfig !== 'undefined') {
             evaluation = IAConfig.applyRules(evaluation, this.getState());
+            evaluation.multiplierScore = Math.round(evaluation.score * (t.mult / 50));
+          }
+          if (scoreboard) {
+            let sbBoost = 0;
+            if (scoreboard.decision === 'pause') {
+              sbBoost -= (sb.pauseScorePenalty || 20);
+            } else if (scoreboard.decision === 'caution') {
+              sbBoost -= (sb.cautionScorePenalty || 10);
+              sbBoost += scoreboard.confidenceAdjustment || 0;
+            } else if (scoreboard.decision === 'act' && scoreboard.isWinningStreak) {
+              sbBoost += (sb.actWinStreakBoost || 5);
+            }
+            if (scoreboard.perColor[t.color]) {
+              const colorWR = scoreboard.perColor[t.color].winRate;
+              if (colorWR >= (sb.goodColorWinRate || 60)) sbBoost += (sb.goodColorBoost || 5);
+              else if (colorWR < (sb.badColorWinRate || 35)) sbBoost -= (sb.badColorPenalty || 5);
+            }
+            if (scoreboard.trend === 'improving') sbBoost += (sb.improvingTrendBoost || 3);
+            else if (scoreboard.trend === 'declining') sbBoost -= (sb.decliningTrendPenalty || 3);
+            evaluation.scoreboardBoost = sbBoost;
+            evaluation.score = Math.max(0, Math.min(100, evaluation.score + sbBoost));
             evaluation.multiplierScore = Math.round(evaluation.score * (t.mult / 50));
           }
           if (!evaluation.ignored) {

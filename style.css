@@ -30,8 +30,9 @@ a:hover{text-decoration:underline}
 .nav{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--bg2);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100}
 .nav-brand{font-size:18px;font-weight:700;color:var(--green);margin-right:24px}
 .nav-links{display:flex;gap:4px;flex-wrap:wrap}
-.nav-links a{padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;color:var(--text2);transition:all .2s}
+.nav-links a{padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;color:var(--text2);transition:all .2s;display:flex;align-items:center;gap:6px}
 .nav-links a:hover,.nav-links a.active{background:var(--bg3);color:var(--text);text-decoration:none}
+.nav-links a .nav-icon{display:none}
 .nav-status{margin-left:auto;display:flex;align-items:center;gap:8px}
 .nav-status .dot{width:8px;height:8px;border-radius:50%;background:var(--green)}
 .nav-status .dot.off{background:var(--red)}
@@ -103,6 +104,12 @@ tr:hover{background:var(--bg3)}
 .form-group input:focus,.form-group select:focus{outline:none;border-color:var(--green)}
 
 /* RESPONSIVE */
+@media(max-width:1100px){
+  .grid-3{grid-template-columns:repeat(2,1fr)}
+  .grid-4{grid-template-columns:repeat(2,1fr)}
+  .grid-5{grid-template-columns:repeat(3,1fr)}
+  .grid-6{grid-template-columns:repeat(3,1fr)}
+}
 @media(max-width:768px){
   .grid-4,.grid-5,.grid-6{grid-template-columns:repeat(2,1fr)}
   .grid-3{grid-template-columns:1fr}
@@ -110,7 +117,7 @@ tr:hover{background:var(--bg3)}
   .nav{flex-wrap:wrap}
   .nav-links a{padding:6px 10px;font-size:12px}
 }
-@media(max-width:480px){
+@media(max-width:420px){
   .grid-4,.grid-5,.grid-6,.grid-3{grid-template-columns:1fr}
   .container{padding:8px}
 }
@@ -123,7 +130,9 @@ tr:hover{background:var(--bg3)}
   .nav::-webkit-scrollbar,.nav-links::-webkit-scrollbar{display:none}
   .nav-brand{font-size:14px;margin-right:2px;line-height:1;flex:0 0 auto}
   .nav-links{flex:1 1 auto;gap:2px;flex-wrap:nowrap;overflow-x:auto;min-width:0}
-  .nav-links a{padding:5px 7px;border-radius:6px;font-size:11px;white-space:nowrap}
+  .nav-links a{padding:6px 8px;border-radius:6px;font-size:11px;white-space:nowrap;justify-content:center;min-width:32px}
+  .nav-links a .nav-text{display:none}
+  .nav-links a .nav-icon{display:flex}
   .nav-status{margin-left:0;gap:4px;flex:0 0 auto}
   .nav-status span{display:none}
   .nav-status a{margin-right:0!important;padding:2px 6px!important;font-size:10px!important}
@@ -167,7 +176,7 @@ tr:hover{background:var(--bg3)}
   .container>.robo-page{gap:6px}
 }
 
-@media(max-width:480px){
+@media(max-width:420px){
   .container{padding:6px}
   .nav{padding:5px 6px}
   .nav-brand{font-size:13px}

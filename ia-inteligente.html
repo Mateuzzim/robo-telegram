@@ -91,12 +91,13 @@
   .ia-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 6px;border-radius:8px;font-size:8px;font-weight:700;background:rgba(233,69,96,.15);color:#e94560}
   @media(max-width:1100px){.ia-page{grid-template-columns:1fr 1fr}.ia-page>div:first-child{grid-column:1/-1}.robot-grid{grid-template-columns:repeat(4,1fr)}}
   @media(max-width:768px){.ia-page{grid-template-columns:1fr;gap:10px}.ia-page>div:first-child{grid-column:1}.settings-grid{grid-template-columns:1fr}.eval-grid{grid-template-columns:1fr 1fr}.code-editor{min-height:120px}.robot-grid{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:420px){.ia-page{gap:8px}.robot-grid{grid-template-columns:1fr}.eval-grid{grid-template-columns:1fr}.settings-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <nav class="nav">
   <span class="nav-brand">ROBOS</span>
-  <div class="nav-links"><a href="index.html">Dashboard</a><a href="monitoramento.html">Monitoramento</a><a href="robos.html">Robos</a><a href="analise.html">Analise</a><a href="ia-inteligente.html" class="active">IA Inteligente</a></div>
+  <div class="nav-links"><a href="index.html"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg></span><span class="nav-text">Dashboard</span></a><a href="monitoramento.html"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></span><span class="nav-text">Monitoramento</span></a><a href="robos.html"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"></rect><circle cx="8.5" cy="16" r="1.5"></circle><circle cx="15.5" cy="16" r="1.5"></circle><path d="M12 11V7"></path><path d="M8 7h8"></path></svg></span><span class="nav-text">Robos</span></a><a href="analise.html"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg></span><span class="nav-text">Analise</span></a><a href="ia-inteligente.html" class="active"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 1 0 0-20z"></path><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg></span><span class="nav-text">IA Inteligente</span></a></div>
   <div class="nav-status"><a href="ws-background.html" target="_blank" style="font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text3);margin-right:8px">BG</a><div class="dot" id="connDot"></div></div>
 </nav>
 
@@ -218,6 +219,73 @@
           <div class="setting-item">
             <label>Boost max</label>
             <input type="number" id="bMax" min="10" max="50" onchange="updateBoost('maxBoost',this.value)">
+          </div>
+        </div>
+      </div>
+
+      <!-- SCOREBOARD -->
+      <div class="ia-panel" style="margin-top:16px">
+        <div class="ia-panel-title">Placar & Decisao</div>
+        <div class="settings-grid">
+          <div class="setting-item">
+            <label>Streak Loss (Pausar)</label>
+            <input type="number" id="sbLosingStreakPause" min="2" max="10" onchange="updateScoreboard('losingStreakPause',this.value)">
+          </div>
+          <div class="setting-item">
+            <label>Pausa Loss Streak (min)</label>
+            <input type="number" id="sbLosingStreakPauseMin" min="1" max="60" onchange="updateScoreboard('losingStreakPauseMinutes',this.value)">
+          </div>
+          <div class="setting-item">
+            <label>Loss Streak Recente</label>
+            <input type="number" id="sbRecentLossStreak" min="2" max="10" onchange="updateScoreboard('recentLossStreakPause',this.value)">
+          </div>
+          <div class="setting-item">
+            <label>Pausa Recente (min)</label>
+            <input type="number" id="sbRecentLossStreakMin" min="1" max="60" onchange="updateScoreboard('recentLossStreakPauseMinutes',this.value)">
+          </div>
+          <div class="setting-item">
+            <label>WR Baixo Threshold</label>
+            <input type="number" id="sbLowWR" min="10" max="50" onchange="updateScoreboard('lowWinRateThreshold',this.value)">
+          </div>
+          <div class="setting-item">
+            <label>Sinais Min (WR Baixo)</label>
+            <input type="number" id="sbLowWRMin" min="1" max="20" onchange="updateScoreboard('lowWinRateMinSignals',this.value)">
+          </div>
+          <div class="setting-item">
+            <label>Streak Win (Agir)</label>
+            <input type="number" id="sbWinStreak" min="2" max="10" onchange="updateScoreboard('winningStreakThreshold',this.value)">
+          </div>
+          <div class="setting-item">
+            <label>WR Descendente</label>
+            <input type="number" id="sbDecliningWR" min="10" max="60" onchange="updateScoreboard('decliningTrendWinRateThreshold',this.value)">
+          </div>
+          <div class="setting-item">
+            <label>Gale Eficiencia Min</label>
+            <input type="number" id="sbLowGale" min="10" max="50" onchange="updateScoreboard('lowGaleEfficiencyThreshold',this.value)">
+          </div>
+          <div class="setting-item">
+            <label>WR Improv. Threshold</label>
+            <input type="number" id="sbImprovingWR" min="40" max="80" onchange="updateScoreboard('improvingTrendWinRateThreshold',this.value)">
+          </div>
+          <div class="setting-item">
+            <label>Penalidade Pause</label>
+            <input type="number" id="sbPausePenalty" min="0" max="50" onchange="updateScoreboard('pauseScorePenalty',this.value)">
+          </div>
+          <div class="setting-item">
+            <label>Penalidade Cautela</label>
+            <input type="number" id="sbCautionPenalty" min="0" max="30" onchange="updateScoreboard('cautionScorePenalty',this.value)">
+          </div>
+          <div class="setting-item">
+            <label>Boost Win Streak</label>
+            <input type="number" id="sbActBoost" min="0" max="20" onchange="updateScoreboard('actWinStreakBoost',this.value)">
+          </div>
+          <div class="setting-item">
+            <label>Cor Boa WR</label>
+            <input type="number" id="sbGoodColor" min="40" max="80" onchange="updateScoreboard('goodColorWinRate',this.value)">
+          </div>
+          <div class="setting-item">
+            <label>Cor Ruim WR</label>
+            <input type="number" id="sbBadColor" min="10" max="50" onchange="updateScoreboard('badColorWinRate',this.value)">
           </div>
         </div>
       </div>
@@ -350,12 +418,13 @@ function init() {
   loadSettings();
   loadPenalty();
   loadBoost();
+  loadScoreboard();
   loadRules();
   loadCode();
   renderRobots();
   startConnection();
   IAConfig.on('decisionLogged', renderLog);
-  IAConfig.on('reset', () => { loadWeights(); loadSettings(); loadPenalty(); loadBoost(); loadRules(); loadCode(); });
+  IAConfig.on('reset', () => { loadWeights(); loadSettings(); loadPenalty(); loadBoost(); loadScoreboard(); loadRules(); loadCode(); });
 }
 
 function startConnection() {
@@ -399,6 +468,9 @@ function selectRobot(id) {
     const savedIA = robot.iaInteligente;
     robot.iaInteligente = true;
     try { robot.analyzeIntelligentStrategy(); } catch(e) { console.error('IA analysis error:', e); }
+    if (!robot.iaState.scoreboard) {
+      try { robot.iaState.scoreboard = robot.analyzeScoreboard(); } catch(e) {}
+    }
     const game = robot.game;
     const colorTargets = game === 'wheel'
       ? [{ color: 'GREY' }, { color: 'RED' }, { color: 'BLUE' }, { color: 'GREEN' }]
@@ -423,7 +495,56 @@ function renderEvaluations() {
   if (!robot) { el.innerHTML = '<div class="no-robot">Robo nao encontrado</div>'; return; }
   const evals = robot.iaState?.evaluations || [];
   const colorAnalyses = robot.iaState?.colorAnalyses || {};
+  const scoreboard = robot.iaState?.scoreboard || null;
   let html = '';
+  if (scoreboard) {
+    const decisionColor = scoreboard.decision === 'act' ? 'var(--green)' : scoreboard.decision === 'pause' ? 'var(--red)' : 'var(--yellow)';
+    const decisionIcon = scoreboard.decision === 'act' ? '&#9654;' : scoreboard.decision === 'pause' ? '&#9724;' : '&#9888;';
+    const trendLabel = scoreboard.trend === 'improving' ? 'MELHORANDO' : scoreboard.trend === 'declining' ? 'PIORANDO' : 'ESTAVEL';
+    const trendColor = scoreboard.trend === 'improving' ? 'var(--green)' : scoreboard.trend === 'declining' ? 'var(--red)' : 'var(--text3)';
+    html += '<div class="section-divider">Placar & Decisao IA</div>';
+    html += `<div style="background:var(--bg);border:1px solid ${decisionColor};border-radius:8px;padding:10px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span style="font-size:18px;color:${decisionColor}">${decisionIcon}</span>
+        <div>
+          <div style="font-size:12px;font-weight:700;color:${decisionColor}">${scoreboard.decision.toUpperCase()}</div>
+          <div style="font-size:9px;color:var(--text3)">${scoreboard.decisionReason}</div>
+        </div>
+        ${scoreboard.pauseMinutes > 0 ? `<div style="margin-left:auto;font-size:10px;color:var(--red);border:1px solid var(--red);border-radius:4px;padding:2px 6px">PAUSAR ${scoreboard.pauseMinutes}min</div>` : ''}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px">
+        <div style="text-align:center">
+          <div style="font-size:16px;font-weight:800;color:${scoreboard.overallWinRate >= 50 ? 'var(--green)' : 'var(--red)'}">${scoreboard.overallWinRate}%</div>
+          <div style="font-size:8px;color:var(--text3)">WIN RATE</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:16px;font-weight:800;color:${scoreboard.recentWinRate >= 50 ? 'var(--green)' : 'var(--red)'}">${scoreboard.recentWinRate}%</div>
+          <div style="font-size:8px;color:var(--text3)">RECENTE</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:16px;font-weight:800;color:var(--blue)">${scoreboard.wins}/${scoreboard.losses}</div>
+          <div style="font-size:8px;color:var(--text3)">W/L</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:16px;font-weight:800;color:${trendColor}">${trendLabel}</div>
+          <div style="font-size:8px;color:var(--text3)">TENDENCIA</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;font-size:9px;color:var(--text3)">
+        <div style="text-align:center">Streak: <strong style="color:${scoreboard.currentStreak > 0 ? 'var(--green)' : scoreboard.currentStreak < 0 ? 'var(--red)' : 'var(--text)'}">${scoreboard.currentStreak > 0 ? '+' : ''}${scoreboard.currentStreak}</strong></div>
+        <div style="text-align:center">Max W: <strong style="color:var(--green)">${scoreboard.maxWinStreak}</strong></div>
+        <div style="text-align:center">Max L: <strong style="color:var(--red)">${scoreboard.maxLossStreak}</strong></div>
+        <div style="text-align:center">Gale Eff: <strong style="color:var(--text)">${scoreboard.galeEfficiency}%</strong></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;font-size:9px;color:var(--text3);margin-top:4px">
+        <div style="text-align:center">SG: <strong style="color:var(--text)">${scoreboard.winSG}</strong></div>
+        <div style="text-align:center">G1: <strong style="color:var(--text)">${scoreboard.winG1}</strong></div>
+        <div style="text-align:center">G2: <strong style="color:var(--text)">${scoreboard.winG2}</strong></div>
+        <div style="text-align:center">Sinais: <strong style="color:var(--text)">${scoreboard.totalSignals}</strong></div>
+      </div>
+      ${Object.keys(scoreboard.perColor).length > 0 ? `<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border);display:flex;gap:6px;flex-wrap:wrap;font-size:9px">${Object.entries(scoreboard.perColor).map(([c, p]) => `<span style="color:var(--text3)">${c}: <strong style="color:${p.winRate >= 50 ? 'var(--green)' : 'var(--red)'}">${p.winRate}%</strong> (${p.wins}W/${p.losses}L)</span>`).join('')}</div>` : ''}
+    </div>`;
+  }
   if (Object.keys(colorAnalyses).length > 0) {
     html += '<div class="section-divider">Analise de Cores</div>';
     html += '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">';
@@ -458,7 +579,7 @@ function renderEvaluations() {
         <div class="ei-label">${e.strategy}</div>
         <div class="ei-value" style="color:${color}">${e.score}</div>
         <div class="ei-bar"><div class="ei-bar-fill" style="width:${e.score}%;background:${color}"></div></div>
-        <div style="font-size:9px;color:var(--text3);margin-top:3px">${e.targetColor} ${e.multiplier}X | WR:${e.winRate}%</div>
+        <div style="font-size:9px;color:var(--text3);margin-top:3px">${e.targetColor} ${e.multiplier}X | WR:${e.winRate}%${e.scoreboardBoost ? ' | SB:' + (e.scoreboardBoost > 0 ? '+' : '') + e.scoreboardBoost : ''}</div>
       </div>`;
     }).join('');
     html += '</div>';
@@ -539,6 +660,31 @@ function loadBoost() {
 
 function updateBoost(key, val) {
   IAConfig.boost[key] = parseInt(val);
+  IAConfig.save();
+}
+
+function loadScoreboard() {
+  const s = IAConfig.scoreboard || {};
+  document.getElementById('sbLosingStreakPause').value = s.losingStreakPause || 3;
+  document.getElementById('sbLosingStreakPauseMin').value = s.losingStreakPauseMinutes || 15;
+  document.getElementById('sbRecentLossStreak').value = s.recentLossStreakPause || 4;
+  document.getElementById('sbRecentLossStreakMin').value = s.recentLossStreakPauseMinutes || 10;
+  document.getElementById('sbLowWR').value = s.lowWinRateThreshold || 30;
+  document.getElementById('sbLowWRMin').value = s.lowWinRateMinSignals || 5;
+  document.getElementById('sbWinStreak').value = s.winningStreakThreshold || 3;
+  document.getElementById('sbDecliningWR').value = s.decliningTrendWinRateThreshold || 40;
+  document.getElementById('sbLowGale').value = s.lowGaleEfficiencyThreshold || 30;
+  document.getElementById('sbImprovingWR').value = s.improvingTrendWinRateThreshold || 60;
+  document.getElementById('sbPausePenalty').value = s.pauseScorePenalty || 20;
+  document.getElementById('sbCautionPenalty').value = s.cautionScorePenalty || 10;
+  document.getElementById('sbActBoost').value = s.actWinStreakBoost || 5;
+  document.getElementById('sbGoodColor').value = s.goodColorWinRate || 60;
+  document.getElementById('sbBadColor').value = s.badColorWinRate || 35;
+}
+
+function updateScoreboard(key, val) {
+  if (!IAConfig.scoreboard) IAConfig.scoreboard = {};
+  IAConfig.scoreboard[key] = parseInt(val);
   IAConfig.save();
 }
 
@@ -688,7 +834,7 @@ function importConfig() {
   }
   if (area.value.trim()) {
     if (IAConfig.importConfig(area.value)) {
-      loadWeights(); loadSettings(); loadPenalty(); loadBoost(); loadRules(); loadCode();
+      loadWeights(); loadSettings(); loadPenalty(); loadBoost(); loadScoreboard(); loadRules(); loadCode();
       alert('Configuracao importada com sucesso!');
       area.style.display = 'none';
     } else {
@@ -700,7 +846,7 @@ function importConfig() {
 function resetAll() {
   if (confirm('Resetar toda a configuracao da IA?')) {
     IAConfig.reset();
-    loadWeights(); loadSettings(); loadPenalty(); loadBoost(); loadRules(); loadCode();
+    loadWeights(); loadSettings(); loadPenalty(); loadBoost(); loadScoreboard(); loadRules(); loadCode();
   }
 }
 
