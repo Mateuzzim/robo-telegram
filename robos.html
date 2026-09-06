@@ -1177,8 +1177,7 @@ async function resetTelegramMessages(id) {
   if (!confirm('Resetar todas as mensagens do Telegram deste robo? Isso vai deletar as mensagens de live, entrada e manutencao do chat.')) return;
   const robot = RobotEngine.getRobot(id);
   if (!robot) { alert('Robo nao encontrado.'); return; }
-  const token = localStorage.getItem('telegram-bot-token') || '';
-  if (!token) { alert('Token do bot nao configurado.'); return; }
+  if (!TelegramService.getToken()) { alert('Token do bot nao configurado.'); return; }
   let deletedCount = 0;
   const prefix = id + ':';
   try {
@@ -1187,6 +1186,7 @@ async function resetTelegramMessages(id) {
       if (key.startsWith(prefix) && msg.messageId) {
         const chatId = key.split(':')[1] || '';
         if (chatId) {
+          const token = TelegramService.getTokenForChat(chatId);
           await fetch('https://api.telegram.org/bot' + token + '/deleteMessage', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1205,6 +1205,7 @@ async function resetTelegramMessages(id) {
       if (key.startsWith(prefix) && msg.messageId) {
         const chatId = msg.chatId || key.split(':')[1] || '';
         if (chatId) {
+          const token = TelegramService.getTokenForChat(chatId);
           await fetch('https://api.telegram.org/bot' + token + '/deleteMessage', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1223,7 +1224,8 @@ async function resetTelegramMessages(id) {
       if (key.startsWith(prefix) && msg.messageId) {
         const chatId = key.split(':')[1] || '';
         if (chatId) {
-          await fetch('https://api.telegram.org/bot' + token + '/deleteMessage', {
+          const mtToken = TelegramService.getTokenForChat(chatId);
+          await fetch('https://api.telegram.org/bot' + mtToken + '/deleteMessage', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ chat_id: chatId, message_id: msg.messageId })
@@ -1247,8 +1249,7 @@ async function resetTelegramMessages(id) {
 }
 async function resetAllTelegramMessages() {
   if (!confirm('Resetar TODAS as mensagens do Telegram de TODOS os robos? Isso vai deletar todas as mensagens de live e entrada do chat.')) return;
-  const token = localStorage.getItem('telegram-bot-token') || '';
-  if (!token) { alert('Token do bot nao configurado.'); return; }
+  if (!TelegramService.getToken()) { alert('Token do bot nao configurado.'); return; }
   let deletedCount = 0;
   const robots = RobotEngine.getAllStates();
   const channels = new Map();
@@ -1264,7 +1265,8 @@ async function resetAllTelegramMessages() {
       if (msg.messageId) {
         const chatId = key.split(':')[1] || '';
         if (chatId) {
-          await fetch('https://api.telegram.org/bot' + token + '/deleteMessage', {
+          const atToken = TelegramService.getTokenForChat(chatId);
+          await fetch('https://api.telegram.org/bot' + atToken + '/deleteMessage', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ chat_id: chatId, message_id: msg.messageId })
@@ -1283,7 +1285,8 @@ async function resetAllTelegramMessages() {
         const parts = key.split(':');
         const chatId = parts[1] || '';
         if (chatId) {
-          await fetch('https://api.telegram.org/bot' + token + '/deleteMessage', {
+          const atToken = TelegramService.getTokenForChat(chatId);
+          await fetch('https://api.telegram.org/bot' + atToken + '/deleteMessage', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ chat_id: chatId, message_id: msg.messageId })
@@ -1304,7 +1307,8 @@ async function resetAllTelegramMessages() {
       if (msg.messageId) {
         const chatId = key.split(':')[1] || '';
         if (chatId) {
-          await fetch('https://api.telegram.org/bot' + token + '/deleteMessage', {
+          const atToken = TelegramService.getTokenForChat(chatId);
+          await fetch('https://api.telegram.org/bot' + atToken + '/deleteMessage', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ chat_id: chatId, message_id: msg.messageId })

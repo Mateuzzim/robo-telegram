@@ -70,12 +70,12 @@ const TelegramService = {
   },
 
   async recalibrateRobot(robot) {
-    const token = this.getToken();
-    if (!token) return;
+    if (!this.getToken()) return;
     const destinations = this.getDestinations(robot);
     for (const dest of destinations) {
       const chatId = dest.channelId;
       if (!chatId) continue;
+      const token = this.getTokenForChat(chatId);
       const prefix = this.entryMessageKey(robot, dest);
       const allEntries = this.getEntryMessages();
       const robotEntries = Object.entries(allEntries)
@@ -98,8 +98,7 @@ const TelegramService = {
   },
 
   async cleanupStaleMessages() {
-    const token = this.getToken();
-    if (!token) return;
+    if (!this.getToken()) return;
     const allRobots = RobotEngine.getAllStates();
     const robotIds = new Set(allRobots.map(r => r.id));
     const liveMessages = this.getLiveMessages();
@@ -110,6 +109,7 @@ const TelegramService = {
       if (!robotIds.has(robotId) && msg.messageId) {
         const chatId = key.split(':')[1] || '';
         if (chatId) {
+          const token = this.getTokenForChat(chatId);
           await this.api(token, 'deleteMessage', { chat_id: chatId, message_id: msg.messageId }).catch(() => {});
         }
         delete liveMessages[key];
@@ -121,6 +121,7 @@ const TelegramService = {
       if (!robotIds.has(robotId) && msg.messageId) {
         const chatId = msg.chatId || '';
         if (chatId) {
+          const token = this.getTokenForChat(chatId);
           await this.api(token, 'deleteMessage', { chat_id: chatId, message_id: msg.messageId }).catch(() => {});
         }
         delete maintenanceMessages[key];
@@ -135,6 +136,27 @@ const TelegramService = {
 
   getToken() {
     return localStorage.getItem(this.tokenKey) || '';
+  },
+
+  getTokenGroup() {
+    return localStorage.getItem('telegram-bot-token-grupos') || '';
+  },
+
+  getChannelType(channelId) {
+    if (!channelId) return 'channel';
+    try {
+      const channels = JSON.parse(localStorage.getItem('telegram-channels') || '[]');
+      const ch = channels.find(c => c.id === channelId);
+      return ch?.type || 'channel';
+    } catch { return 'channel'; }
+  },
+
+  getTokenForChat(channelId) {
+    if (channelId && this.getChannelType(channelId) === 'group') {
+      const groupToken = this.getTokenGroup();
+      if (groupToken) return groupToken;
+    }
+    return this.getToken();
   },
 
   getLiveMessages() {
@@ -565,8 +587,8 @@ const TelegramService = {
   },
 
   async sendOrEditLiveMessage(robot, dest) {
-    const token = this.getToken();
     const chatId = dest?.channelId || '';
+    const token = this.getTokenForChat(chatId);
     const threadId = dest?.threadId ?? null;
     if (!token || !chatId) return false;
 
@@ -657,8 +679,8 @@ const TelegramService = {
   },
 
   async sendLiveNormal(robot, dest) {
-    const token = this.getToken();
     const chatId = dest?.channelId || '';
+    const token = this.getTokenForChat(chatId);
     const threadId = dest?.threadId ?? null;
     if (!token || !chatId) return false;
 
@@ -681,8 +703,8 @@ const TelegramService = {
   },
 
   async sendEntryNormal(robot, signal, dest) {
-    const token = this.getToken();
     const chatId = dest?.channelId || '';
+    const token = this.getTokenForChat(chatId);
     const threadId = dest?.threadId ?? null;
     if (!token || !chatId) return false;
 
@@ -705,8 +727,8 @@ const TelegramService = {
   },
 
   async sendEntryMessage(robot, signal, dest) {
-    const token = this.getToken();
     const chatId = dest?.channelId || '';
+    const token = this.getTokenForChat(chatId);
     const threadId = dest?.threadId ?? null;
     if (!token || !chatId) return false;
 
@@ -820,8 +842,7 @@ const TelegramService = {
   },
 
   async deleteExistingEntryMessages(robot, exactKey) {
-    const token = this.getToken();
-    if (!token || !robot) return true;
+    if (!this.getToken() || !robot) return true;
     const messages = this.getEntryMessages();
     const matching = Object.entries(messages).filter(([key, msg]) => (
       key === exactKey ||
@@ -833,6 +854,7 @@ const TelegramService = {
       const messageId = msg?.messageId || msg?.message_id;
       const chatId = msg?.chatId || this.chatIdFromEntryKey(key, robot) || robot.telegram?.channelId || '';
       if (messageId && chatId) {
+        const token = this.getTokenForChat(chatId);
         const deleted = await this.api(token, 'deleteMessage', {
           chat_id: chatId,
           message_id: messageId
@@ -1455,9 +1477,9 @@ const TelegramService = {
   },
 
   async sendFreshEntryMessage(robot, signal) {
-    const token = this.getToken();
+    if (!this.getToken()) return false;
     const destinations = this.getDestinations(robot);
-    if (!token || destinations.length === 0) return false;
+    if (destinations.length === 0) return false;
     const destResults = [];
     for (const dest of destinations) {
       const key = 'entry:' + this.entryMessageKey(robot, dest);
@@ -1468,8 +1490,8 @@ const TelegramService = {
   },
 
   async _sendFreshEntryMessage(robot, signal, dest) {
-    const token = this.getToken();
     const chatId = dest?.channelId || '';
+    const token = this.getTokenForChat(chatId);
     const threadId = dest?.threadId ?? null;
     if (!token || !chatId) return false;
     const key = this.entryMessageKey(robot, dest);
@@ -1513,8 +1535,8 @@ const TelegramService = {
       }
       return;
     }
-    const token = this.getToken();
     const chatId = dest?.channelId || '';
+    const token = this.getTokenForChat(chatId);
     const threadId = dest?.threadId ?? null;
     if (!token || !chatId) return;
     const key = this.messageKey(robot, dest);
@@ -1620,8 +1642,8 @@ const TelegramService = {
       }
       return;
     }
-    const token = this.getToken();
     const chatId = dest?.channelId || '';
+    const token = this.getTokenForChat(chatId);
     const threadId = dest?.threadId ?? null;
     if (!token || !chatId) return;
     await this.clearAllMessages(robot);
@@ -1680,8 +1702,7 @@ const TelegramService = {
   },
 
   async clearAllMessages(robot) {
-    const token = this.getToken();
-    if (!token || !robot) return;
+    if (!this.getToken() || !robot) return;
     const liveMessages = this.getLiveMessages();
     const entryMessages = this.getEntryMessages();
     const maintenanceMessages = this.getMaintenanceMessages();
@@ -1699,6 +1720,7 @@ const TelegramService = {
     }
     this.saveLiveMessages(liveMessages);
     for (const { chatId, messageId } of liveToDelete) {
+      const token = this.getTokenForChat(chatId);
       await this.api(token, 'deleteMessage', { chat_id: chatId, message_id: messageId }).catch(() => {});
     }
     const entryToDelete = [];
@@ -1713,6 +1735,7 @@ const TelegramService = {
     }
     this.saveEntryMessages(entryMessages);
     for (const { chatId, messageId } of entryToDelete) {
+      const token = this.getTokenForChat(chatId);
       await this.api(token, 'deleteMessage', { chat_id: chatId, message_id: messageId }).catch(() => {});
     }
     const maintToDelete = [];
@@ -1727,6 +1750,7 @@ const TelegramService = {
     }
     this.saveMaintenanceMessages(maintenanceMessages);
     for (const { chatId, messageId } of maintToDelete) {
+      const token = this.getTokenForChat(chatId);
       await this.api(token, 'deleteMessage', { chat_id: chatId, message_id: messageId }).catch(() => {});
     }
     try {

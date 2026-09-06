@@ -74,8 +74,9 @@
 
   <div class="cfg-col">
     <div class="card">
-      <div class="card-header"><span class="card-title">Telegram Bot</span></div>
-      <div class="form-group"><label>Token do Bot</label><input id="tgToken" placeholder="123456:ABC-DEF..." type="password"></div>
+      <div class="card-header"><span class="card-title">Telegram Bot - Canais</span></div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Bot principal para envio de sinais em <b>canais</b></div>
+      <div class="form-group"><label>Token do Bot (Canais)</label><input id="tgToken" placeholder="123456:ABC-DEF..." type="password"></div>
       <div class="form-group"><label>Dono Oficial</label><input id="tgOwner" placeholder="@usuario ou nome"></div>
       <div style="display:flex;gap:8px;align-items:center">
         <button class="btn btn-green btn-sm" onclick="saveToken()">Salvar Telegram</button>
@@ -83,6 +84,17 @@
         <button class="btn btn-ghost btn-sm" onclick="clearTelegramMessages()">Resetar Mensagens</button>
       </div>
       <div id="testResult" class="test-result"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span class="card-title">Telegram Bot - Grupos</span></div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Bot secundario para envio de sinais em <b>grupos</b> (resolve conflito 409 do getUpdates)</div>
+      <div class="form-group"><label>Token do Bot (Grupos)</label><input id="tgTokenGroup" placeholder="987654:ABC-XYZ..." type="password"></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-green btn-sm" onclick="saveTokenGroup()">Salvar Token Grupos</button>
+        <button class="btn btn-ghost btn-sm" onclick="testTokenGroup()">Testar Conexao</button>
+      </div>
+      <div id="testResultGroup" class="test-result"></div>
     </div>
 
     <div class="card">
@@ -137,6 +149,7 @@
         <div style="display:flex;gap:8px">
           <input id="chName" placeholder="Nome (ex: Sinais VIP)" style="flex:1;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
           <input id="chId" placeholder="Chat ID (-100...)" style="flex:1;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
+          <select id="chType" style="padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;min-width:100px"><option value="channel">Canal</option><option value="group">Grupo</option></select>
           <button class="btn btn-green btn-sm" id="channelFormBtn" onclick="addChannel()">Add</button>
           <button class="btn btn-ghost btn-sm" onclick="hideAddChannel()">Cancelar</button>
         </div>
@@ -191,13 +204,26 @@
 App.init();
 
 const TOKEN_KEY = 'telegram-bot-token';
+const TOKEN_GROUP_KEY = 'telegram-bot-token-grupos';
 const CHANNELS_KEY = 'telegram-channels';
 const OWNER_KEY = 'telegram-owner-name';
 
 function getToken() { return localStorage.getItem(TOKEN_KEY) || ''; }
+function getTokenGroup() { return localStorage.getItem(TOKEN_GROUP_KEY) || ''; }
 function getOwner() { return localStorage.getItem(OWNER_KEY) || ''; }
 function getChannels() { try { return JSON.parse(localStorage.getItem(CHANNELS_KEY) || '[]'); } catch { return []; } }
 function saveChannels(ch) { localStorage.setItem(CHANNELS_KEY, JSON.stringify(ch)); }
+
+function getChannelToken(channelId) {
+  if (!channelId) return getToken();
+  const channels = getChannels();
+  const ch = channels.find(c => c.id === channelId);
+  if (ch?.type === 'group') {
+    const gt = getTokenGroup();
+    if (gt) return gt;
+  }
+  return getToken();
+}
 
 function getPendingRobotLinks() {
   const pending = {};
@@ -219,6 +245,7 @@ function getPendingRobotLinks() {
 document.getElementById('cfgWheel').value = CONFIG.wheel.wsUrl;
 document.getElementById('cfgDouble').value = CONFIG.double.wsUrl;
 document.getElementById('tgToken').value = getToken();
+document.getElementById('tgTokenGroup').value = getTokenGroup();
 document.getElementById('tgOwner').value = getOwner();
 
 function saveWsConfig() {
@@ -268,15 +295,42 @@ async function testToken() {
   }
 }
 
+function saveTokenGroup() {
+  const t = document.getElementById('tgTokenGroup').value.trim();
+  localStorage.setItem(TOKEN_GROUP_KEY, t);
+  alert('Token de Grupos salvo.');
+}
+
+async function testTokenGroup() {
+  const token = getTokenGroup();
+  const el = document.getElementById('testResultGroup');
+  if (!token) { el.className = 'test-result test-err'; el.textContent = 'Salve o token de grupos primeiro.'; return; }
+  try {
+    const r = await fetch('https://api.telegram.org/bot' + token + '/getMe');
+    const d = await r.json();
+    if (d.ok) {
+      el.className = 'test-result test-ok';
+      el.textContent = 'Conectado: @' + d.result.username + ' (' + d.result.first_name + ')';
+    } else {
+      el.className = 'test-result test-err';
+      el.textContent = 'Erro: ' + (d.description || 'Token invalido');
+    }
+  } catch (e) {
+    el.className = 'test-result test-err';
+    el.textContent = 'Falha na conexao: ' + e.message;
+  }
+}
+
 let editingChannelId = null;
 
 function showAddChannel() {
   editingChannelId = null;
-  document.getElementById('channelFormTitle').textContent = 'Adicionar Canal';
+  document.getElementById('channelFormTitle').textContent = 'Adicionar Canal/Grupo';
   document.getElementById('channelFormBtn').textContent = 'Add';
   document.getElementById('channelFormBtn').onclick = addChannel;
   document.getElementById('chName').value = '';
   document.getElementById('chId').value = '';
+  document.getElementById('chType').value = 'channel';
   document.getElementById('addChannelForm').style.display = 'block';
 }
 
@@ -292,21 +346,23 @@ function showEditChannel(id) {
   const ch = channels.find(c => c.id === id);
   if (!ch) return;
   editingChannelId = id;
-  document.getElementById('channelFormTitle').textContent = 'Editar Canal';
+  document.getElementById('channelFormTitle').textContent = 'Editar Canal/Grupo';
   document.getElementById('channelFormBtn').textContent = 'Salvar';
   document.getElementById('channelFormBtn').onclick = updateChannel;
   document.getElementById('chName').value = ch.name;
   document.getElementById('chId').value = ch.id;
+  document.getElementById('chType').value = ch.type || 'channel';
   document.getElementById('addChannelForm').style.display = 'block';
 }
 
 function addChannel() {
   const name = document.getElementById('chName').value.trim();
   const id = document.getElementById('chId').value.trim();
+  const type = document.getElementById('chType').value;
   if (!name || !id) { alert('Preencha nome e Chat ID.'); return; }
   const channels = getChannels();
   if (channels.find(c => c.id === id)) { alert('Este Chat ID ja existe.'); return; }
-  channels.push({ name, id });
+  channels.push({ name, id, type: type || 'channel' });
   saveChannels(channels);
   hideAddChannel();
   renderChannels();
@@ -318,12 +374,13 @@ function updateChannel() {
   if (!editingChannelId) return;
   const name = document.getElementById('chName').value.trim();
   const id = document.getElementById('chId').value.trim();
+  const type = document.getElementById('chType').value;
   if (!name || !id) { alert('Preencha nome e Chat ID.'); return; }
   const channels = getChannels();
   if (id !== editingChannelId && channels.find(c => c.id === id)) { alert('Este Chat ID ja existe.'); return; }
   const idx = channels.findIndex(c => c.id === editingChannelId);
   if (idx === -1) return;
-  channels[idx] = { name, id };
+  channels[idx] = { name, id, type: type || channels[idx].type || 'channel' };
   saveChannels(channels);
   hideAddChannel();
   renderChannels();
@@ -381,9 +438,34 @@ function removeTopic(channelId, threadId) {
   renderRobotLinks();
 }
 
+async function testChannelConnection(channelId) {
+  const btn = document.getElementById('testBtn_' + channelId);
+  const token = getChannelToken(channelId);
+  if (!token) { alert('Configure o token do bot para este tipo de canal/grupo.'); return; }
+  if (btn) { btn.textContent = '...'; btn.disabled = true; }
+  try {
+    const msg = '✅ Teste de conexao - ' + new Date().toLocaleTimeString('pt-BR');
+    const r = await fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: channelId, text: msg, disable_web_page_preview: true })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      alert('Mensagem enviada com sucesso para ' + channelId);
+    } else {
+      alert('Erro: ' + (d.description || 'Falha ao enviar'));
+    }
+  } catch (e) {
+    alert('Falha na conexao: ' + e.message);
+  } finally {
+    if (btn) { btn.textContent = 'Testar'; btn.disabled = false; }
+  }
+}
+
 async function createTopicFromBot(channelId) {
-  const token = getToken();
-  if (!token) { alert('Configure o token do bot primeiro.'); return; }
+  const token = getChannelToken(channelId);
+  if (!token) { alert('Configure o token do bot para este tipo de canal/grupo.'); return; }
   const name = prompt('Nome do novo topico:');
   if (!name || !name.trim()) return;
   try {
@@ -405,7 +487,11 @@ async function createTopicFromBot(channelId) {
       renderRobotLinks();
       alert('Topico criado: ' + name.trim() + ' (ID: ' + threadId + ')');
     } else {
-      alert('Erro: ' + (d.description || 'Falha ao criar topico'));
+      let hint = '';
+      if (d.error_code === 400) {
+        hint = '\n\nEste grupo nao suporta topicos. Certifique-se de que:\n1. E um supergrupo\n2. Topicos estao habilitados nas configuracoes do grupo';
+      }
+      alert('Erro: ' + (d.description || 'Falha ao criar topico') + hint);
     }
   } catch (e) {
     alert('Falha: ' + e.message);
@@ -413,12 +499,19 @@ async function createTopicFromBot(channelId) {
 }
 
 async function detectTopicsFromBot(channelId) {
-  const token = getToken();
-  if (!token) { alert('Configure o token do bot primeiro.'); return; }
+  const token = getChannelToken(channelId);
+  if (!token) { alert('Configure o token do bot para este tipo de canal/grupo.'); return; }
   try {
-    const r = await fetch('https://api.telegram.org/bot' + token + '/getUpdates?offset=-1000');
+    const r = await fetch('https://api.telegram.org/bot' + token + '/getUpdates?offset=-1000&timeout=0');
     const d = await r.json();
-    if (!d.ok) { alert('Erro ao buscar updates.'); return; }
+    if (!d.ok) {
+      if (r.status === 409) {
+        alert('Conflito: outro processo ja esta usando getUpdates com este bot. Feche outros aplicativos/abas que usem este bot e tente novamente.');
+      } else {
+        alert('Erro ao buscar updates: ' + (d.description || 'Status ' + r.status));
+      }
+      return;
+    }
     const topics = getChannelTopics(channelId);
     let found = 0;
     const seen = new Set();
@@ -488,11 +581,13 @@ function renderChannels() {
       <div style="display:flex;align-items:center;justify-content:space-between">
         <div>
           <span>${escapeHtml(c.name)}</span>
+          ${c.type === 'group' ? '<span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;background:rgba(249,115,22,.15);color:var(--orange,#f97316);margin-left:6px">GRUPO</span>' : '<span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;background:rgba(35,104,255,.15);color:var(--blue);margin-left:6px">CANAL</span>'}
           <div class="ch-id">${channelId}</div>
           ${usedBy}
           ${lastSend}
         </div>
         <div style="display:flex;gap:6px">
+          <button class="btn btn-sm btn-blue" onclick="testChannelConnection('${channelIdJs}')" id="testBtn_${channelId}" style="font-size:9px;padding:2px 6px">Testar</button>
           <button class="btn btn-sm btn-ghost" onclick="showEditChannel('${channelIdJs}')">Editar</button>
           <button class="btn btn-sm btn-ghost" onclick="removeChannel('${channelIdJs}')">Remover</button>
         </div>
@@ -731,12 +826,15 @@ function renderStatus() {
   const online = robots.filter(r => r.status === 'online').length;
   const withTg = robots.filter(r => r.telegram?.enabled).length;
   const token = getToken();
+  const tokenGroup = getTokenGroup();
   const wheelStatus = Store.get('source-status-wheel', {});
   const doubleStatus = Store.get('source-status-double', {});
+  const groupChannels = getChannels().filter(c => c.type === 'group').length;
   document.getElementById('statusInfo').innerHTML = `
     <div>Robos: <strong>${robots.length}</strong> (${online} online)</div>
-    <div>Telegram: <strong style="color:${token ? 'var(--green)' : 'var(--red)'}">${token ? 'Configurado' : 'Sem token'}</strong></div>
-    <div>Canais: <strong>${getChannels().length}</strong></div>
+    <div>Telegram Canais: <strong style="color:${token ? 'var(--green)' : 'var(--red)'}">${token ? 'Configurado' : 'Sem token'}</strong></div>
+    <div>Telegram Grupos: <strong style="color:${tokenGroup ? 'var(--green)' : 'var(--text3)'}">${tokenGroup ? 'Configurado' : 'Nao configurado'}</strong></div>
+    <div>Canais/Grupos: <strong>${getChannels().length}</strong> (${groupChannels} grupos)</div>
     <div>Robos com Telegram: <strong>${withTg}</strong></div>
     <div>Fonte Wheel: <strong style="color:${wheelStatus.connected ? 'var(--green)' : 'var(--red)'}">${wheelStatus.connected ? 'Online' : 'Offline'}</strong></div>
     <div>Fonte Double: <strong style="color:${doubleStatus.connected ? 'var(--green)' : 'var(--red)'}">${doubleStatus.connected ? 'Online' : 'Offline'}</strong></div>`;

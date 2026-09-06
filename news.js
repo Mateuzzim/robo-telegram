@@ -154,8 +154,8 @@ const NewsService = (() => {
 
   async function sendToTelegram(text) {
     const config = getSummaryConfig();
-    const token = TelegramService.getToken();
     const chatId = config.channelId;
+    const token = TelegramService.getTokenForChat(chatId);
     if (!token || !chatId) return;
     const result = await TelegramService.api(token, 'sendMessage', {
       chat_id: chatId,
@@ -1091,8 +1091,8 @@ const NewsService = (() => {
 
   async function sendSummary() {
     const config = getSummaryConfig();
-    const token = TelegramService.getToken();
     const chatId = config.channelId;
+    const token = TelegramService.getTokenForChat(chatId);
     if (!token || !chatId) return;
 
     const robots = RobotEngine.getAllRobots();

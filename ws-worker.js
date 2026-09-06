@@ -825,6 +825,15 @@ const CE={red:"🔴",black:"⚫",green:"🟢"};
 const CL={red:"VERMELHO",black:"PRETO",green:"VERDE"};
 
 function robotGetToken(){return localStorage.getItem(ROBOT_TOKEN_KEY)||"";}
+function robotGetTokenGroup(){return localStorage.getItem("telegram-bot-token-grupos")||"";}
+function robotGetChannelType(channelId){
+  if(!channelId)return"channel";
+  try{var ch=JSON.parse(localStorage.getItem(ROBOT_CHANNELS_KEY)||"[]").find(c=>c.id===channelId);return(ch&&ch.type)||"channel";}catch{return"channel";}
+}
+function robotGetTokenForChat(channelId){
+  if(channelId&&robotGetChannelType(channelId)==="group"){var gt=robotGetTokenGroup();if(gt)return gt;}
+  return robotGetToken();
+}
 function robotGetChannels(){try{return JSON.parse(localStorage.getItem(ROBOT_CHANNELS_KEY)||"[]");}catch{return[];}}
 function robotGetData(id){try{return JSON.parse(localStorage.getItem(ROBOT_STORAGE_PREFIX+id)||"null");}catch{return null;}}
 function robotSaveData(id,data){try{localStorage.setItem(ROBOT_STORAGE_PREFIX+id,JSON.stringify(data));}catch{}try{localStorage.setItem(ROBOT_STORAGE_PREFIX+id+"-version",Date.now()+"");}catch{}}
@@ -897,7 +906,7 @@ function robotLiveEmojis(history){
 }
 
 function robotSendTelegram(channelId, text){
-  const token=robotGetToken();
+  const token=robotGetTokenForChat(channelId);
   if(!token||!channelId)return Promise.resolve(false);
   return fetch("https://api.telegram.org/bot"+token+"/sendMessage",{
     method:"POST",

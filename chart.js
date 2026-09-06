@@ -282,7 +282,8 @@ const ChartService = (() => {
       return;
     }
 
-    const token = TelegramService.getToken();
+    const chatId = config.channelId;
+    const token = TelegramService.getTokenForChat(chatId);
     if (!token) {
       console.warn('[ChartService] Sem token do Telegram');
       return;

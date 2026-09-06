@@ -659,8 +659,8 @@ function renderConnectionStatus() {
 async function testTelegramChannel() {
   const resultEl = document.getElementById('testTgResult');
   const btn = document.getElementById('btnTestTg');
-  const token = localStorage.getItem('telegram-bot-token') || '';
   const chatId = document.getElementById('tgChannel')?.value || '';
+  const token = TelegramService.getTokenForChat(chatId) || localStorage.getItem('telegram-bot-token') || '';
   if (!token) { resultEl.innerHTML = '<span style="color:var(--red)">Token nao configurado</span>'; return; }
   if (!chatId) { resultEl.innerHTML = '<span style="color:var(--red)">Selecione um canal</span>'; return; }
   btn.disabled = true;
@@ -819,7 +819,6 @@ async function deleteStoredTelegramMessage(token, chatId, messageId) {
 }
 
 async function resetRobotTelegramMessages(robot) {
-  const token = localStorage.getItem('telegram-bot-token') || '';
   const stores = ['telegram-live-messages-v1', 'telegram-entry-messages-v1'];
   for (const storeKey of stores) {
     const messages = readStoredObject(storeKey);
@@ -829,6 +828,7 @@ async function resetRobotTelegramMessages(robot) {
       const messageId = msg?.messageId || msg?.message_id;
       const chatId = msg?.chatId || (() => { try { const parts = key.split(':'); return parts[1] || robot.telegram?.channelId || ''; } catch { return robot.telegram?.channelId || ''; } })();
       if (messageId && chatId) {
+        const token = TelegramService.getTokenForChat(chatId);
         await deleteStoredTelegramMessage(token, chatId, messageId);
       }
       delete messages[key];

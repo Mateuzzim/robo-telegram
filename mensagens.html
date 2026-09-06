@@ -472,7 +472,7 @@ async function sendTestMessage() {
   const robotId = document.getElementById('testRobot').value;
   const channelId = document.getElementById('testChannel').value;
   const type = document.getElementById('testType').value;
-  const token = localStorage.getItem('telegram-bot-token') || '';
+  const token = TelegramService.getTokenForChat(channelId) || localStorage.getItem('telegram-bot-token') || '';
   const el = document.getElementById('testResult');
 
   if (!token) { el.innerHTML = '<span style="color:var(--red)">Configure o token do bot primeiro.</span>'; return; }

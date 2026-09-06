@@ -27,12 +27,33 @@ const AnaliseTelegramService = (() => {
     return token;
   }
 
+  function getTokenGroup() {
+    return localStorage.getItem('telegram-bot-token-grupos') || '';
+  }
+
+  function getChannelType(channelId) {
+    if (!channelId) return 'channel';
+    try {
+      const channels = JSON.parse(localStorage.getItem('telegram-channels') || '[]');
+      const ch = channels.find(c => c.id === channelId);
+      return ch?.type || 'channel';
+    } catch { return 'channel'; }
+  }
+
+  function getTokenForChat(channelId) {
+    if (channelId && getChannelType(channelId) === 'group') {
+      const gt = getTokenGroup();
+      if (gt) return gt;
+    }
+    return getToken();
+  }
+
   function setToken(t) {
     token = t;
   }
 
-  async function apiCall(method, body) {
-    const tk = getToken();
+  async function apiCall(method, body, chatId) {
+    const tk = chatId ? getTokenForChat(chatId) : getToken();
     if (!tk) return { ok: false, description: 'Token não configurado' };
     try {
       const resp = await fetch(`${API_BASE}/bot${tk}/${method}`, {
@@ -52,7 +73,7 @@ const AnaliseTelegramService = (() => {
       text,
       parse_mode: 'HTML',
       disable_web_page_preview: true
-    });
+    }, chatId);
   }
 
   async function editMessage(chatId, messageId, text) {
@@ -62,14 +83,14 @@ const AnaliseTelegramService = (() => {
       text,
       parse_mode: 'HTML',
       disable_web_page_preview: true
-    });
+    }, chatId);
   }
 
   async function deleteMessage(chatId, messageId) {
     return apiCall('deleteMessage', {
       chat_id: chatId,
       message_id: messageId
-    });
+    }, chatId);
   }
 
   function formatarRelatorio(relatorio, analises, cfg, analiseOrder) {

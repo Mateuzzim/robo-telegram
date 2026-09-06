@@ -497,7 +497,7 @@ async function testSummaryChannel() {
   document.getElementById('summaryStatus').textContent = 'Testando...';
   document.getElementById('summaryStatus').style.color = 'var(--yellow)';
   try {
-    const token = localStorage.getItem('telegram-bot-token') || '';
+    const token = TelegramService.getTokenForChat(channelId) || localStorage.getItem('telegram-bot-token') || '';
     if (!token) {
       document.getElementById('summaryStatus').textContent = 'Token não configurado';
       document.getElementById('summaryStatus').style.color = 'var(--red)';
@@ -578,7 +578,7 @@ async function testAnalysisChannel() {
   document.getElementById('analysisStatus').textContent = 'Testando...';
   document.getElementById('analysisStatus').style.color = 'var(--yellow)';
   try {
-    const token = localStorage.getItem('telegram-bot-token') || '';
+    const token = TelegramService.getTokenForChat(channelId) || localStorage.getItem('telegram-bot-token') || '';
     if (!token) {
       document.getElementById('analysisStatus').textContent = 'Token não configurado';
       document.getElementById('analysisStatus').style.color = 'var(--red)';
@@ -657,7 +657,7 @@ async function testChartChannel() {
   document.getElementById('chartStatus').textContent = 'Testando...';
   document.getElementById('chartStatus').style.color = 'var(--yellow)';
   try {
-    const token = localStorage.getItem('telegram-bot-token') || '';
+    const token = TelegramService.getTokenForChat(channelId) || localStorage.getItem('telegram-bot-token') || '';
     if (!token) {
       document.getElementById('chartStatus').textContent = 'Token não configurado';
       document.getElementById('chartStatus').style.color = 'var(--red)';
