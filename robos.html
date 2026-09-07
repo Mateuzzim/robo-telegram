@@ -275,7 +275,8 @@
         <input type="checkbox" id="fTgEnabled"> Enviar sinais para Telegram
       </label>
       <div id="destList" style="margin-bottom:10px"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end">
+      <div style="display:grid;grid-template-columns:80px 1fr 1fr auto;gap:8px;align-items:end">
+        <div class="form-group"><label>Tipo</label><select id="fTgDestType" onchange="populateTgChannelSelect()"><option value="">Todos</option><option value="channel">Canal</option><option value="group">Grupo</option></select></div>
         <div class="form-group"><label>Canal/Grupo</label><select id="fTgChannel" onchange="updateDestTopicOptions()"><option value="">Selecionar...</option></select></div>
         <div class="form-group"><label>Topico</label><select id="fTgTopic"><option value="">Sem topico</option></select></div>
         <button class="btn btn-sm btn-blue" onclick="addDestination()" style="height:34px;margin-bottom:1px">+ Add</button>
@@ -349,6 +350,19 @@ function updateDestTopicOptions() {
   topicSel.innerHTML = '<option value="">Sem topico</option>' +
     topics.map(t => '<option value="' + t.threadId + '">' + t.name + ' (#' + t.threadId + ')</option>').join('');
 }
+function populateTgChannelSelect() {
+  const typeFilter = document.getElementById('fTgDestType').value;
+  const channels = getChannels();
+  const filtered = typeFilter ? channels.filter(c => c.type === typeFilter) : channels;
+  const sel = document.getElementById('fTgChannel');
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">Selecionar...</option>' + filtered.map(c => {
+    const icon = c.type === 'group' ? '👥' : '📢';
+    return '<option value="' + c.id + '">' + icon + ' ' + escapeHtml(c.name) + '</option>';
+  }).join('');
+  if (filtered.find(c => c.id === prev)) sel.value = prev;
+  updateDestTopicOptions();
+}
 let pendingDestinations = [];
 function addDestination() {
   const channelId = document.getElementById('fTgChannel').value;
@@ -372,8 +386,9 @@ function renderDestinations() {
     const chName = ch?.name || d.channelId;
     const topic = (ch?.topics || []).find(t => t.threadId === d.threadId);
     const topicLabel = topic ? ' > ' + topic.name : (d.threadId ? ' > #' + d.threadId : ' (geral)');
+    const chType = ch?.type === 'group' ? '👥' : '📢';
     return '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;margin-bottom:4px;font-size:12px">' +
-      '<span style="flex:1">📢 ' + chName + topicLabel + '</span>' +
+      '<span style="flex:1">' + chType + ' ' + chName + topicLabel + '</span>' +
       '<button class="btn btn-sm btn-ghost" onclick="removeDestination(' + i + ')" style="font-size:10px;padding:2px 6px;color:var(--red)">X</button></div>';
   }).join('');
 }
@@ -487,9 +502,8 @@ function showCreate(){
   document.getElementById('fTgMsgType').value = 'both';
   setSelectedStrategies([]);
   setSelectedFilters([]);
-  const channels = getChannels();
-  const sel = document.getElementById('fTgChannel');
-  sel.innerHTML = '<option value="">Selecionar...</option>' + channels.map(c => `<option value="${c.id}">${escapeHtml(c.name)} (${c.id})</option>`).join('');
+  document.getElementById('fTgDestType').value = '';
+  populateTgChannelSelect();
   document.getElementById('fTgTopic').innerHTML = '<option value="">Sem topico</option>';
   pendingDestinations = [];
   renderDestinations();
@@ -518,9 +532,8 @@ function showEdit(id){
   if (strategies.includes('padroesCores')) {
     document.getElementById('fPatternSize').value = robot.patternSize || 3;
   }
-  const channels = getChannels();
-  const sel = document.getElementById('fTgChannel');
-  sel.innerHTML = '<option value="">Selecionar...</option>' + channels.map(c => `<option value="${c.id}">${escapeHtml(c.name)} (${c.id})</option>`).join('');
+  document.getElementById('fTgDestType').value = '';
+  populateTgChannelSelect();
   const tg = robot.telegram || {};
   document.getElementById('fTgEnabled').checked = !!tg.enabled;
   document.getElementById('fTgMsgType').value = tg.msgType || 'both';
