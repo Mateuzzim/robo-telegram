@@ -1761,5 +1761,60 @@ const TelegramService = {
       }
       if (changed) localStorage.setItem(this.entryEventStoreKey, JSON.stringify(events));
     } catch {}
+  },
+
+  buildScheduleMessage(robot, schedule, action) {
+    const gameLabel = robot.game === 'wheel' ? 'Wheel' : 'Double';
+    const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
+    const daysLabel = (schedule.days || []).sort().map(d => dayNames[d]).join(', ');
+    const repeatLabel = schedule.repeatInterval > 0 ? 'A cada ' + schedule.repeatInterval + ' horas' : 'Horario fixo';
+    const maxEntries = schedule.maxEntries > 0 ? schedule.maxEntries : 'Ilimitado';
+    const actionEmoji = action === 'activate' ? '✅' : '⛔';
+    const actionText = action === 'activate' ? 'ATIVADO' : 'DESATIVADO';
+    const now = new Date();
+    const timeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+
+    return [
+      '━━ 🚨 <b>AGENDAMENTO ' + actionText + '</b> 🚨 ━━',
+      '🤖 <b>ROBO:</b> ' + robot.name,
+      '🔰 <b>Jogo:</b> ' + gameLabel,
+      '',
+      '⏰ <b>HORARIO CONFIGURADO</b>',
+      '🕐 <b>Inicio:</b> ' + schedule.startTime + ' → 🕐 <b>Fim:</b> ' + schedule.endTime,
+      '🔄 <b>Repetir:</b> ' + repeatLabel,
+      '',
+      '📅 <b>Dias:</b> ' + daysLabel,
+      '📊 <b>Max Entradas:</b> ' + maxEntries,
+      '',
+      '━━━━━━━━━━━━━━━━━━━━',
+      actionEmoji + ' <b>STATUS:</b> ' + actionText,
+      '🕕 <b>Alterado em:</b> ' + timeStr,
+      '━━━━━━━━━━━━━━━━━━━━'
+    ].join('\n');
+  },
+
+  async sendScheduleNotification(robot, schedule, action) {
+    if (!this.getToken()) return;
+    let destinations = [];
+    if (schedule.destinations && schedule.destinations.length > 0) {
+      destinations = schedule.destinations.filter(d => d.channelId);
+    } else {
+      destinations = this.getDestinations(robot);
+    }
+    if (!destinations.length) return;
+    const text = this.buildScheduleMessage(robot, schedule, action);
+    for (const dest of destinations) {
+      const chatId = dest.channelId;
+      if (!chatId) continue;
+      const token = this.getTokenForChat(chatId);
+      const payload = {
+        chat_id: chatId,
+        text: this.prepareTelegramText(text),
+        parse_mode: 'HTML',
+        disable_web_page_preview: true
+      };
+      if (dest.threadId) payload.message_thread_id = dest.threadId;
+      await this.api(token, 'sendMessage', payload).catch(() => {});
+    }
   }
 };

@@ -21,11 +21,13 @@
 <script src="analise-telegram.js"></script>
 <script src="news.js"></script>
 <script src="chart.js"></script>
+<script src="scheduler.js"></script>
 <script src="app.js"></script>
 <script>
 App.init();
 NewsService.init();
 ChartService.init();
+Scheduler.init();
 
 (function migrateWheelGreyToBlack() {
   const key = 'historico-wheel-v1';
