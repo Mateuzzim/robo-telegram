@@ -126,7 +126,7 @@
 
     <div class="form-group">
       <label>Repetir a cada</label>
-      <select id="fRepeatInterval" onchange="toggleTimeFields()">
+      <select id="fRepeatInterval">
         <option value="0">Sem repeticao (horario fixo)</option>
         <option value="1">A cada 1 hora</option>
         <option value="2">A cada 2 horas</option>
@@ -138,22 +138,6 @@
         <option value="12">A cada 12 horas</option>
       </select>
       <div style="font-size:10px;color:var(--text3);margin-top:4px">O robo trabalha X horas, para, e repete o ciclo</div>
-    </div>
-
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-      <label style="font-size:12px;font-weight:600;color:var(--text3)">Horarios</label>
-      <button type="button" class="btn btn-sm" id="fTimeToggle" onclick="toggleTimeEnabled()" style="min-width:60px;font-size:11px;padding:4px 12px;background:var(--bg3);border:1px solid var(--border);color:var(--text3)">OFF</button>
-    </div>
-
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px" id="timeFieldsGroup">
-      <div class="form-group">
-        <label>Horario Inicio</label>
-        <input type="time" id="fStartTime" value="08:00" disabled style="opacity:0.4">
-      </div>
-      <div class="form-group">
-        <label>Horario Fim</label>
-        <input type="time" id="fEndTime" value="22:00" disabled style="opacity:0.4">
-      </div>
     </div>
 
     <div class="form-group">
@@ -191,7 +175,7 @@
 
     <div class="form-group">
       <label>
-        <input type="checkbox" id="fEnabled"> Ativar agendamento
+        <input type="checkbox" id="fEnabled" autocomplete="off"> Ativar agendamento
       </label>
       <div style="font-size:10px;color:var(--text3);margin-top:2px">Deixe desmarcado para salvar desabilitado</div>
     </div>
@@ -330,60 +314,7 @@ function toggleDay(el) {
   el.classList.toggle('active');
 }
 
-let _timeEnabled = false;
 
-function toggleTimeEnabled() {
-  _timeEnabled = !_timeEnabled;
-  const btn = document.getElementById('fTimeToggle');
-  const startTime = document.getElementById('fStartTime');
-  const endTime = document.getElementById('fEndTime');
-  if (_timeEnabled) {
-    btn.textContent = 'ON';
-    btn.className = 'btn btn-sm btn-green';
-    btn.style.minWidth = '60px';
-    btn.style.fontSize = '11px';
-    btn.style.padding = '4px 12px';
-    startTime.disabled = false;
-    startTime.style.opacity = '1';
-    endTime.disabled = false;
-    endTime.style.opacity = '1';
-  } else {
-    btn.textContent = 'OFF';
-    btn.className = 'btn btn-sm';
-    btn.style.minWidth = '60px';
-    btn.style.fontSize = '11px';
-    btn.style.padding = '4px 12px';
-    btn.style.background = 'var(--bg3)';
-    btn.style.border = '1px solid var(--border)';
-    btn.style.color = 'var(--text3)';
-    startTime.disabled = true;
-    startTime.style.opacity = '0.4';
-    endTime.disabled = true;
-    endTime.style.opacity = '0.4';
-  }
-}
-
-function toggleTimeFields() {
-  const repeat = parseInt(document.getElementById('fRepeatInterval').value) || 0;
-  const startTime = document.getElementById('fStartTime');
-  const endTime = document.getElementById('fEndTime');
-  if (repeat > 0) {
-    _timeEnabled = false;
-    startTime.disabled = true;
-    startTime.style.opacity = '0.4';
-    endTime.disabled = true;
-    endTime.style.opacity = '0.4';
-    const btn = document.getElementById('fTimeToggle');
-    btn.textContent = 'OFF';
-    btn.className = 'btn btn-sm';
-    btn.style.minWidth = '60px';
-    btn.style.fontSize = '11px';
-    btn.style.padding = '4px 12px';
-    btn.style.background = 'var(--bg3)';
-    btn.style.border = '1px solid var(--border)';
-    btn.style.color = 'var(--text3)';
-  }
-}
 
 function getSelectedDays() {
   return Array.from(document.querySelectorAll('#fDays .day-chip.active')).map(c => parseInt(c.dataset.day));
@@ -507,7 +438,6 @@ function buildPreviewMsg(s) {
     return '<b>AGENDAMENTO</b>\n' +
       '<b>Robo:</b> ' + escapeHtml(name) + '\n' +
       '<b>Jogo:</b> ' + gameLabel + '\n' +
-      '<b>Inicio:</b> ' + s.startTime + ' / <b>Fim:</b> ' + s.endTime + '\n' +
       '<b>Repetir:</b> ' + repeatLabel + '\n' +
       '<b>Dias:</b> ' + escapeHtml(days) + '\n' +
       '<b>Max:</b> ' + maxE + '\n' +
@@ -563,9 +493,6 @@ function renderSchedules() {
         '</div>' +
       '</div>' +
       '<div class="schedule-times">' +
-        '<div class="time-badge"><span class="tb-label">INICIO</span><span class="tb-value">' + s.startTime + '</span></div>' +
-        '<span class="time-arrow">→</span>' +
-        '<div class="time-badge"><span class="tb-label">FIM</span><span class="tb-value">' + s.endTime + '</span></div>' +
         (s.repeatInterval > 0 ? '<div class="time-badge" style="border-color:var(--yellow)"><span class="tb-label">REPETIR</span><span class="tb-value" style="color:var(--yellow)">' + s.repeatInterval + 'h</span></div>' : '') +
         '<div class="time-badge"><span class="tb-label">ENTRADAS</span><span class="tb-value" style="color:' + entryColor + '">' + entries + (maxEntries > 0 ? ' / ' + maxEntries : ' / ∞') + '</span></div>' +
       '</div>' +
@@ -586,27 +513,10 @@ function showCreate() {
   document.getElementById('modalTitle').textContent = 'Novo Agendamento';
   document.getElementById('modalBtn').textContent = 'Criar';
   document.getElementById('fEditId').value = '';
-  document.getElementById('fStartTime').value = '08:00';
-  document.getElementById('fEndTime').value = '22:00';
   document.getElementById('fMaxEntries').value = '10';
   document.getElementById('fRepeatInterval').value = '5';
   document.getElementById('fEnabled').checked = false;
   setSelectedDays([1, 2, 3, 4, 5]);
-  _timeEnabled = false;
-  const timeBtn = document.getElementById('fTimeToggle');
-  timeBtn.textContent = 'OFF';
-  timeBtn.className = 'btn btn-sm';
-  timeBtn.style.minWidth = '60px';
-  timeBtn.style.fontSize = '11px';
-  timeBtn.style.padding = '4px 12px';
-  timeBtn.style.background = 'var(--bg3)';
-  timeBtn.style.border = '1px solid var(--border)';
-  timeBtn.style.color = 'var(--text3)';
-  document.getElementById('fStartTime').disabled = true;
-  document.getElementById('fStartTime').style.opacity = '0.4';
-  document.getElementById('fEndTime').disabled = true;
-  document.getElementById('fEndTime').style.opacity = '0.4';
-  toggleTimeFields();
 
   const robots = getRobots();
   const sel = document.getElementById('fRobot');
@@ -629,39 +539,10 @@ function editSchedule(idx) {
   document.getElementById('modalTitle').textContent = 'Editar Agendamento';
   document.getElementById('modalBtn').textContent = 'Salvar';
   document.getElementById('fEditId').value = idx;
-  document.getElementById('fStartTime').value = s.startTime;
-  document.getElementById('fEndTime').value = s.endTime;
   document.getElementById('fMaxEntries').value = s.maxEntries || 0;
   document.getElementById('fRepeatInterval').value = s.repeatInterval || 0;
   document.getElementById('fEnabled').checked = s.enabled;
   setSelectedDays(s.days || [1, 2, 3, 4, 5]);
-  const hasRepeat = (s.repeatInterval || 0) > 0;
-  _timeEnabled = !hasRepeat;
-  const timeBtn = document.getElementById('fTimeToggle');
-  if (_timeEnabled) {
-    timeBtn.textContent = 'ON';
-    timeBtn.className = 'btn btn-sm btn-green';
-    timeBtn.style.minWidth = '60px';
-    timeBtn.style.fontSize = '11px';
-    timeBtn.style.padding = '4px 12px';
-    document.getElementById('fStartTime').disabled = false;
-    document.getElementById('fStartTime').style.opacity = '1';
-    document.getElementById('fEndTime').disabled = false;
-    document.getElementById('fEndTime').style.opacity = '1';
-  } else {
-    timeBtn.textContent = 'OFF';
-    timeBtn.className = 'btn btn-sm';
-    timeBtn.style.minWidth = '60px';
-    timeBtn.style.fontSize = '11px';
-    timeBtn.style.padding = '4px 12px';
-    timeBtn.style.background = 'var(--bg3)';
-    timeBtn.style.border = '1px solid var(--border)';
-    timeBtn.style.color = 'var(--text3)';
-    document.getElementById('fStartTime').disabled = true;
-    document.getElementById('fStartTime').style.opacity = '0.4';
-    document.getElementById('fEndTime').disabled = true;
-    document.getElementById('fEndTime').style.opacity = '0.4';
-  }
 
   const robots = getRobots();
   const sel = document.getElementById('fRobot');
@@ -677,8 +558,8 @@ function editSchedule(idx) {
 function saveSchedule() {
   const editId = document.getElementById('fEditId').value;
   const robotId = document.getElementById('fRobot').value;
-  const startTime = document.getElementById('fStartTime').value;
-  const endTime = document.getElementById('fEndTime').value;
+  const startTime = '00:00';
+  const endTime = '23:59';
   const maxEntries = parseInt(document.getElementById('fMaxEntries').value) || 0;
   const repeatInterval = parseInt(document.getElementById('fRepeatInterval').value) || 0;
   const enabled = document.getElementById('fEnabled').checked;
@@ -686,8 +567,6 @@ function saveSchedule() {
 
   if (!robotId) { alert('Selecione um robo'); return; }
   if (!days.length) { alert('Selecione pelo menos um dia'); return; }
-  if (_timeEnabled && (!startTime || !endTime)) { alert('Defina os horarios'); return; }
-  if (_timeEnabled && startTime === endTime) { alert('Inicio e fim nao podem ser iguais'); return; }
 
   const schedules = getSchedules();
 
@@ -700,7 +579,7 @@ function saveSchedule() {
   } else {
     schedules.push({
       id: 'schedule-' + Date.now(),
-      robotId, startTime, endTime, maxEntries, repeatInterval, enabled, days,
+      robotId, startTime, endTime, maxEntries, repeatInterval, enabled: false, days,
       destinations: pendingScheduleDestinations.map(d => ({ channelId: d.channelId, threadId: d.threadId || null })),
       currentEntries: 0, lastReset: Date.now(), createdAt: Date.now()
     });
@@ -727,8 +606,11 @@ function toggleSchedule(idx) {
 
   if (schedule.enabled) {
     const robot = RobotEngine.getRobot(schedule.robotId);
-    if (robot && typeof TelegramService !== 'undefined') {
-      TelegramService.sendScheduleNotification(robot, schedule, 'activate');
+    if (robot) {
+      robot.stats = { signals: 0, wins: 0, losses: 0, winSG: 0, winG1: 0, winG2: 0, currentStreak: 0, maxWinStreak: 0, maxLossStreak: 0, patternsFound: 0, signalsApproved: 0, signalsRejected: 0 };
+      if (typeof TelegramService !== 'undefined') {
+        TelegramService.sendScheduleNotification(robot, schedule, 'activate');
+      }
     }
   }
 
@@ -741,8 +623,11 @@ function enableAll() {
     if (!s.enabled) {
       s.enabled = true;
       const robot = RobotEngine.getRobot(s.robotId);
-      if (robot && typeof TelegramService !== 'undefined') {
-        TelegramService.sendScheduleNotification(robot, s, 'activate');
+      if (robot) {
+        robot.stats = { signals: 0, wins: 0, losses: 0, winSG: 0, winG1: 0, winG2: 0, currentStreak: 0, maxWinStreak: 0, maxLossStreak: 0, patternsFound: 0, signalsApproved: 0, signalsRejected: 0 };
+        if (typeof TelegramService !== 'undefined') {
+          TelegramService.sendScheduleNotification(robot, s, 'activate');
+        }
       }
     }
   });
@@ -767,116 +652,7 @@ function updateClock() {
   document.getElementById('clockDisplay').textContent = day + ' ' + date + ' — ' + h + ':' + m + ':' + s;
 }
 
-function getNextExecutionTime(schedule) {
-  const now = new Date();
-  const nowMins = now.getHours() * 60 + now.getMinutes();
-  const startMins = timeToMinutes(schedule.startTime);
-
-  if (schedule.repeatInterval > 0) {
-    const intervalMins = schedule.repeatInterval * 60;
-    const elapsed = ((nowMins - startMins) % (intervalMins * 2) + intervalMins * 2) % (intervalMins * 2);
-    const nextStart = nowMins + (intervalMins * 2 - elapsed);
-    const h = Math.floor(nextStart / 60) % 24;
-    const m = nextStart % 60;
-    return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
-  } else {
-    return schedule.startTime + ' (amanha)';
-  }
-}
-
-function notifyMaxEntriesReached(schedule) {
-  if (typeof TelegramService === 'undefined') return;
-  const robot = RobotEngine.getRobot(schedule.robotId);
-  if (!robot) return;
-
-  const gameLabel = robot.game === 'wheel' ? 'Wheel' : 'Double';
-  const nextTime = getNextExecutionTime(schedule);
-  const now = new Date();
-  const timeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
-
-  const text = [
-    '━━ <b>MAXIMO DE ENTRADAS</b> ━━',
-    '🤖 <b>Robo:</b> ' + robot.name,
-    '🔰 <b>Jogo:</b> ' + gameLabel,
-    '',
-    '📊 <b>Entradas:</b> ' + schedule.currentEntries + ' / ' + schedule.maxEntries,
-    '⛔ Limite atingido!',
-    '',
-    '🔄 <b>Proxima execucao:</b> ' + nextTime,
-    '━━━━━━━━━━━━━━━━━━━━',
-    '🕐 <b>' + timeStr + '</b>',
-    '━━━━━━━━━━━━━━━━━━━━'
-  ].join('\n');
-
-  const destinations = (schedule.destinations && schedule.destinations.length) ? schedule.destinations : TelegramService.getDestinations(robot);
-  for (const dest of destinations) {
-    if (!dest.channelId) continue;
-    const token = TelegramService.getTokenForChat(dest.channelId);
-    if (!token) continue;
-    const payload = {
-      chat_id: dest.channelId,
-      text: TelegramService.prepareTelegramText(text),
-      parse_mode: 'HTML',
-      disable_web_page_preview: true
-    };
-    if (dest.threadId) payload.message_thread_id = dest.threadId;
-    TelegramService.api(token, 'sendMessage', payload).catch(() => {});
-  }
-}
-
-function checkSchedules() {
-  const schedules = getSchedules();
-  schedules.forEach(s => {
-    if (!s.enabled) return;
-    const active = isScheduleActive(s);
-    const robot = RobotEngine.getRobot(s.robotId);
-    if (!robot) return;
-
-    const entries = getEntriesUsed(s);
-    const maxReached = s.maxEntries > 0 && entries >= s.maxEntries;
-    const wasMaxReached = s._maxNotified === true;
-
-    if (active && !maxReached && robot.status === 'offline') {
-      robot.currentSignal = null;
-      robot.galeCount = 0;
-      robot.usedPatterns = { RED: [], BLACK: [], GREY: [] };
-      if (typeof TelegramService !== 'undefined') TelegramService.clearAllMessages(robot);
-      RobotEngine.startRobot(s.robotId);
-      s._maxNotified = false;
-    } else if ((!active || maxReached) && robot.status === 'online') {
-      RobotEngine.stopRobot(s.robotId);
-    }
-
-    if (maxReached && !wasMaxReached) {
-      s._maxNotified = true;
-      notifyMaxEntriesReached(s);
-    }
-  });
-  saveSchedules(schedules);
-}
-
-function incrementEntry(robotId) {
-  const schedules = getSchedules();
-  const now = new Date();
-  const today = now.toDateString();
-  let changed = false;
-  schedules.forEach(s => {
-    if (s.robotId !== robotId) return;
-    if (!s.enabled || !isScheduleActive(s)) return;
-    const lastReset = s.lastReset ? new Date(s.lastReset).toDateString() : '';
-    if (lastReset !== today) {
-      s.currentEntries = 0;
-      s.lastReset = now.getTime();
-    }
-    if (s.maxEntries > 0 && (s.currentEntries || 0) >= s.maxEntries) return;
-    s.currentEntries = (s.currentEntries || 0) + 1;
-    changed = true;
-  });
-  if (changed) saveSchedules(schedules);
-}
-
 function renderAll() {
-  resetDailyEntries();
   renderStats();
   renderSchedules();
 }
@@ -884,11 +660,7 @@ function renderAll() {
 renderAll();
 updateClock();
 setInterval(updateClock, 1000);
-setInterval(() => { checkSchedules(); renderAll(); }, 30000);
-
-EventBus.on('robot:signal', (data) => {
-  if (data && data.robotId) incrementEntry(data.robotId);
-});
+setInterval(() => { renderAll(); }, 30000);
 </script>
 </body>
 </html>

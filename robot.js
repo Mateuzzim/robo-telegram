@@ -402,7 +402,7 @@ class Robot {
           signal.iaTarget = this.iaState.activeTarget;
           signal.iaMultiplier = this.iaState.activeMultiplier;
         }
-        EventBus.emit('signal:created', signal);
+        EventBus.emit('signal:created', { ...signal, robotId: this.id });
         break;
       }
     }

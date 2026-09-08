@@ -944,9 +944,48 @@ function loadRobots(){
     iaInteligente:'#e94560'
   };
   
+  function getScheduleForRobot(robotId) {
+    const schedules = Store.get('robot-schedules', []);
+    return schedules.find(s => s.robotId === robotId && s.enabled) || null;
+  }
+
+  function getScheduleEntries(schedule) {
+    if (!schedule) return { current: 0, max: 0 };
+    const now = new Date();
+    const today = now.toDateString();
+    const lastReset = schedule.lastReset ? new Date(schedule.lastReset).toDateString() : '';
+    const current = (lastReset === today) ? (schedule.currentEntries || 0) : 0;
+    return { current, max: schedule.maxEntries || 0 };
+  }
+
+  function isScheduleActiveNow(schedule) {
+    if (!schedule) return false;
+    const now = new Date();
+    const currentDay = now.getDay();
+    const days = (schedule.days || []).map(Number);
+    if (!days.includes(currentDay)) return false;
+    const nowMins = now.getHours() * 60 + now.getMinutes();
+    const startMins = (schedule.startTime || '00:00').split(':').reduce((h, m) => h * 60 + Number(m), 0);
+    const endMins = (schedule.endTime || '23:59').split(':').reduce((h, m) => h * 60 + Number(m), 0);
+    const repeatInterval = schedule.repeatInterval || 0;
+    if (repeatInterval > 0) {
+      const intervalMins = repeatInterval * 60;
+      const elapsedMins = (nowMins < startMins ? nowMins + 1440 : nowMins) - startMins;
+      const elapsed = elapsedMins % (intervalMins * 2);
+      return elapsed < intervalMins;
+    }
+    if (startMins <= endMins) return nowMins >= startMins && nowMins < endMins;
+    if (nowMins >= startMins) return true;
+    if (nowMins < endMins) return true;
+    return false;
+  }
+
   function renderRow(r) {
     const robotId = escapeAttr(r.id);
     const robotIdJs = escapeAttr(escapeJsString(r.id));
+    const schedule = getScheduleForRobot(r.id);
+    const scheduledActive = isScheduleActiveNow(schedule);
+    const schedEntries = getScheduleEntries(schedule);
     const conf = r.diagnostic?.confidence || 0;
     const confColor = conf >= 80 ? 'var(--green)' : conf >= 60 ? 'var(--yellow)' : 'var(--red)';
     const wins = r.stats?.wins || 0;
@@ -975,7 +1014,8 @@ function loadRobots(){
           ${strategyTags}
         </div>
       </td>
-      <td>${createBadge(r.status)}</td>
+      <td>${scheduledActive ? '<span class="badge badge-yellow" style="font-size:10px">AGENDADO ' + schedEntries.current + '/' + schedEntries.max + '</span> ' : ''}${createBadge(r.status)}</td>
+      <td style="font-size:11px">${schedEntries.max > 0 ? '<span style="color:var(--yellow)">' + schedEntries.current + ' / ' + schedEntries.max + '</span>' : '-'}</td>
       <td style="font-size:11px">${getTargetLabel(r)}</td>
       <td style="font-size:12px;font-weight:700;color:${confColor}">${conf}%</td>
       <td style="font-size:11px"><span style="color:var(--green)">${wins}W</span> <span style="color:var(--red)">${losses}L</span></td>
@@ -998,9 +1038,10 @@ function loadRobots(){
     </tr>`;
   }
 
-  function renderSection(title, icon, robotList, color) {
+  function renderSection(title, icon, robotList, color, showEntries) {
     if (!robotList.length) return '';
     const rows = robotList.map(renderRow).join('');
+    const entriesHeader = showEntries ? '<th>Entradas</th>' : '';
     return `
       <div style="margin-bottom:16px">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)">
@@ -1009,21 +1050,26 @@ function loadRobots(){
           <span style="font-size:11px;color:var(--text3);background:var(--bg3);padding:2px 8px;border-radius:10px">${robotList.length}</span>
         </div>
         <div class="card"><div class="table-wrap"><table>
-          <thead><tr><th>Robo</th><th>Estrategia</th><th>Status</th><th>Alvo</th><th>Conf</th><th>W/L</th><th>Modo</th><th>Intervalo</th><th>Gale</th><th>Acoes</th></tr></thead>
+          <thead><tr><th>Robo</th><th>Estrategia</th><th>Status</th>${entriesHeader}<th>Alvo</th><th>Conf</th><th>W/L</th><th>Modo</th><th>Intervalo</th><th>Gale</th><th>Acoes</th></tr></thead>
           <tbody>${rows}</tbody>
         </table></div></div>
       </div>`;
   }
 
-  const canais = [], grupos = [], semDestino = [];
+  const canais = [], grupos = [], semDestino = [], agendados = [];
   robots.forEach(r => {
     const t = getRobotDestType(r);
+    const sched = getScheduleForRobot(r.id);
+    if (sched) {
+      agendados.push(r);
+    }
     if (t === 'grupo') grupos.push(r);
     else if (t === 'canal') canais.push(r);
     else semDestino.push(r);
   });
 
   let html = '';
+  if (agendados.length) html += renderSection('Agendados', '⏰', agendados, 'var(--yellow)', true);
   html += renderSection('Todos os Robos Canal', '📢', canais, 'var(--blue)');
   html += renderSection('Todos os Robos Grupo', '👥', grupos, 'var(--orange,#f97316)');
   html += renderSection('Sem Destino', '⚪', semDestino, 'var(--text3)');
@@ -2125,6 +2171,12 @@ function undoAutoAnalise() {
 
 loadRobots();
 EventBus.on('robots:synced', loadRobots);
+EventBus.on('schedules:changed', loadRobots);
+let _robosRenderTimeout = null;
+EventBus.on('robot:state', () => {
+  if (_robosRenderTimeout) return;
+  _robosRenderTimeout = setTimeout(() => { _robosRenderTimeout = null; loadRobots(); }, 1000);
+});
 </script>
 <div class="modal-overlay" id="stopModal">
   <div class="modal">

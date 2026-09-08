@@ -11,7 +11,7 @@ const Scheduler = {
       this._signalHandler = (data) => {
         if (data && data.robotId) this.incrementEntry(data.robotId);
       };
-      EventBus.on('robot:signal', this._signalHandler);
+      EventBus.on('signal:created', this._signalHandler);
     }
     this._timer = setInterval(() => {
       this.resetDailyEntries();
@@ -25,6 +25,7 @@ const Scheduler = {
 
   saveSchedules(list) {
     Store.set('robot-schedules', list);
+    if (typeof EventBus !== 'undefined') EventBus.emit('schedules:changed');
   },
 
   timeToMinutes(t) {
@@ -101,9 +102,27 @@ const Scheduler = {
         s.currentEntries = 0;
         s.lastReset = now.getTime();
       }
-      if (s.maxEntries > 0 && (s.currentEntries || 0) >= s.maxEntries) return;
+      if (s.maxEntries > 0 && (s.currentEntries || 0) >= s.maxEntries) {
+        const robot = RobotEngine.getRobot(robotId);
+        if (robot && robot.status === 'online') {
+          RobotEngine.stopRobot(robotId);
+          if (!s._maxNotified) {
+            s._maxNotified = true;
+            this.notifyMaxEntriesReached(s);
+          }
+        }
+        return;
+      }
       s.currentEntries = (s.currentEntries || 0) + 1;
       changed = true;
+      if (s.maxEntries > 0 && s.currentEntries >= s.maxEntries) {
+        const robot = RobotEngine.getRobot(robotId);
+        if (robot && robot.status === 'online') {
+          RobotEngine.stopRobot(robotId);
+          s._maxNotified = true;
+          this.notifyMaxEntriesReached(s);
+        }
+      }
     });
     if (changed) this.saveSchedules(schedules);
   },
@@ -133,12 +152,12 @@ const Scheduler = {
     const now = new Date();
     const timeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
     const text = [
-      '━━ <b>MAXIMO DE ENTRADAS</b> ━━',
-      '🤖 <b>Robo:</b> ' + robot.name,
+      '━━ 🚨 <b>AGENDAMENTO CONCLUIDO</b> 🚨 ━━',
+      '🤖 <b>ROBO:</b> ' + robot.name,
       '🔰 <b>Jogo:</b> ' + gameLabel,
       '',
       '📊 <b>Entradas:</b> ' + schedule.currentEntries + ' / ' + schedule.maxEntries,
-      '⛔ Limite atingido!',
+      '✅ Todas as entradas realizadas!',
       '',
       '🔄 <b>Proxima execucao:</b> ' + nextTime,
       '━━━━━━━━━━━━━━━━━━━━',
@@ -203,7 +222,7 @@ const Scheduler = {
       this._timer = null;
     }
     if (this._signalHandler && typeof EventBus !== 'undefined') {
-      EventBus.off('robot:signal', this._signalHandler);
+      EventBus.off('signal:created', this._signalHandler);
       this._signalHandler = null;
     }
   }

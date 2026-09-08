@@ -385,38 +385,40 @@ const TelegramService = {
       pattern: Array.isArray(signal.pattern) ? [...signal.pattern] : signal.pattern
     };
     const destinations = this.getDestinations(robot);
+
     for (const dest of destinations) {
       if (!this.shouldProcessEntryEvent(robot, snapshot, dest)) {
         if (robot.currentSignal?.id === signal.id) robot.currentSignal.entrySent = true;
-        continue;
       }
+    }
+
+    if (this.isDynamicMode(robot)) {
       if (robot.currentSignal?.id === signal.id) robot.currentSignal.entrySending = true;
       try {
-        if (this.isDynamicMode(robot)) {
+        for (const dest of destinations) {
           await this.updateDynamicMessage(robot, dest);
-          if (robot.currentSignal?.id === snapshot.id) robot.currentSignal.entrySent = true;
-        } else if (this.isLiveDynamicMode(robot)) {
-          const sent = await this.sendFreshEntryMessage(robot, snapshot);
-          if (sent && robot.currentSignal?.id === snapshot.id) {
-            robot.currentSignal.entrySent = true;
-          } else if (!sent) {
-            if (robot.currentSignal?.id === snapshot.id) robot.currentSignal.entrySent = false;
-            this.forgetEntryEvent(snapshot.entryEventKey);
-          }
-          if (this.shouldSendLive(robot)) {
-            this.enqueueLiveMessage(robot);
-          }
+        }
+        if (robot.currentSignal?.id === snapshot.id) robot.currentSignal.entrySent = true;
+      } finally {
+        if (robot.currentSignal?.id === snapshot.id) robot.currentSignal.entrySending = false;
+      }
+    } else {
+      if (robot.currentSignal?.id === signal.id) robot.currentSignal.entrySending = true;
+      try {
+        let sent;
+        if (this.isLiveDynamicMode(robot)) {
+          sent = await this.sendFreshEntryMessage(robot, snapshot);
         } else {
-          const sent = await this.enqueueEntryMessage(robot, snapshot);
-          if (sent && robot.currentSignal?.id === snapshot.id) {
-            robot.currentSignal.entrySent = true;
-          } else if (!sent) {
-            if (robot.currentSignal?.id === snapshot.id) robot.currentSignal.entrySent = false;
-            this.forgetEntryEvent(snapshot.entryEventKey);
-          }
-          if (this.shouldSendLive(robot)) {
-            this.enqueueLiveMessage(robot);
-          }
+          sent = await this.enqueueEntryMessage(robot, snapshot);
+        }
+        if (sent && robot.currentSignal?.id === snapshot.id) {
+          robot.currentSignal.entrySent = true;
+        } else if (!sent) {
+          if (robot.currentSignal?.id === snapshot.id) robot.currentSignal.entrySent = false;
+          this.forgetEntryEvent(snapshot.entryEventKey);
+        }
+        if (this.shouldSendLive(robot)) {
+          this.enqueueLiveMessage(robot);
         }
       } finally {
         if (robot.currentSignal?.id === snapshot.id) robot.currentSignal.entrySending = false;
@@ -474,18 +476,20 @@ const TelegramService = {
 
     const destinations = this.getDestinations(robot);
     for (const dest of destinations) {
-      if (!this.shouldProcessEntryEvent(robot, snapshot, dest)) continue;
+      this.shouldProcessEntryEvent(robot, snapshot, dest);
+    }
 
-      if (this.isDynamicMode(robot)) {
+    if (this.isDynamicMode(robot)) {
+      for (const dest of destinations) {
         await this.updateDynamicMessage(robot, dest);
-      } else if (this.isLiveDynamicMode(robot)) {
-        await this.sendFreshEntryMessage(robot, snapshot);
-      } else {
-        await this.enqueueEntryMessage(robot, snapshot);
       }
-      if (!this.isDynamicMode(robot) && this.shouldSendLive(robot)) {
-        this.enqueueLiveMessage(robot);
-      }
+    } else if (this.isLiveDynamicMode(robot)) {
+      await this.sendFreshEntryMessage(robot, snapshot);
+    } else {
+      await this.enqueueEntryMessage(robot, snapshot);
+    }
+    if (!this.isDynamicMode(robot) && this.shouldSendLive(robot)) {
+      this.enqueueLiveMessage(robot);
     }
   },
 
@@ -574,8 +578,9 @@ const TelegramService = {
     this.saveEntryEvents(events);
   },
 
-  isNormalProcessed(robotId, signalId, status, gale) {
-    const key = robotId + '|' + signalId + '|' + status + '|' + (gale || 0);
+  isNormalProcessed(robotId, signalId, status, gale, dest) {
+    const destKey = dest?.channelId || '';
+    const key = robotId + '|' + signalId + '|' + status + '|' + (gale || 0) + '|' + destKey;
     const entry = this._normalProcessed[key];
     if (!entry) return false;
     if (Date.now() - entry > 5000) {
@@ -585,8 +590,9 @@ const TelegramService = {
     return true;
   },
 
-  markNormalProcessed(robotId, signalId, status, gale) {
-    const key = robotId + '|' + signalId + '|' + status + '|' + (gale || 0);
+  markNormalProcessed(robotId, signalId, status, gale, dest) {
+    const destKey = dest?.channelId || '';
+    const key = robotId + '|' + signalId + '|' + status + '|' + (gale || 0) + '|' + destKey;
     this._normalProcessed[key] = Date.now();
   },
 
@@ -596,12 +602,14 @@ const TelegramService = {
     for (const dest of destinations) {
       const key = 'entry:' + this.entryMessageKey(robot, dest);
       if (this.isNormalMode(robot)) {
-        if (this.isNormalProcessed(robot.id, signal.id, signal.status, signal.gale)) {
+        if (this.isNormalProcessed(robot.id, signal.id, signal.status, signal.gale, dest)) {
           continue;
         }
-        this.markNormalProcessed(robot.id, signal.id, signal.status, signal.gale);
         const sent = await this.enqueue(key, () => this.sendEntryNormal(robot, signal, dest));
-        if (sent) anySent = true;
+        if (sent) {
+          this.markNormalProcessed(robot.id, signal.id, signal.status, signal.gale, dest);
+          anySent = true;
+        }
       } else {
         const sent = await this.enqueue(key, () => this.withLock(key, () => this.sendEntryMessage(robot, signal, dest)));
         if (sent) anySent = true;
@@ -778,6 +786,7 @@ const TelegramService = {
     const threadId = dest?.threadId ?? null;
     if (!token || !chatId) return false;
 
+    const key = this.entryMessageKey(robot, dest);
     const text = this.prepareTelegramText(this.buildEntryMessage(robot, signal));
 
     const sendPayload = {
@@ -789,6 +798,22 @@ const TelegramService = {
     if (threadId) sendPayload.message_thread_id = threadId;
     const sent = await this.api(token, 'sendMessage', sendPayload);
     if (sent.ok && sent.result?.message_id) {
+      const latest = this.getEntryMessages();
+      latest[key] = {
+        messageId: sent.result.message_id,
+        text,
+        robotId: robot.id,
+        chatId,
+        signalId: signal.id,
+        status: signal.status || 'approved',
+        gale: signal.gale || 0,
+        result: signal.result ? { ...signal.result } : null,
+        eventKey: signal.entryEventKey || '',
+        historyResultKey: signal.historyResultKey || signal.lastCheckedResultKey || signal.waitingAfterResultKey || signal.sourceResultKey || '',
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
+      this.saveEntryMessages(latest);
       return true;
     } else {
       this.logApiError('sendMessage/entry-normal', sent);
@@ -1081,10 +1106,7 @@ const TelegramService = {
       const greenProt = robot.greenProtection && robot.game === 'double' ? ' + 🟢' : '';
       const targetLabel = this.colorLabel(target.color);
       return [
-        '⚠️ <b>G' + (signal.gale || 1) + ' - 🎯 ENTRAR=</b> ' + target.emoji + greenProt + ' <b>' + targetLabel + '</b>',
-        '━━━━━━━━━━━━━━━━━━━',
-        '❇️ <b>TENTANDO NOVAMENTE</b>',
-        '❌ <b>LOSS, VEIO:</b> ' + resultLabel + ' ' + resultEmoji + resultMult,
+        '⚠️ <b>G' + (signal.gale || 1) + ' - ENTRAR=</b> ' + target.emoji + greenProt + ' <b>' + targetLabel + '</b>',
       ].join('\n');
     }
 
@@ -1881,7 +1903,6 @@ const TelegramService = {
       '🔰 <b>Jogo:</b> ' + gameLabel,
       '',
       '⏰ <b>HORARIO CONFIGURADO</b>',
-      '🕐 <b>Inicio:</b> ' + schedule.startTime + ' → 🕐 <b>Fim:</b> ' + schedule.endTime,
       '🔄 <b>Repetir:</b> ' + repeatLabel,
       '',
       '📅 <b>Dias:</b> ' + daysLabel,
