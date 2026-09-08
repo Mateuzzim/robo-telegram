@@ -1948,7 +1948,7 @@ const RobotEngine = {
   getAllRobots() { return [...this.robots.values()]; },
   getAllStates() { return this.getAllRobots().map(r => r.getState()); },
 
-  startRobot(id) { const r = this.robots.get(id); if (r) { r.status = 'online'; r.startedAt = Date.now(); r.startDelayUntil = Date.now() + 30000; if (r._startDelayTimer) clearTimeout(r._startDelayTimer); r._startDelayTimer = setTimeout(() => { r.startDelayUntil = null; r.analyze(); }, 30000); EventBus.emit('robot:started', { id }); this.save(); } },
+  startRobot(id) { const r = this.robots.get(id); if (r) { r.status = 'online'; r.startedAt = Date.now(); r.startDelayUntil = Date.now() + 30000; this.loadHistoryFromStorage(r); if (r._startDelayTimer) clearTimeout(r._startDelayTimer); r._startDelayTimer = setTimeout(() => { r.startDelayUntil = null; r.analyze(); }, 30000); EventBus.emit('robot:started', { id }); this.save(); } },
   stopRobot(id) { const r = this.robots.get(id); if (r) { r.status = 'offline'; r.startedAt = null; r.currentSignal = null; if (r._startDelayTimer) { clearTimeout(r._startDelayTimer); r._startDelayTimer = null; } r.startDelayUntil = null; if (typeof TelegramService !== 'undefined' && TelegramService.isDynamicMode(r)) TelegramService.updateDynamicMessage(r); EventBus.emit('robot:stopped', { id }); this.save(); } },
   pauseRobot(id) { const r = this.robots.get(id); if (r) { r.status = 'paused'; EventBus.emit('robot:paused', { id }); this.save(); } },
   resumeRobot(id) { const r = this.robots.get(id); if (r) { r.status = 'online'; EventBus.emit('robot:resumed', { id }); this.save(); } },
@@ -2019,7 +2019,7 @@ const RobotEngine = {
         added++;
       }
       if (added > 0) {
-        if (robot.history.length > 500) robot.history.length = 500;
+        if (robot.history.length > 1000) robot.history.length = 1000;
         robot.diagnostic.analyzedResults = robot.history.length;
         if (robot.status === 'online') robot.analyze();
       }
@@ -2079,7 +2079,7 @@ EventBus.on('results:history', (d) => {
         robot.history.unshift(item);
         addedCount++;
       });
-      if (robot.history.length > 400) robot.history.length = 400;
+      if (robot.history.length > 1000) robot.history.length = 1000;
       robot.diagnostic.analyzedResults = robot.history.length;
       if (addedCount > 0) robot.analyze();
     }

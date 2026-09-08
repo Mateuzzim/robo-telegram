@@ -28,6 +28,7 @@ const TelegramService = {
     if (this.initialized) return;
     this.initialized = true;
     EventBus.on('result:new', (result) => this.handleResultChange(result));
+    EventBus.on('results:history', (history) => this.handleHistoryChange(history));
     EventBus.on('signal:created', (signal) => this.handleSignalCreated(signal));
     EventBus.on('signal:gale', (signal) => this.handleSignalChange(signal));
     EventBus.on('signal:win', (signal) => this.handleSignalChange(signal));
@@ -58,8 +59,7 @@ const TelegramService = {
   },
 
   async recalibrateAll() {
-    const token = this.getToken();
-    if (!token) return;
+    if (!this.hasAnyToken()) return;
     await this.cleanupStaleMessages();
     const robots = RobotEngine.getAllRobots().filter(r => (
       r.status === 'online' && this.shouldSendLive(r)
@@ -70,7 +70,7 @@ const TelegramService = {
   },
 
   async recalibrateRobot(robot) {
-    if (!this.getToken()) return;
+    if (!this.hasAnyToken()) return;
     const destinations = this.getDestinations(robot);
     for (const dest of destinations) {
       const chatId = dest.channelId;
@@ -98,7 +98,7 @@ const TelegramService = {
   },
 
   async cleanupStaleMessages() {
-    if (!this.getToken()) return;
+    if (!this.hasAnyToken()) return;
     const allRobots = RobotEngine.getAllStates();
     const robotIds = new Set(allRobots.map(r => r.id));
     const liveMessages = this.getLiveMessages();
@@ -142,17 +142,38 @@ const TelegramService = {
     return localStorage.getItem('telegram-bot-token-grupos') || '';
   },
 
+  hasAnyToken() {
+    if (this.getToken() || this.getTokenGroup()) return true;
+    try {
+      const channels = JSON.parse(localStorage.getItem('telegram-channels') || '[]');
+      return channels.some(ch => ch?.tokenKey && localStorage.getItem(ch.tokenKey));
+    } catch { return false; }
+  },
+
   getChannelType(channelId) {
     if (!channelId) return 'channel';
     try {
       const channels = JSON.parse(localStorage.getItem('telegram-channels') || '[]');
-      const ch = channels.find(c => c.id === channelId);
+      const ch = channels.find(c => String(c.id) === String(channelId));
       return ch?.type || 'channel';
     } catch { return 'channel'; }
   },
 
+  getChannelConfig(channelId) {
+    if (!channelId) return null;
+    try {
+      const channels = JSON.parse(localStorage.getItem('telegram-channels') || '[]');
+      return channels.find(c => String(c.id) === String(channelId)) || null;
+    } catch { return null; }
+  },
+
   getTokenForChat(channelId) {
-    if (channelId && this.getChannelType(channelId) === 'group') {
+    const channel = this.getChannelConfig(channelId);
+    if (channel?.tokenKey) {
+      const customToken = localStorage.getItem(channel.tokenKey);
+      if (customToken) return customToken;
+    }
+    if (channelId && (channel?.type || this.getChannelType(channelId)) === 'group') {
       const groupToken = this.getTokenGroup();
       if (groupToken) return groupToken;
     }
@@ -208,7 +229,26 @@ const TelegramService = {
 
   messageKey(robot, dest) {
     const chatId = dest?.channelId || robot.telegram?.channelId || '';
+    const threadId = dest?.threadId ?? robot.telegram?.threadId ?? null;
+    return [robot.id, chatId, threadId ? 't' + threadId : ''].filter(Boolean).join(':');
+  },
+
+  legacyMessageKey(robot, dest) {
+    const chatId = dest?.channelId || robot.telegram?.channelId || '';
     return [robot.id, chatId].join(':');
+  },
+
+  migrateLegacyMessage(messages, robot, dest, key) {
+    const legacyBase = this.legacyMessageKey(robot, dest);
+    const legacyKey = key.endsWith(':entry') ? legacyBase + ':entry' : key.endsWith(':maint') ? legacyBase + ':maint' : legacyBase;
+    if (key === legacyKey || messages[key] || !messages[legacyKey]) return false;
+    messages[key] = {
+      ...messages[legacyKey],
+      chatId: messages[legacyKey].chatId || dest?.channelId || robot.telegram?.channelId || '',
+      threadId: dest?.threadId ?? robot.telegram?.threadId ?? null
+    };
+    delete messages[legacyKey];
+    return true;
   },
 
   entryMessageKey(robot, dest) {
@@ -226,26 +266,33 @@ const TelegramService = {
 
   shouldSendLive(robot) {
     if (!this.isTelegramEnabled(robot)) return false;
-    const msgType = robot.telegram?.msgType || 'both';
-    if (msgType !== 'live' && msgType !== 'both' && msgType !== 'dynamic' && msgType !== 'live_dynamic') {
-      return false;
-    }
-    return true;
+    return ['live', 'both', 'dynamic', 'live_dynamic'].includes(this.getMessageType(robot));
   },
 
   shouldSendSignal(robot) {
     if (!this.isTelegramEnabled(robot)) return false;
-    const msgType = robot.telegram?.msgType || 'both';
-    if (msgType !== 'signal' && msgType !== 'both' && msgType !== 'normal' && msgType !== 'dynamic' && msgType !== 'live_dynamic') return false;
-    return true;
+    return ['signal', 'both', 'normal', 'dynamic', 'live_dynamic'].includes(this.getMessageType(robot));
+  },
+
+  getMessageType(robot) {
+    const msgType = robot?.telegram?.msgType || 'both';
+    return ['live', 'signal', 'both', 'normal', 'dynamic', 'live_dynamic'].includes(msgType) ? msgType : 'both';
   },
 
   isNormalMode(robot) {
-    return robot?.telegram?.msgType === 'normal';
+    return this.getMessageType(robot) === 'normal';
   },
 
   isDynamicMode(robot) {
-    return robot?.telegram?.msgType === 'dynamic';
+    return this.getMessageType(robot) === 'dynamic';
+  },
+
+  isLiveDynamicMode(robot) {
+    return this.getMessageType(robot) === 'live_dynamic';
+  },
+
+  isDynamicEntryMode(robot) {
+    return this.isDynamicMode(robot) || this.isLiveDynamicMode(robot);
   },
 
   async updateLiveMessages(result) {
@@ -270,11 +317,21 @@ const TelegramService = {
     await this.sendPendingEntryMessages(result);
   },
 
+  async handleHistoryChange(history) {
+    const game = history?.label || history?.game;
+    if (!game || !Array.isArray(history?.results) || !history.results.length) return;
+    await this.updateLiveMessages({ label: game, game });
+  },
+
   async handleRobotStarted(d) {
     const robot = RobotEngine.getRobot(d?.id);
     if (!robot || !this.shouldSendLive(robot)) return;
     if (robot.status !== 'online') return;
-    await this.enqueueLiveMessage(robot);
+    if (this.isDynamicMode(robot)) {
+      await this.updateDynamicMessage(robot);
+    } else {
+      await this.enqueueLiveMessage(robot);
+    }
   },
 
   async sendPendingEntryMessages(result) {
@@ -287,8 +344,7 @@ const TelegramService = {
       robot.status === 'online' &&
       (!game || robot.game === game) &&
       this.shouldSendSignal(robot) &&
-      !this.isDynamicMode(robot) &&
-      robot.telegram?.msgType !== 'live_dynamic' &&
+      !this.isDynamicEntryMode(robot) &&
       robot.currentSignal &&
       !robot.currentSignal.entrySending &&
       (!robot.currentSignal.entrySent || !this.hasEntryMessageForAnyDest(robot, robot.currentSignal))
@@ -339,8 +395,17 @@ const TelegramService = {
         if (this.isDynamicMode(robot)) {
           await this.updateDynamicMessage(robot, dest);
           if (robot.currentSignal?.id === snapshot.id) robot.currentSignal.entrySent = true;
-        } else if (robot.telegram?.msgType === 'live_dynamic') {
-          await this.sendFreshEntryMessage(robot, snapshot);
+        } else if (this.isLiveDynamicMode(robot)) {
+          const sent = await this.sendFreshEntryMessage(robot, snapshot);
+          if (sent && robot.currentSignal?.id === snapshot.id) {
+            robot.currentSignal.entrySent = true;
+          } else if (!sent) {
+            if (robot.currentSignal?.id === snapshot.id) robot.currentSignal.entrySent = false;
+            this.forgetEntryEvent(snapshot.entryEventKey);
+          }
+          if (this.shouldSendLive(robot)) {
+            this.enqueueLiveMessage(robot);
+          }
         } else {
           const sent = await this.enqueueEntryMessage(robot, snapshot);
           if (sent && robot.currentSignal?.id === snapshot.id) {
@@ -411,12 +476,14 @@ const TelegramService = {
     for (const dest of destinations) {
       if (!this.shouldProcessEntryEvent(robot, snapshot, dest)) continue;
 
-      if (robot.telegram?.msgType === 'live_dynamic') {
+      if (this.isDynamicMode(robot)) {
+        await this.updateDynamicMessage(robot, dest);
+      } else if (this.isLiveDynamicMode(robot)) {
         await this.sendFreshEntryMessage(robot, snapshot);
       } else {
         await this.enqueueEntryMessage(robot, snapshot);
       }
-      if (this.shouldSendLive(robot)) {
+      if (!this.isDynamicMode(robot) && this.shouldSendLive(robot)) {
         this.enqueueLiveMessage(robot);
       }
     }
@@ -424,14 +491,14 @@ const TelegramService = {
 
   async handleSignalResolved(signal) {
     const robot = RobotEngine.getRobot(signal?.robotId);
-    if (!robot || (!this.isDynamicMode(robot) && robot.telegram?.msgType !== 'live_dynamic')) return;
+    if (!robot || !this.isDynamicEntryMode(robot)) return;
     if (this.isDynamicMode(robot)) {
       await this.updateDynamicMessage(robot);
     }
     if (!robot.currentSignal) {
       setTimeout(() => {
         const current = RobotEngine.getRobot(robot.id);
-        if (current && !current.currentSignal && (this.isDynamicMode(current) || current.telegram?.msgType === 'live_dynamic')) {
+        if (current && !current.currentSignal && this.isDynamicEntryMode(current)) {
           if (this.isDynamicMode(current)) {
             this.updateDynamicMessage(current);
           } else {
@@ -448,9 +515,11 @@ const TelegramService = {
     const resultKey = signal.lastCheckedResultKey || signal.waitingAfterResultKey || signal.sourceResultKey ||
       [result.color || '', result.number ?? '', result.multiplier || ''].join(':');
     const chatId = dest?.channelId || robot.telegram?.channelId || '';
+    const threadId = dest?.threadId ?? robot.telegram?.threadId ?? '';
     return [
       robot.id,
       chatId,
+      threadId ? 't' + threadId : 'main',
       signal.id,
       signal.status || 'approved',
       signal.gale || 0,
@@ -595,6 +664,7 @@ const TelegramService = {
     const text = this.prepareTelegramText(this.buildLiveMessage(robot));
     const messages = this.getLiveMessages();
     const key = this.messageKey(robot, dest);
+    if (this.migrateLegacyMessage(messages, robot, dest, key)) this.saveLiveMessages(messages);
     const current = messages[key];
     if (current?.sending && Date.now() - (current.updatedAt || 0) < this.liveSendingTimeoutMs) return false;
     if (current?.messageId && current?.text === text) return true;
@@ -735,6 +805,7 @@ const TelegramService = {
     const key = this.entryMessageKey(robot, dest);
     const text = this.prepareTelegramText(this.buildEntryMessage(robot, signal));
     const messages = this.getEntryMessages();
+    if (this.migrateLegacyMessage(messages, robot, dest, key)) this.saveEntryMessages(messages);
     const current = messages[key];
     const messageId = current?.messageId;
     if (messageId && current?.text === text) return true;
@@ -842,7 +913,7 @@ const TelegramService = {
   },
 
   async deleteExistingEntryMessages(robot, exactKey) {
-    if (!this.getToken() || !robot) return true;
+    if (!this.hasAnyToken() || !robot) return true;
     const messages = this.getEntryMessages();
     const matching = Object.entries(messages).filter(([key, msg]) => (
       key === exactKey ||
@@ -1008,11 +1079,11 @@ const TelegramService = {
       const target = this.getSignalTarget(robot, signal);
       const resultMult = this.getMultiplierLabel(signal.result?.color, robot.game);
       const greenProt = robot.greenProtection && robot.game === 'double' ? ' + 🟢' : '';
+      const targetLabel = this.colorLabel(target.color);
       return [
-        '⚡️ <b>G' + (signal.gale || 1) + ' - TENTANDO NOVAMENTE</b>',
-        '🎯 <b>ENTRAR</b>',
-        target.emoji + greenProt,
+        '⚠️ <b>G' + (signal.gale || 1) + ' - 🎯 ENTRAR=</b> ' + target.emoji + greenProt + ' <b>' + targetLabel + '</b>',
         '━━━━━━━━━━━━━━━━━━━',
+        '❇️ <b>TENTANDO NOVAMENTE</b>',
         '❌ <b>LOSS, VEIO:</b> ' + resultLabel + ' ' + resultEmoji + resultMult,
       ].join('\n');
     }
@@ -1030,11 +1101,12 @@ const TelegramService = {
       galeMax = robot.gale?.max || 0;
     }
     const galeLine = galeMax > 0 ? '⚡️ <b>GALE ATÉ: G' + galeMax + '</b>' : '⚡️ <b>ENTRADA SECA</b>';
+    const targetLine = '🎯 <b>ENTRAR NA COR=</b> ' + target.emoji + greenProtLabel + '<b>' + this.colorLabel(target.color) + '</b>';
     return [
-      '🤖 <b>SINAL ENCONTRADO</b> 🤖',
-      '🎯 <b>ENTRAR NA COR</b>',
-      target.emoji + greenProtLabel,
+      targetLine,
+      '',
       '━━━━━━━━━━━━━━━━━━━━',
+      '🤖 <b>SINAL ENCONTRADO</b> 🤖',
       galeLine,
       '📈 <b>Aproveitamento:</b> <b>' + rate + '%</b>',
       this.formatRateBar(rate)
@@ -1125,8 +1197,6 @@ const TelegramService = {
     return [
       '━━ 🚨 <b>' + gameName + ' AO VIVO</b> 🚨',
       '🤖 <b>NOME DO ROBÔ:</b> ' + robot.name,
-      '🔰 <b>Proteção/Gales:</b> ' + galeInstruction,
-      robot.greenProtection && robot.game === 'double' ? '🛡️ <b>ATENÇÃO PROTEGER= VERDE</b> 🟢' : '',
       '',
       '━━ 📊 <b>STATUS DO ROBÔ</b> ━━',
       '🟢 <b>Status:</b> ' + (robot.status === 'online' ? 'Online' : robot.status === 'offline' ? 'Offline' : robot.status) + ' 🎮 <b>Jogo:</b> ' + gameLabel,
@@ -1135,8 +1205,9 @@ const TelegramService = {
       '🎯 <b>Último Resultado:</b> ' + lastResultEmoji + ' ' + lastResultLabel,
       '',
       '━━ 🧠 <b>DIAGNÓSTICO DA IA</b> ━━',
+      robot.iaInteligente ? '🧠 <b>IA Inteligente:</b> ' + ((robot.iaState||{}).activeStrategy||'--') + ' → ' + ((robot.iaState||{}).activeTarget||'--') + ' ' + ((robot.iaState||{}).activeMultiplier||'') + 'X' : '',
       '📡 <b>Status:</b> ' + (d.status || 'IDLE'),
-      '📊 <b>' + (d.analyzedResults || 0) + ' Resultados Analisados</b>',
+      '📊 <b>' + Math.min(d.analyzedResults || 0, robot.resultsToAnalyze || 500) + '/' + (robot.resultsToAnalyze || 500) + ' Resultados Analisados</b>',
       '🔥 <b>Confiança:</b> ' + (d.confidence || 0) + '%',
       '🔍 <b>Padrão:</b> ' + (d.mainPattern || '--'),
       '🎯 <b>Entrada:</b>  ' + entryEmoji + ' ' + entryLabel,
@@ -1197,7 +1268,11 @@ const TelegramService = {
       '{lastResultEmoji}': lastResultEmoji,
       '{lastResultLabel}': '<b>' + lastResultLabel + '</b>',
       '{diagnosticStatus}': '<b>' + (d.status || 'IDLE') + '</b>',
-      '{analyzedResults}': '<b>' + (d.analyzedResults || 0) + '</b>',
+      '{iaStrategy}': '<b>' + ((robot.iaState||{}).activeStrategy||'--') + '</b>',
+      '{iaTarget}': entryEmoji + ' <b>' + ((robot.iaState||{}).activeTarget||'--') + '</b>',
+      '{iaMultiplier}': '<b>' + ((robot.iaState||{}).activeMultiplier||'') + 'X</b>',
+      '{iaConfidence}': '<b>' + ((robot.iaState||{}).activeConfidence||0) + '%</b>',
+      '{analyzedResults}': '<b>' + Math.min(d.analyzedResults || 0, robot.resultsToAnalyze || 500) + '/' + (robot.resultsToAnalyze || 500) + '</b>',
       '{confidenceDiag}': '<b>' + (d.confidence || 0) + '%</b>',
       '{pattern}': '<b>' + (d.mainPattern || '--') + '</b>',
       '{entry}': entryEmoji + ' <b>' + entryLabel + '</b>',
@@ -1313,10 +1388,10 @@ const TelegramService = {
       const blue = galeByColor.blue || 0;
       const green = galeByColor.green || 0;
       const protections = [];
-      if (grey > 0) protections.push('⚫ G' + grey);
-      if (red > 0) protections.push('🔴 G' + red);
-      if (blue > 0) protections.push('🔵 G' + blue);
-      if (green > 0) protections.push('🟢 G' + green);
+      if (grey > 0) protections.push('⚫ Preto G' + grey);
+      if (red > 0) protections.push('🔴 Vermelho G' + red);
+      if (blue > 0) protections.push('🔵 Azul G' + blue);
+      if (green > 0) protections.push('🟢 Verde G' + green);
       if (protections.length) parts.push('🛡 PROTEÇÃO: ' + protections.join(' / '));
       else parts.push('🎯 ENTRADA SECA');
     }
@@ -1335,11 +1410,11 @@ const TelegramService = {
     const blue = galeByColor.blue || 0;
     const green = galeByColor.green || 0;
     const protections = [];
-    if (grey > 0) protections.push('⚫G' + grey);
-    if (red > 0) protections.push('🔴G' + red);
-    if (blue > 0) protections.push('🔵G' + blue);
-    if (green > 0) protections.push('🟢G' + green);
-    if (protections.length) return protections.join('/');
+      if (grey > 0) protections.push('⚫ Preto G' + grey);
+      if (red > 0) protections.push('🔴 Vermelho G' + red);
+      if (blue > 0) protections.push('🔵 Azul G' + blue);
+      if (green > 0) protections.push('🟢 Verde G' + green);
+      if (protections.length) return protections.join(' | ');
     return 'Entrada seca';
   },
 
@@ -1381,11 +1456,17 @@ const TelegramService = {
 
   normalizeTelegramHistory(robot, history) {
     return history.map(r => {
-      const rawColor = robot.game === 'double' ? r.color : (r.cellColor ?? r.color);
       const number = robot.game === 'double' ? (r.number ?? r.cellIndex) : (r.cellIndex ?? r.number);
+      let rawColor = robot.game === 'double' ? r.color : (r.cellColor ?? r.color);
+      if (robot.game === 'double' && !rawColor) {
+        if (number === 0) rawColor = 'green';
+        else if (number >= 1 && number <= 7) rawColor = 'red';
+        else if (number >= 8 && number <= 14) rawColor = 'black';
+      }
       const roundId = r.roundId ?? r.roundID ?? r.roundUuid ?? r.roundUUID ?? r.gameId ?? r.gameID ?? r.id ?? r.uuid;
+      const color = String(rawColor || '').toUpperCase();
       const item = {
-        color: String(rawColor || '').toUpperCase(),
+        color: color === 'GRAY' ? 'GREY' : color,
         number,
         multiplier: r.multiplier || null,
         time: r.time || r.timestamp || 0
@@ -1477,7 +1558,7 @@ const TelegramService = {
   },
 
   async sendFreshEntryMessage(robot, signal) {
-    if (!this.getToken()) return false;
+    if (!this.hasAnyToken()) return false;
     const destinations = this.getDestinations(robot);
     if (destinations.length === 0) return false;
     const destResults = [];
@@ -1497,6 +1578,7 @@ const TelegramService = {
     const key = this.entryMessageKey(robot, dest);
     const text = signal && signal.id !== 'cleanup' ? this.prepareTelegramText(this.buildEntryMessage(robot, signal)) : '';
     const messages = this.getEntryMessages();
+    if (this.migrateLegacyMessage(messages, robot, dest, key)) this.saveEntryMessages(messages);
     const current = messages[key];
     if (current?.messageId) {
       await this.api(token, 'deleteMessage', { chat_id: chatId, message_id: current.messageId }).catch(() => {});
@@ -1542,6 +1624,7 @@ const TelegramService = {
     const key = this.messageKey(robot, dest);
     const text = this.prepareTelegramText(this.buildDynamicMessage(robot));
     const messages = this.getLiveMessages();
+    if (this.migrateLegacyMessage(messages, robot, dest, key)) this.saveLiveMessages(messages);
     const current = messages[key];
 
     if (current?.sending && Date.now() - (current.updatedAt || 0) < this.liveSendingTimeoutMs) return;
@@ -1594,11 +1677,28 @@ const TelegramService = {
     if (!signal) {
       return '━━ 🚨 <b>AGUARDANDO SINAL</b> 🚨\n🤖 ' + robot.name + '\n🕕 ' + this.getCachedTime();
     }
-    const targetEmoji = this.colorEmoji(signal.target);
-    const targetLabel = this.colorLabel(signal.target);
+    const target = this.getSignalTarget(robot, signal);
+    const targetEmoji = target.emoji;
+    const targetLabel = this.colorLabel(target.color);
     const wins = robot.stats?.wins || 0;
     const losses = robot.stats?.losses || 0;
     const rate = (wins + losses) > 0 ? Math.round((wins / (wins + losses)) * 100) : 0;
+    const greenProt = robot.greenProtection && robot.game === 'double';
+    const greenProtLabel = greenProt ? ' + 🟢' : '';
+    let galeMax;
+    if (robot.game === 'wheel') {
+      const galeByColor = robot.galeByColor || {};
+      const colorKey = { RED: 'red', BLACK: 'grey', GREY: 'grey', BLUE: 'blue' };
+      const key = colorKey[target.color] || 'grey';
+      galeMax = galeByColor[key] ?? 1;
+    } else {
+      galeMax = robot.gale?.max || 0;
+    }
+    const galeLine = galeMax > 0 ? '⚡️ <b>GALE ATÉ: G' + galeMax + '</b>' : '⚡️ <b>ENTRADA SECA</b>';
+    const targetLine = '🎯 <b>ENTRAR NA COR=</b> ' + targetEmoji + greenProtLabel + '<b>' + targetLabel + '</b>';
+    if (!['win', 'loss'].includes(String(signal.status || 'approved').toLowerCase())) {
+      return this.buildEntryMessage(robot, signal);
+    }
     if (signal.status === 'win') {
       return [
         '━━ ✅ <b>WIN!</b> ✅ ━━',
@@ -1696,13 +1796,14 @@ const TelegramService = {
     if (sent.ok && sent.result?.message_id) {
       const key = this.maintenanceKey(robot, dest);
       const latest = this.getMaintenanceMessages();
+      this.migrateLegacyMessage(latest, robot, dest, key);
       latest[key] = { messageId: sent.result.message_id, chatId, robotId: robot.id, type, createdAt: Date.now() };
       this.saveMaintenanceMessages(latest);
     }
   },
 
   async clearAllMessages(robot) {
-    if (!this.getToken() || !robot) return;
+    if (!this.hasAnyToken() || !robot) return;
     const liveMessages = this.getLiveMessages();
     const entryMessages = this.getEntryMessages();
     const maintenanceMessages = this.getMaintenanceMessages();
@@ -1794,7 +1895,7 @@ const TelegramService = {
   },
 
   async sendScheduleNotification(robot, schedule, action) {
-    if (!this.getToken()) return;
+    if (!this.hasAnyToken()) return;
     let destinations = [];
     if (schedule.destinations && schedule.destinations.length > 0) {
       destinations = schedule.destinations.filter(d => d.channelId);

@@ -175,7 +175,7 @@ class Robot {
     this.lastHeartbeat = Date.now();
     if (!isDuplicate) {
       this.history.unshift({ color, number: normalized.number, multiplier: normalized.multiplier, roundId: normalized.roundId, storageId: normalized.storageId, resultKey: key, timestamp: normalized.time || Date.now() });
-      if (this.history.length > 500) this.history.pop();
+      if (this.history.length > 1000) this.history.pop();
       this.addLog('Resultado: ' + (color || normalized.number));
       this.analyze();
     }
@@ -220,7 +220,8 @@ class Robot {
       return;
     }
 
-    if (this.history.length < this.resultsToAnalyze) {
+    this.effectiveResults = Math.min(this.history.length, this.resultsToAnalyze);
+    if (this.effectiveResults < 10) {
       this.diagnostic.status = 'LOADING';
       this.diagnostic.mainPattern = `Aguardando dados (${this.history.length}/${this.resultsToAnalyze})`;
       this.diagnostic.confidence = 0;
@@ -247,8 +248,7 @@ class Robot {
 
     this.diagnostic.status = 'ANALYZING';
 
-    const reavaliationInterval = (typeof IAConfig !== 'undefined') ? IAConfig.settings.reavaliationInterval : 30000;
-    if (this.iaInteligente && (!this.iaState.activeStrategy || Date.now() - (this.iaState.lastAnalysisTime || 0) > reavaliationInterval)) {
+    if (this.iaInteligente) {
       this.analyzeIntelligentStrategy();
     }
 
@@ -274,7 +274,7 @@ class Robot {
       const sc = (this.strategyConfig || {})[name] || {};
       const defaultPS = { alternancia: 5, repeticao: 5, frequencia: 1, tendencia: 5, espelhamento: 5, diagonal: 6, padroesCores: 3 };
       const ps = sc.patternSize || defaultPS[name] || 3;
-      const r = name === 'padroesCores' ? fn(this.history.slice(0, this.resultsToAnalyze), this.target, ps) : fn(this.history, this.target, ps);
+      const r = fn(this.history.slice(0, this.effectiveResults), this.target, ps);
       scores[name] = r.confidence || 0;
       if (sc.enabled !== false) { total += r.confidence || 0; activeCount++; }
       strategyDetails[name] = {
@@ -295,15 +295,13 @@ class Robot {
     this.diagnostic.numberAnalysis = this.analyzeNumbers(this.history);
 
     if (this.currentSignal) {
-      const stratFn = strategies[this.strategy || 'todas'] || strategies[Object.keys(strategies)[0]];
+      const stratFn = strategies[this.strategy] || strategies[Object.keys(strategies)[0]];
       let stratResult = null;
       if (stratFn) {
         const sc2 = (this.strategyConfig || {})[this.strategy] || {};
         const defaultPS2 = { alternancia: 5, repeticao: 5, frequencia: 1, tendencia: 5, espelhamento: 5, diagonal: 6, padroesCores: 3 };
         const ps2 = sc2.patternSize || defaultPS2[this.strategy] || 3;
-        stratResult = this.strategy === 'padroesCores'
-          ? stratFn(this.history.slice(0, this.resultsToAnalyze), this.target, ps2)
-          : stratFn(this.history, this.target, ps2);
+        stratResult = stratFn(this.history.slice(0, this.effectiveResults), this.target, ps2);
       }
       this.diagnostic.status = 'WAITING_RESULT';
       this.diagnostic.mainPattern = 'Gale ' + (this.galeCount || 0) + '/' + (this.gale?.max || 0) + ' - ' + (stratResult?.reason || 'aguardando');
@@ -322,9 +320,8 @@ class Robot {
     }
 
     let signal = null;
-    const isAll = this.strategy === 'todas';
-    const robotStrategies = this.strategies || [this.strategy || 'todas'];
-    let namesToTry = isAll ? strategyNames : robotStrategies.filter(s => s !== 'todas');
+    const robotStrategies = this.strategies || (this.strategy ? [this.strategy] : []);
+    let namesToTry = robotStrategies.length ? robotStrategies.slice() : Object.keys(strategies).filter(s => s !== 'iaInteligente');
 
     if (this.iaInteligente && this.iaState.activeStrategy && strategies[this.iaState.activeStrategy]) {
       namesToTry = [this.iaState.activeStrategy];
@@ -339,7 +336,7 @@ class Robot {
       const sc = (this.strategyConfig || {})[name] || {};
       if (sc.enabled === false) continue;
       const fn = strategies[name];
-      const result = name === 'padroesCores' ? fn(this.history.slice(0, this.resultsToAnalyze), this.target, this.patternSize) : fn(this.history, this.target);
+      const result = fn(this.history.slice(0, this.effectiveResults), this.target, this.patternSize);
 
       if (sc.target && sc.target !== 'any' && result.target) {
         result.target = sc.target.toUpperCase();
@@ -359,10 +356,11 @@ class Robot {
       const effectiveMinConf = Math.max(minConf, sc.minConfidence || 0);
 
       if (!result.matched || result.confidence < effectiveMinConf) {
+        const multiStrat = namesToTry.length > 1;
         this.signalFlow = {
-          step1: (isAll ? 'Analisando: ' : 'Ciclo: ') + name,
+          step1: (multiStrat ? 'Analisando: ' : 'Ciclo: ') + name,
           step2: 'Confianca: ' + (result.confidence || 0) + '% (min: ' + effectiveMinConf + '%)',
-          step3: result.matched ? 'Confianca baixa - ' + (isAll ? 'proxima estrategia' : 'aguardando') : (result.reason || 'Nao detectado'),
+          step3: result.matched ? 'Confianca baixa - ' + (multiStrat ? 'proxima estrategia' : 'aguardando') : (result.reason || 'Nao detectado'),
           step4: 'Aguardando proximo resultado...'
         };
         EventBus.emit('robot:state', this.getState());
@@ -824,12 +822,14 @@ class Robot {
     const windowSize = (typeof IAConfig !== 'undefined') ? IAConfig.settings.windowSize : 30;
     const evals = [];
     for (const [name, fn] of Object.entries(strategies)) {
-      if (name === 'todas' || name === 'iaInteligente') continue;
+      if (name === 'iaInteligente') continue;
       const sc = (this.strategyConfig || {})[name] || {};
       if (sc.enabled === false) continue;
+      const defaultPS = { alternancia: 5, repeticao: 5, frequencia: 1, tendencia: 5, espelhamento: 5, diagonal: 6, padroesCores: 3 };
+      const ps = sc.patternSize || defaultPS[name] || 3;
       for (const t of colorTargets) {
         try {
-          const result = fn(history, { color: t.color, multiplier: t.mult });
+          const result = fn(history.slice(0, this.effectiveResults), { color: t.color, multiplier: t.mult }, ps);
           if (!result || !result.matched) continue;
           const confidence = result.confidence || 0;
           const confluences = result.confluences || 0;
@@ -973,6 +973,14 @@ class Robot {
           reason: best.reason
         });
       }
+    } else {
+      this.iaState.activeStrategy = this.strategies?.[0] || this.strategy || '--';
+      this.iaState.activeTarget = this.target?.color || 'any';
+      this.iaState.activeMultiplier = this.target?.multiplier || '--';
+      this.iaState.activeConfidence = 0;
+      this.iaState.activeWinRate = 0;
+      this.iaState.activeReason = 'Nenhum padrao detectado para esta combinacao';
+      this.iaState.evaluations = [];
     }
   }
 
@@ -1264,6 +1272,6 @@ class Robot {
   }
 
   toJSON() {
-    return { id: this.id, name: this.name, game: this.game, strategy: this.strategy, strategies: this.strategies, status: this.status, mode: this.mode, target: this.target, filterMode: this.filterMode, patternSize: this.patternSize, lastPatternAnalysisTime: this.lastPatternAnalysisTime, history: this.history.slice(0, 500), resultsToAnalyze: this.resultsToAnalyze, minimumConfidence: this.minimumConfidence, minScore: this.minScore, confirmations: this.confirmations, intervalMin: this.intervalMin, galeMax: this.gale.max, telegram: { ...this.telegram, message: { ...(this.telegram.message || {}) } }, stats: this.stats, lastHeartbeat: this.lastHeartbeat, lastResult: this.lastResult, lastSignal: this.lastSignal, currentSignal: this.currentSignal, galeCount: this.galeCount, lastSignalTime: this.lastSignalTime, diagnostic: this.diagnostic, signalFlow: this.signalFlow, logs: this.logs, signalHistory: this.signalHistory, strategyIndex: this.strategyIndex, usedPatterns: this.usedPatterns, startedAt: this.startedAt, strategyConfig: this.strategyConfig || {}, greenProtection: this.greenProtection, filters: this.filters, galeByColor: this.galeByColor, autoPause: this.autoPause, startDelayUntil: this.startDelayUntil, iaInteligente: this.iaInteligente, iaState: this.iaState };
+    return { id: this.id, name: this.name, game: this.game, strategy: this.strategy, strategies: this.strategies, status: this.status, mode: this.mode, target: this.target, filterMode: this.filterMode, patternSize: this.patternSize, lastPatternAnalysisTime: this.lastPatternAnalysisTime, history: this.history.slice(0, 1000), resultsToAnalyze: this.resultsToAnalyze, minimumConfidence: this.minimumConfidence, minScore: this.minScore, confirmations: this.confirmations, intervalMin: this.intervalMin, galeMax: this.gale.max, telegram: { ...this.telegram, message: { ...(this.telegram.message || {}) } }, stats: this.stats, lastHeartbeat: this.lastHeartbeat, lastResult: this.lastResult, lastSignal: this.lastSignal, currentSignal: this.currentSignal, galeCount: this.galeCount, lastSignalTime: this.lastSignalTime, diagnostic: this.diagnostic, signalFlow: this.signalFlow, logs: this.logs, signalHistory: this.signalHistory, strategyIndex: this.strategyIndex, usedPatterns: this.usedPatterns, startedAt: this.startedAt, strategyConfig: this.strategyConfig || {}, greenProtection: this.greenProtection, filters: this.filters, galeByColor: this.galeByColor, autoPause: this.autoPause, startDelayUntil: this.startDelayUntil, iaInteligente: this.iaInteligente, iaState: this.iaState };
   }
 }

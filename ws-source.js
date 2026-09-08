@@ -291,7 +291,7 @@ class WSSource {
 
 const ResultHistoryStore = {
   keys: { wheel: 'historico-wheel-v1', double: 'historico-double-v1' },
-  maxResults: 500,
+  maxResults: 1000,
   duplicateWindowMs: 15000,
 
   getKey(label) {

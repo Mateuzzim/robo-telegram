@@ -6,6 +6,7 @@
 <title>IA Inteligente - Sistema</title>
 <link rel="stylesheet" href="style.css">
 <style>
+  html{zoom:0.8}
   :root{--radius:12px}
   .ia-page{display:grid;grid-template-columns:280px 1fr 320px;gap:16px;min-height:calc(100vh - 120px)}
   .ia-panel{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
@@ -98,7 +99,10 @@
 <nav class="nav">
   <span class="nav-brand">ROBOS</span>
   <div class="nav-links"><a href="index.html"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg></span><span class="nav-text">Dashboard</span></a><a href="monitoramento.html"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></span><span class="nav-text">Monitoramento</span></a><a href="robos.html"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"></rect><circle cx="8.5" cy="16" r="1.5"></circle><circle cx="15.5" cy="16" r="1.5"></circle><path d="M12 11V7"></path><path d="M8 7h8"></path></svg></span><span class="nav-text">Robos</span></a><a href="horarios.html"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg></span><span class="nav-text">Horarios</span></a><a href="analise.html"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg></span><span class="nav-text">Analise</span></a><a href="ia-inteligente.html" class="active"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 1 0 0-20z"></path><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg></span><span class="nav-text">IA Inteligente</span></a></div>
-  <div class="nav-status"><a href="ws-background.html" target="_blank" style="font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text3);margin-right:8px">BG</a><div class="dot" id="connDot"></div></div>
+  <div class="nav-status">
+    <button id="themeToggle" onclick="toggleTheme()" title="Alternar tema" style="width:34px;height:34px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:all .2s"><svg id="themeIconMoon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg><svg id="themeIconSun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg></button>
+    <a href="ws-background.html" target="_blank" style="font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text3);margin-right:8px">BG</a>
+    <div class="dot" id="connDot"></div></div>
 </nav>
 
 <div class="container">
@@ -393,6 +397,22 @@
 <script src="app.js"></script>
 <script>
 App.init();
+function toggleTheme() {
+  const html = document.documentElement;
+  const isLight = html.getAttribute('data-theme') === 'light';
+  html.setAttribute('data-theme', isLight ? 'dark' : 'light');
+  localStorage.setItem('theme', isLight ? 'dark' : 'light');
+  const moon = document.getElementById('themeIconMoon');
+  const sun = document.getElementById('themeIconSun');
+  if (moon && sun) { moon.style.display = isLight ? 'none' : 'block'; sun.style.display = isLight ? 'block' : 'none'; }
+}
+(function() {
+  const saved = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', saved);
+  const moon = document.getElementById('themeIconMoon');
+  const sun = document.getElementById('themeIconSun');
+  if (moon && sun) { moon.style.display = saved === 'light' ? 'none' : 'block'; sun.style.display = saved === 'light' ? 'block' : 'none'; }
+})();
 </script>
 <script>
 let currentTab = 'evaluate';

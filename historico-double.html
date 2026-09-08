@@ -35,6 +35,7 @@
     <a href="mensagens.html"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg></span><span class="nav-text">Mensagens</span></a>
   </div>
   <div class="nav-status">
+    <button id="themeToggle" onclick="toggleTheme()" title="Alternar tema" style="width:34px;height:34px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:all .2s"><svg id="themeIconMoon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg><svg id="themeIconSun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg></button>
     <a href="ws-background.html" target="_blank" style="font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text3);margin-right:8px">BG</a>
     <div class="dot" id="connDot"></div><span id="connText" style="font-size:12px;color:var(--text2)">Conectando...</span></div>
 </nav>
@@ -57,12 +58,28 @@
 <script src="app.js"></script>
 <script>
 App.init();
+function toggleTheme() {
+  const html = document.documentElement;
+  const isLight = html.getAttribute('data-theme') === 'light';
+  html.setAttribute('data-theme', isLight ? 'dark' : 'light');
+  localStorage.setItem('theme', isLight ? 'dark' : 'light');
+  const moon = document.getElementById('themeIconMoon');
+  const sun = document.getElementById('themeIconSun');
+  if (moon && sun) { moon.style.display = isLight ? 'none' : 'block'; sun.style.display = isLight ? 'block' : 'none'; }
+}
+(function() {
+  const saved = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', saved);
+  const moon = document.getElementById('themeIconMoon');
+  const sun = document.getElementById('themeIconSun');
+  if (moon && sun) { moon.style.display = saved === 'light' ? 'none' : 'block'; sun.style.display = saved === 'light' ? 'block' : 'none'; }
+})();
 const resultsEl = document.getElementById('results');
 const countEl = document.getElementById('resultCount');
 const connDot = document.getElementById('connDot');
 const connText = document.getElementById('connText');
 const STORAGE_KEY = 'historico-double-v1';
-const MAX_RESULTS = 500;
+const MAX_RESULTS = 1000;
 
 function loadHistory() {
   try {

@@ -15,6 +15,7 @@
 <script src="ws-source.js"></script>
 <script src="robot.js"></script>
 <script src="robot-engine.js"></script>
+<script src="ia-inteligente.js"></script>
 <script src="filters.js"></script>
 <script src="telegram.js"></script>
 <script src="analise-engine.js"></script>
@@ -24,10 +25,43 @@
 <script src="scheduler.js"></script>
 <script src="app.js"></script>
 <script>
+const statusEl = document.getElementById('status');
+let _backgroundAuxStarted = false;
+let _analiseSyncTimer = null;
+
+function isBackgroundLeader() {
+  return !!(window.App && App._backgroundStarted);
+}
+
+function startBackgroundAuxTasks() {
+  if (_backgroundAuxStarted || !isBackgroundLeader()) return;
+  _backgroundAuxStarted = true;
+  NewsService.init();
+  ChartService.init();
+  Scheduler.init();
+  AnaliseEngine.getAllBots().filter(b => b.status === 'online').forEach(b => {
+    AnaliseEngine.startBot(b.id);
+  });
+  if (!_analiseSyncTimer) {
+    _analiseSyncTimer = setInterval(() => {
+      if (isBackgroundLeader()) AnaliseEngine.syncFromStorage();
+    }, 10000);
+  }
+}
+
+function stopBackgroundAuxTasks() {
+  _backgroundAuxStarted = false;
+  if (_analiseSyncTimer) {
+    clearInterval(_analiseSyncTimer);
+    _analiseSyncTimer = null;
+  }
+}
+
+EventBus.on('background:started', startBackgroundAuxTasks);
+EventBus.on('background:stopped', stopBackgroundAuxTasks);
+
 App.init();
-NewsService.init();
-ChartService.init();
-Scheduler.init();
+startBackgroundAuxTasks();
 
 (function migrateWheelGreyToBlack() {
   const key = 'historico-wheel-v1';
@@ -49,16 +83,6 @@ Scheduler.init();
     }
   } catch {}
 })();
-
-AnaliseEngine.getAllBots().filter(b => b.status === 'online').forEach(b => {
-  AnaliseEngine.startBot(b.id);
-});
-
-setInterval(() => {
-  AnaliseEngine.syncFromStorage();
-}, 10000);
-
-const statusEl = document.getElementById('status');
 
 const KEYS = { wheel: 'historico-wheel-v1', double: 'historico-double-v1' };
 const MAX_RESULTS = 500;
@@ -187,6 +211,7 @@ function updateStatus(label, item) {
 }
 
 EventBus.on('result:new', (d) => {
+  if (!isBackgroundLeader()) return;
   if (d.label === 'wheel' || d.label === 'double') {
     addResult(d.label, d);
     AnaliseEngine.getAllBots().filter(b => b.status === 'online' && b.game === d.label).forEach(b => {
@@ -196,16 +221,19 @@ EventBus.on('result:new', (d) => {
 });
 
 EventBus.on('results:history', (d) => {
+  if (!isBackgroundLeader()) return;
   if (d.label === 'wheel' || d.label === 'double') {
     mergeHistory(d.label, d.results);
   }
 });
 
 EventBus.on('ws-status', (d) => {
+  if (!isBackgroundLeader()) return;
   statusEl.textContent = `[${new Date().toLocaleTimeString()}] ${d.label}: ${d.connected ? 'Online' : 'Offline'}`;
 });
 
 document.addEventListener('visibilitychange', () => {
+  if (!isBackgroundLeader()) return;
   if (document.visibilityState === 'visible') {
     if (Sources.wheel && !Sources.wheel.connected) Sources.wheel.forceReconnect();
     if (Sources.double && !Sources.double.connected) Sources.double.forceReconnect();
@@ -223,6 +251,7 @@ let _keepAliveCounter = 0;
 let _lastNetworkState = navigator.onLine;
 
 window.addEventListener('online', () => {
+  if (!isBackgroundLeader()) return;
   statusEl.textContent = '[' + new Date().toLocaleTimeString() + '] Rede detectada - reconectando...';
   if (Sources.wheel) Sources.wheel.forceReconnect();
   if (Sources.double) Sources.double.forceReconnect();
@@ -233,6 +262,10 @@ window.addEventListener('offline', () => {
 });
 
 setInterval(() => {
+  if (!isBackgroundLeader()) {
+    statusEl.textContent = '[' + new Date().toLocaleTimeString() + '] BG aguardando liderança...';
+    return;
+  }
   _keepAliveCounter++;
   const isOnline = navigator.onLine;
   if (isOnline !== _lastNetworkState) {
