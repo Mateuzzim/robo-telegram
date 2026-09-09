@@ -2,17 +2,11 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,viewport-fit=cover">
-<meta name="theme-color" content="#a855f7">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Robos">
-<link rel="manifest" href="manifest.json">
-<link rel="icon" href="icon-192.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icon-192.svg">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Dashboard - Sistema de Robos</title>
 <link rel="stylesheet" href="style.css">
 <style>
+  html{zoom:0.75}
   .hero{background:linear-gradient(135deg,rgba(168,85,247,.18),rgba(6,182,212,.12),rgba(35,104,255,.08));border:1px solid var(--border);border-radius:16px;padding:28px 32px;margin-bottom:24px;position:relative;overflow:hidden}
   .hero::before{content:'';position:absolute;top:-60%;right:-12%;width:350px;height:350px;background:radial-gradient(circle,rgba(168,85,247,.1),transparent 70%);border-radius:50%}
   .hero::after{content:'';position:absolute;bottom:-50%;left:8%;width:250px;height:250px;background:radial-gradient(circle,rgba(6,182,212,.08),transparent 70%);border-radius:50%}
@@ -68,69 +62,55 @@
   .signal-status{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:5px;font-size:10px;font-weight:700}
   @media(max-width:1100px){.stats-grid{grid-template-columns:repeat(2,1fr)}.quick-actions{grid-template-columns:repeat(2,1fr)}}
   @media(max-width:768px){
+    html{zoom:1}
     .container{padding:10px 12px}
-    .hero{padding:14px 16px;margin-bottom:10px;border-radius:12px}
-    .hero h1{font-size:18px;gap:8px}
-    .hero h1 .logo{width:26px;height:26px;border-radius:8px}
-    .hero h1 .logo svg{width:14px;height:14px}
-    .hero p{font-size:10px;margin-top:2px;display:none}
-    .stats-grid{grid-template-columns:repeat(2,1fr);gap:6px;margin-bottom:10px}
-    .stat-card{padding:8px 10px}
-    .stat-card .stat-icon{width:24px;height:24px;border-radius:6px;margin-bottom:4px}
-    .stat-card .stat-icon svg{width:12px;height:12px}
-    .stat-card .stat-value{font-size:20px}
-    .stat-card .stat-label{font-size:9px;margin-top:2px}
-    .stat-card .stat-sub{font-size:8px}
-    .quick-actions{grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:10px}
-    .quick-action{padding:8px 4px;border-radius:8px}
-    .quick-action .qa-icon svg{width:18px;height:18px}
-    .quick-action .qa-label{font-size:8px;letter-spacing:.2px}
-    .main-grid{grid-template-columns:1fr;gap:8px;margin-bottom:8px}
-    .card{padding:10px;border-radius:10px}
-    .section-title{font-size:11px;margin-bottom:8px}
-    .robot-card{padding:6px 8px;margin-bottom:4px;border-radius:8px}
-    .robot-card .rc-icon{width:28px;height:28px;border-radius:6px}
-    .robot-card .rc-name{font-size:11px}
-    .robot-card .rc-meta{font-size:9px}
-    .robot-card .rc-right{gap:4px}
-    .robot-card .rc-stats{gap:4px;font-size:8px}
-    .feed-item{padding:4px 0;font-size:10px;gap:4px}
-    .feed-time{font-size:8px;min-width:32px}
-    .signal-row{padding:4px 0;font-size:10px;gap:6px}
-    .signal-row span[style*="min-width:80px"]{min-width:50px!important;font-size:9px}
-    .signal-row span[style*="min-width:60px"]{min-width:40px!important;font-size:9px}
-    .nav{padding:6px 8px;gap:6px}
-    .nav-brand{font-size:13px;margin-right:8px}
+    .hero{padding:16px 18px;margin-bottom:14px;border-radius:12px}
+    .hero h1{font-size:20px;gap:8px}
+    .hero h1 .logo{width:28px;height:28px;border-radius:8px}
+    .hero h1 .logo svg{width:16px;height:16px}
+    .hero p{font-size:11px;margin-top:2px}
+    .stats-grid{grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px}
+    .stat-card{padding:12px 14px}
+    .stat-card .stat-icon{width:28px;height:28px;border-radius:8px;margin-bottom:6px}
+    .stat-card .stat-value{font-size:24px}
+    .stat-card .stat-label{font-size:10px;margin-top:4px}
+    .stat-card .stat-sub{font-size:9px}
+    .quick-actions{grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px}
+    .quick-action{padding:10px 8px;border-radius:10px}
+    .quick-action .qa-icon svg{width:22px;height:22px}
+    .quick-action .qa-label{font-size:9px;letter-spacing:.3px}
+    .main-grid{gap:10px;margin-bottom:12px}
+    .card{padding:12px;border-radius:10px}
+    .section-title{font-size:12px;margin-bottom:10px}
+    .robot-card{padding:8px 10px;margin-bottom:5px;border-radius:8px}
+    .robot-card .rc-icon{width:30px;height:30px;border-radius:8px}
+    .robot-card .rc-name{font-size:12px}
+    .robot-card .rc-meta{font-size:10px}
+    .robot-card .rc-right{gap:6px}
+    .robot-card .rc-stats{gap:6px;font-size:9px}
+    .feed-item{padding:5px 0;font-size:11px;gap:6px}
+    .feed-time{font-size:9px;min-width:36px}
+    .signal-row{padding:5px 0;font-size:11px;gap:8px}
+    .nav{padding:8px 10px;gap:8px}
+    .nav-brand{font-size:14px;margin-right:12px}
     .nav-links{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:none}
     .nav-links::-webkit-scrollbar{display:none}
-    .nav-links a{padding:4px 6px;font-size:10px;gap:3px;white-space:nowrap;flex-shrink:0}
-    .nav-links a .nav-icon svg{width:12px;height:12px}
-    .nav-status{gap:3px;flex-shrink:0}
-    .nav-status a{font-size:8px;padding:2px 5px}
+    .nav-links a{padding:5px 8px;font-size:11px;gap:4px;white-space:nowrap;flex-shrink:0}
+    .nav-links a .nav-icon svg{width:14px;height:14px}
+    .nav-status{gap:4px;flex-shrink:0}
+    .nav-status a{font-size:9px;padding:2px 6px}
   }
   @media(max-width:420px){
-    .stats-grid{display:flex!important;flex-wrap:nowrap!important;gap:3px!important;margin-bottom:8px!important;padding:0!important}
-    .stats-grid .stat-card,.stat-card{flex:1 1 0%!important;min-width:0!important;max-width:25%!important;padding:4px 2px!important;display:flex!important;flex-direction:column!important;align-items:center!important;text-align:center!important;border-radius:6px!important;overflow:hidden!important;position:relative!important;background:var(--bg2)!important;border:1px solid var(--border)!important}
-    .stat-card::before{display:none!important}
-    .stat-card .stat-icon,.stat-card>div:first-child{display:none!important;width:0!important;height:0!important;margin:0!important;padding:0!important}
-    .stat-card .stat-value,.stat-card>div:nth-child(2){font-size:14px!important;line-height:1!important;font-weight:800!important;margin:0!important;padding:0!important}
-    .stat-card .stat-label,.stat-card>div:nth-child(3){font-size:6px!important;margin-top:1px!important;letter-spacing:.2px!important;text-transform:uppercase!important;color:var(--text3)!important;padding:0!important}
-    .stat-card .stat-sub,.stat-card>div:nth-child(4){font-size:5px!important;margin-top:0!important;opacity:.7!important;color:var(--text3)!important;padding:0!important}
-    .quick-actions{grid-template-columns:repeat(4,1fr)!important;gap:3px!important;margin-bottom:8px!important}
-    .quick-action{padding:6px 2px!important;border-radius:6px!important}
-    .quick-action .qa-icon svg{width:16px!important;height:16px!important}
-    .quick-action .qa-label{font-size:7px!important;letter-spacing:0!important}
-    .main-grid{gap:6px!important;margin-bottom:6px!important}
-    .card{padding:8px!important;border-radius:8px!important}
-    .section-title{font-size:10px!important;margin-bottom:6px!important}
-    .robot-card{padding:5px 6px!important;margin-bottom:3px!important;border-radius:6px!important}
-    .robot-card .rc-icon{width:24px!important;height:24px!important;border-radius:6px!important}
-    .robot-card .rc-name{font-size:10px!important}
-    .robot-card .rc-meta{font-size:8px!important}
-    .robot-card .rc-stats{display:none!important}
-    .feed-item{padding:3px 0!important;font-size:9px!important;gap:3px!important}
-    .feed-time{font-size:7px!important;min-width:28px!important}
-    .signal-row{padding:3px 0!important;font-size:9px!important;gap:4px!important}
+    .stats-grid{grid-template-columns:1fr 1fr;gap:6px}
+    .stat-card{padding:10px 12px;display:flex;align-items:center;gap:10px}
+    .stat-card .stat-icon{margin-bottom:0}
+    .quick-actions{grid-template-columns:repeat(2,1fr);gap:6px}
+    .quick-action{padding:8px 6px}
+    .quick-action .qa-icon svg{width:20px;height:20px}
+    .quick-action .qa-label{font-size:8px}
+    .main-grid{grid-template-columns:1fr}
+    .robot-card .rc-icon{width:26px;height:26px}
+    .robot-card .rc-stats{display:none}
   }
 </style>
 </head>
@@ -150,7 +130,6 @@
     <a href="historico-wheel.html"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span><span class="nav-text">Wheel</span></a>
     <a href="historico-double.html"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></span><span class="nav-text">Double</span></a>
     <a href="mensagens.html"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span><span class="nav-text">Mensagens</span></a>
-    <a href="help.html"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span><span class="nav-text">Ajuda</span></a>
   </div>
   <div class="nav-status">
     <button id="themeToggle" onclick="toggleTheme()" title="Alternar tema" style="width:34px;height:34px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:all .2s"><svg id="themeIconMoon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg><svg id="themeIconSun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg></button>
@@ -409,11 +388,6 @@ setInterval(renderDashboard, 5000);
 setInterval(renderFeed, 5000);
 setInterval(renderSignals, 5000);
 setInterval(renderConnectionStatus, 2000);
-</script>
-<script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/service-worker.js').catch(() => {});
-}
 </script>
 </body>
 </html>

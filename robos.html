@@ -3,13 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<meta name="theme-color" content="#a855f7">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Robos">
-<link rel="manifest" href="manifest.json">
-<link rel="icon" href="icon-192.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icon-192.svg">
 <title>Robos</title>
 <link rel="stylesheet" href="style.css">
 <style>
@@ -168,10 +161,11 @@
         <div class="form-group" id="galeMaxGroup"><label>Gale Maximo</label><input id="fGale" type="number" value="2" style="max-width:120px"></div>
         <div id="galeByColorGroup" style="display:none">
           <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin:10px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--border)">Gales por Cor (WHEEL)</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">
             <div class="form-group"><label>⚫️ Preto</label><input id="fGaleGrey" type="number" value="1" min="0" style="width:100%"></div>
             <div class="form-group"><label>🔴 Vermelho</label><input id="fGaleRed" type="number" value="3" min="0" style="width:100%"></div>
             <div class="form-group"><label>🔵 Azul</label><input id="fGaleBlue" type="number" value="5" min="0" style="width:100%"></div>
+            <div class="form-group"><label>🟢 Verde</label><input id="fGaleGreen" type="number" value="10" min="0" style="width:100%"></div>
           </div>
         </div>
         <div class="form-group" id="patternSizeGroup" style="display:none"><label>Tamanho do Padrao</label><select id="fPatternSize"><option value="1">1 cor</option><option value="2">2 cores</option><option value="3" selected>3 cores</option><option value="4">4 cores</option><option value="5">5 cores</option><option value="6">6 cores</option></select></div>
@@ -344,7 +338,8 @@ function toggleIaInteligente() {
     const wheelByColor = {
       grey: ['cicloPreto','reacaoPreto'],
       red: ['cicloVermelho','convergenciaVermelha'],
-      blue: ['cicloAzul','sequenciaAzul']
+      blue: ['cicloAzul','sequenciaAzul'],
+      green: ['cicloVerde','convergencia']
     };
     const doubleByColor = {
       black: ['sequenciaNegra','momentumPreto'],
@@ -460,6 +455,7 @@ const TARGETS = {
     { value: 'grey', label: 'Preto 2X' },
     { value: 'red', label: 'Vermelho 3X' },
     { value: 'blue', label: 'Azul 5X' },
+    { value: 'green', label: 'Verde 50X' },
     { value: 'red+grey', label: 'Vermelho / Preto' }
   ],
   double: [
@@ -507,6 +503,7 @@ function autoSetGale() {
       grey: 1,
       red: 3,
       blue: 5,
+      green: 10,
       'red+grey': 1
     },
     double: {
@@ -525,6 +522,7 @@ function autoSetGale() {
     document.getElementById('fGaleGrey').value = 1;
     document.getElementById('fGaleRed').value = 3;
     document.getElementById('fGaleBlue').value = 5;
+    document.getElementById('fGaleGreen').value = 10;
   }
 }
 function showCreate(){
@@ -545,6 +543,7 @@ function showCreate(){
   document.getElementById('fGaleGrey').value = '1';
   document.getElementById('fGaleRed').value = '3';
   document.getElementById('fGaleBlue').value = '5';
+  document.getElementById('fGaleGreen').value = '10';
   document.getElementById('fPatternSize').value = '3';
   document.getElementById('fAutoPause').value = '0';
   document.getElementById('fIaInteligente').checked = false;
@@ -612,6 +611,7 @@ function showEdit(id){
   document.getElementById('fGaleGrey').value = galeByColor.grey ?? 1;
   document.getElementById('fGaleRed').value = galeByColor.red ?? 3;
   document.getElementById('fGaleBlue').value = galeByColor.blue ?? 5;
+  document.getElementById('fGaleGreen').value = galeByColor.green ?? 10;
   updateGaleByColorVisibility();
   renderLossPatterns(robot);
   document.getElementById('modal').style.display='flex';
@@ -790,11 +790,12 @@ function createRobot(){
   const galeByColor = {
     grey: parseInt(document.getElementById('fGaleGrey')?.value) || 1,
     red: parseInt(document.getElementById('fGaleRed')?.value) || 3,
-    blue: parseInt(document.getElementById('fGaleBlue')?.value) || 5
+    blue: parseInt(document.getElementById('fGaleBlue')?.value) || 5,
+    green: parseInt(document.getElementById('fGaleGreen')?.value) || 10
   };
   let galeMax = parseInt(document.getElementById('fGale').value) || 2;
   if (game === 'wheel' && targetColor === 'any') {
-    galeMax = Math.max(galeByColor.grey, galeByColor.red, galeByColor.blue);
+    galeMax = Math.max(galeByColor.grey, galeByColor.red, galeByColor.blue, galeByColor.green);
   }
 
   const tgConfig = {
@@ -2194,10 +2195,5 @@ EventBus.on('robot:state', () => {
     </div>
   </div>
 </div>
-<script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/service-worker.js').catch(() => {});
-}
-</script>
 </body>
 </html>
