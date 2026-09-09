@@ -21,3 +21,16 @@ try {
   if (savedWsConfig.wheelWsUrl) CONFIG.wheel.wsUrl = savedWsConfig.wheelWsUrl;
   if (savedWsConfig.doubleWsUrl) CONFIG.double.wsUrl = savedWsConfig.doubleWsUrl;
 } catch {}
+
+try {
+  if (typeof location !== 'undefined' &&
+      location.hostname !== 'localhost' &&
+      location.hostname !== '127.0.0.1' &&
+      location.hostname !== '0.0.0.0' &&
+      location.protocol.startsWith('http')) {
+    var _relayHost = location.hostname;
+    var _relayPort = location.port || '3000';
+    CONFIG.wheel.wsUrl = 'ws://' + _relayHost + ':' + _relayPort + '/ws/wheel';
+    CONFIG.double.wsUrl = 'ws://' + _relayHost + ':' + _relayPort + '/ws/double';
+  }
+} catch {}

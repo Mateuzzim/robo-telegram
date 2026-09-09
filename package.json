@@ -1,0 +1,15 @@
+{
+  "name": "robotelegram-relay",
+  "version": "1.0.0",
+  "description": "Servidor relay para acesso remoto via celular",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "tunnel": "node tunnel.js",
+    "remote": "node server.js & node tunnel.js"
+  },
+  "dependencies": {
+    "localtunnel": "^2.0.2",
+    "ws": "^8.18.0"
+  }
+}

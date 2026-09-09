@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<meta name="theme-color" content="#a855f7">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Robos">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.svg">
+<title>Ajuda - Sistema de Robos</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  html{zoom:0.75}
+  .hero{background:linear-gradient(135deg,rgba(41,217,120,.15),rgba(35,104,255,.1),rgba(168,85,247,.08));border:1px solid var(--border);border-radius:16px;padding:28px 32px;margin-bottom:24px;position:relative;overflow:hidden}
+  .hero::before{content:'';position:absolute;top:-50%;right:-10%;width:300px;height:300px;background:radial-gradient(circle,rgba(41,217,120,.08),transparent 70%);border-radius:50%}
+  .hero h1{font-size:28px;font-weight:800;margin-bottom:4px;position:relative;z-index:1;display:flex;align-items:center;gap:12px}
+  .hero p{color:var(--text3);font-size:13px;position:relative;z-index:1}
+  .section{margin-bottom:24px}
+  .section-title{font-size:16px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px;color:var(--green)}
+  .section-title .num{width:28px;height:28px;border-radius:50%;background:var(--green);color:#000;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;flex-shrink:0}
+  .step{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:12px;transition:all .2s;cursor:default}
+  .step:hover{border-color:var(--green);transform:translateX(4px)}
+  .step h3{font-size:14px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+  .step p{font-size:12px;color:var(--text2);margin-bottom:8px}
+  .step:last-child{margin-bottom:0}
+  .code-block{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 16px;font-family:'Cascadia Code','Fira Code',monospace;font-size:12px;color:var(--green);overflow-x:auto;margin:8px 0;position:relative;white-space:pre-wrap;word-break:break-all}
+  .code-block .copy-btn{position:absolute;top:8px;right:8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:10px;color:var(--text2);cursor:pointer;transition:all .2s}
+  .code-block .copy-btn:hover{background:var(--green);color:#000}
+  .tip{background:rgba(41,217,120,.08);border:1px solid rgba(41,217,120,.2);border-radius:10px;padding:14px 16px;margin:12px 0;font-size:12px;color:var(--green);display:flex;gap:10px;align-items:flex-start}
+  .tip .icon{font-size:18px;flex-shrink:0;margin-top:-2px}
+  .warn{background:rgba(234,179,8,.08);border:1px solid rgba(234,179,8,.2);border-radius:10px;padding:14px 16px;margin:12px 0;font-size:12px;color:var(--yellow);display:flex;gap:10px;align-items:flex-start}
+  .warn .icon{font-size:18px;flex-shrink:0;margin-top:-2px}
+  .danger{background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.2);border-radius:10px;padding:14px 16px;margin:12px 0;font-size:12px;color:var(--red);display:flex;gap:10px;align-items:flex-start}
+  .danger .icon{font-size:18px;flex-shrink:0;margin-top:-2px}
+  .diagram{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:20px;margin:16px 0;font-family:'Cascadia Code','Fira Code',monospace;font-size:11px;color:var(--text2);text-align:center;line-height:1.8;overflow-x:auto}
+  .diagram .highlight{color:var(--green);font-weight:700}
+  .diagram .accent{color:#a855f7;font-weight:700}
+  .diagram .blue{color:var(--blue);font-weight:700}
+  .badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:6px;font-size:10px;font-weight:700}
+  .badge-local{background:rgba(41,217,120,.12);color:var(--green);border:1px solid rgba(41,217,120,.25)}
+  .badge-remote{background:rgba(168,85,247,.12);color:#a855f7;border:1px solid rgba(168,85,247,.25)}
+  .badge-pwa{background:rgba(35,104,255,.12);color:var(--blue);border:1px solid rgba(35,104,255,.25)}
+  .file-list{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:12px 0}
+  .file-item{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:11px;display:flex;align-items:center;gap:8px}
+  .file-item .fi-icon{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
+  .file-item .fi-name{font-weight:600;color:var(--text)}
+  .file-item .fi-desc{color:var(--text3);font-size:10px}
+  .faq-item{background:var(--bg2);border:1px solid var(--border);border-radius:10px;margin-bottom:8px;overflow:hidden}
+  .faq-q{padding:14px 16px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:space-between;transition:background .2s}
+  .faq-q:hover{background:var(--bg3)}
+  .faq-q .arrow{transition:transform .2s;color:var(--text3)}
+  .faq-q.open .arrow{transform:rotate(180deg)}
+  .faq-a{padding:0 16px 14px;font-size:12px;color:var(--text2);display:none;line-height:1.6}
+  .faq-a.show{display:block}
+  .tabs{display:flex;gap:4px;margin-bottom:16px;background:var(--bg);border-radius:10px;padding:4px}
+  .tab{flex:1;padding:10px;text-align:center;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;color:var(--text3)}
+  .tab.active{background:var(--green);color:#000}
+  .tab-content{display:none}
+  .tab-content.active{display:block}
+  .phone-mock{width:220px;margin:16px auto;background:var(--bg);border:2px solid var(--border);border-radius:24px;padding:12px;position:relative}
+  .phone-mock .notch{width:80px;height:6px;background:var(--border);border-radius:3px;margin:0 auto 10px}
+  .phone-mock .screen{background:var(--bg2);border-radius:8px;padding:10px;min-height:200px;font-size:10px;color:var(--text2)}
+  .phone-mock .screen .url-bar{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;margin-bottom:8px;font-size:9px;color:var(--text3);display:flex;align-items:center;gap:6px}
+  .phone-mock .screen .url-bar .lock{color:var(--green)}
+  .phone-mock .screen .content{font-size:9px;line-height:1.4}
+  @media(max-width:768px){
+    html{zoom:1}
+    .container{padding:10px 12px}
+    .hero{padding:16px 18px;margin-bottom:14px;border-radius:12px}
+    .hero h1{font-size:20px;gap:8px}
+    .hero p{font-size:11px;margin-top:2px}
+    .section-title{font-size:14px}
+    .step{padding:14px 16px}
+    .file-list{grid-template-columns:1fr}
+    .nav{padding:8px 10px;gap:8px}
+    .nav-brand{font-size:14px;margin-right:12px}
+    .nav-links{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+    .nav-links::-webkit-scrollbar{display:none}
+    .nav-links a{padding:5px 8px;font-size:11px;gap:4px;white-space:nowrap;flex-shrink:0}
+  }
+</style>
+</head>
+<body>
+<nav class="nav">
+  <span class="nav-brand">ROBOS</span>
+  <div class="nav-links">
+    <a href="index.html"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></span><span class="nav-text">Dashboard</span></a>
+    <a href="help.html" class="active"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span><span class="nav-text">Ajuda</span></a>
+  </div>
+  <div class="nav-status">
+    <button id="themeToggle" onclick="toggleTheme()" title="Alternar tema" style="width:34px;height:34px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:all .2s"><svg id="themeIconMoon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg><svg id="themeIconSun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg></button>
+    <div class="dot" id="connDot"></div>
+    <span id="connText" style="font-size:12px;color:var(--text2)">--</span>
+  </div>
+</nav>
+
+<div class="container">
+  <div class="hero">
+    <h1>
+      <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--green),var(--blue));display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(41,217,120,.3)">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      </div>
+      Central de Ajuda
+    </h1>
+    <p>Guia completo para acessar o sistema de robos em tempo real pelo celular</p>
+  </div>
+
+  <!-- VISAO GERAL -->
+  <div class="section">
+    <div class="section-title"><span class="num">1</span> Como Funciona</div>
+
+    <div class="diagram">
+      <span class="accent">PC (VPN)</span> --<span class="highlight">WebSocket</span>--> <span class="blue">api.inout.games</span><br>
+          |<br>
+          <span class="highlight">server.js</span> (relay na porta 3000)<br>
+          |<br>
+      +---+---+<br>
+      |       |<br>
+  <span class="accent">Local</span>  <span class="highlight">Tunnel</span><br>
+  <span style="color:var(--text3)">WiFi</span>   <span style="color:var(--text3)">Internet</span><br>
+      |       |<br>
+  <span class="accent">Celular</span> <span class="accent">Celular</span><br>
+  <span style="color:var(--text3)">(mesmo WiFi)</span> <span style="color:var(--text3)">(qualquer lugar)</span>
+    </div>
+
+    <div class="tip">
+      <span class="icon">&#x1F4A1;</span>
+      <div>O <strong>server.js</strong> funciona como um "repetidor": conecta na API via VPN no PC e repassa todos os dados em tempo real para o celular.</div>
+    </div>
+  </div>
+
+  <!-- REQUISITOS -->
+  <div class="section">
+    <div class="section-title"><span class="num">2</span> Requisitos</div>
+
+    <div class="file-list">
+      <div class="file-item">
+        <div class="fi-icon" style="background:rgba(41,217,120,.15);color:var(--green)">N</div>
+        <div><div class="fi-name">Node.js</div><div class="fi-desc">v18+ (ja instalado: v26.7.0)</div></div>
+      </div>
+      <div class="file-item">
+        <div class="fi-icon" style="background:rgba(35,104,255,.15);color:var(--blue)">VPN</div>
+        <div><div class="fi-name">VPN ligada</div><div class="fi-desc">Para acessar a API no PC</div></div>
+      </div>
+      <div class="file-item">
+        <div class="fi-icon" style="background:rgba(168,85,247,.15);color:#a855f7">WiFi</div>
+        <div><div class="fi-name">Mesma rede</div><div class="fi-desc">PC e celular no mesmo WiFi</div></div>
+      </div>
+      <div class="file-item">
+        <div class="fi-icon" style="background:rgba(234,179,8,.15);color:var(--yellow)">HTTP</div>
+        <div><div class="fi-name">Navegador</div><div class="fi-desc">Chrome, Safari ou Edge no celular</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODO LOCAL -->
+  <div class="section">
+    <div class="section-title"><span class="num">3</span> Acesso Local <span class="badge badge-local">Mesmo WiFi</span></div>
+
+    <div class="step">
+      <h3>&#x1F4CD; Passo 1 - Abrir o terminal</h3>
+      <p>No PC, abra o PowerShell ou CMD e navegue ate a pasta do projeto:</p>
+      <div class="code-block">cd C:\Users\branc\Desktop\rob2\robotelegram</div>
+    </div>
+
+    <div class="step">
+      <h3>&#x26A1; Passo 2 - Iniciar o servidor</h3>
+      <p>Execute o comando para iniciar o relay:</p>
+      <div class="code-block">node server.js</div>
+      <p>Vai aparecer algo assim:</p>
+      <div class="code-block" style="color:var(--text2)">================================================
+  SERVIDOR RELAY - ROBOTELEGRAM
+================================================
+  PC:      http://localhost:3000
+  Celular: http://192.168.1.105:3000
+------------------------------------------------</div>
+    </div>
+
+    <div class="step">
+      <h3>&#x1F4F1; Passo 3 - No celular</h3>
+      <p>Abra o navegador no celular e digite o endereco que apareceu no terminal:</p>
+      <div class="code-block">http://192.168.1.105:3000</div>
+      <div class="warn">
+        <span class="icon">&#x26A0;&#xFE0F;</span>
+        <div>O numero do IP pode ser diferente. Use o que aparecer no terminal.</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <h3>&#x1F5A5;&#xFE0F; Passo 4 - No PC (opcional)</h3>
+      <p>Você também pode acessar pelo PC abrindo no navegador:</p>
+      <div class="code-block">http://localhost:3000</div>
+    </div>
+  </div>
+
+  <!-- MODO REMOTO -->
+  <div class="section">
+    <div class="section-title"><span class="num">4</span> Acesso Remoto <span class="badge badge-remote">Qualquer Lugar</span></div>
+
+    <div class="step">
+      <h3>&#x1F4CD; Passo 1 - Abrir 2 terminais</h3>
+      <p>Abra dois terminais na pasta do projeto (pode ser duas janelas do PowerShell):</p>
+      <div class="code-block">cd C:\Users\branc\Desktop\rob2\robotelegram</div>
+    </div>
+
+    <div class="step">
+      <h3>&#x26A1; Passo 2 - Terminal 1: Iniciar o servidor</h3>
+      <p>No primeiro terminal, inicie o relay:</p>
+      <div class="code-block">node server.js</div>
+    </div>
+
+    <div class="step">
+      <h3>&#x1F310; Passo 3 - Terminal 2: Iniciar o tunnel</h3>
+      <p>No segundo terminal, inicie o tunnel para criar a URL publica:</p>
+      <div class="code-block">node tunnel.js</div>
+      <p>Vai aparecer algo assim:</p>
+      <div class="code-block" style="color:var(--text2)">╔══════════════════════════════════════════════╗
+  ACESSO REMOTO ATIVADO
+╠══════════════════════════════════════════════╣
+  URL PUBLICA: https://easy-bottles-raise.loca.lt
+╠══════════════════════════════════════════════╣
+  Abra essa URL no celular de qualquer lugar
+╚══════════════════════════════════════════════╝</div>
+    </div>
+
+    <div class="step">
+      <h3>&#x1F4F1; Passo 4 - No celular (de qualquer lugar)</h3>
+      <p>Abra o navegador e digite a URL publica que apareceu:</p>
+      <div class="code-block">https://easy-bottles-raise.loca.lt</div>
+      <div class="tip">
+        <span class="icon">&#x1F4A1;</span>
+        <div>A URL muda a cada vez que voce reinicia o tunnel. Anote a URL atual.</div>
+      </div>
+    </div>
+
+    <div class="danger">
+      <span class="icon">&#x1F534;</span>
+      <div><strong>Importante:</strong> Mantenha AMBOS os terminais abertos. Se fechar um, o sistema para.</div>
+    </div>
+  </div>
+
+  <!-- PWA -->
+  <div class="section">
+    <div class="section-title"><span class="num">5</span> Instalar como App (PWA) <span class="badge badge-pwa">App Nativo</span></div>
+
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('android')">Android</div>
+      <div class="tab" onclick="switchTab('iphone')">iPhone</div>
+      <div class="tab" onclick="switchTab('pc')">PC</div>
+    </div>
+
+    <div id="tab-android" class="tab-content active">
+      <div class="step">
+        <h3>&#x1F4F1; Chrome no Android</h3>
+        <p>1. Abra o endereco no Chrome<br>
+        2. Toque nos 3 pontinhos (canto superior direito)<br>
+        3. Toque em "Adicionar a tela inicial"<br>
+        4. Confirme o nome e toque em "Adicionar"</p>
+        <div class="tip">
+          <span class="icon">&#x2705;</span>
+          <div>Pronto! O app aparece na tela inicial como um app nativo, com icone e tela cheia.</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-iphone" class="tab-content">
+      <div class="step">
+        <h3>&#x1F4F1; Safari no iPhone</h3>
+        <p>1. Abra o endereco no Safari<br>
+        2. Toque no icone de compartilhar (quadrado com seta)<br>
+        3. Role para baixo e toque em "Adicionar a Tela de Inicio"<br>
+        4. Confirme e toque em "Adicionar"</p>
+        <div class="tip">
+          <span class="icon">&#x2705;</span>
+          <div>O app aparece na tela inicial. Ao abrir, abre em tela cheia sem barra do Safari.</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-pc" class="tab-content">
+      <div class="step">
+        <h3>&#x1F5A5;&#xFE0F; Chrome no PC</h3>
+        <p>1. Abra http://localhost:3000 no Chrome<br>
+        2. Clique nos 3 pontinhos (canto superior direito)<br>
+        3. Clique em "Mais ferramentas" > "Instalar aplicativo"...<br>
+        4. Confirme a instalacao</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ARQUIVOS -->
+  <div class="section">
+    <div class="section-title"><span class="num">6</span> Arquivos do Sistema</div>
+
+    <div class="file-list">
+      <div class="file-item">
+        <div class="fi-icon" style="background:rgba(41,217,120,.15);color:var(--green)">&#x2699;</div>
+        <div><div class="fi-name">server.js</div><div class="fi-desc">Servidor relay (roda no PC)</div></div>
+      </div>
+      <div class="file-item">
+        <div class="fi-icon" style="background:rgba(168,85,247,.15);color:#a855f7">&#x1F310;</div>
+        <div><div class="fi-name">tunnel.js</div><div class="fi-desc">Acesso remoto via internet</div></div>
+      </div>
+      <div class="file-item">
+        <div class="fi-icon" style="background:rgba(35,104,255,.15);color:var(--blue">&#x1F4E6;</div>
+        <div><div class="fi-name">package.json</div><div class="fi-desc">Dependencias do projeto</div></div>
+      </div>
+      <div class="file-item">
+        <div class="fi-icon" style="background:rgba(234,179,8,.15);color:var(--yellow">&#x1F527;</div>
+        <div><div class="fi-name">config.js</div><div class="fi-desc">Configuracoes e URLs da API</div></div>
+      </div>
+      <div class="file-item">
+        <div class="fi-icon" style="background:rgba(41,217,120,.15);color:var(--green">&#x1F4F2;</div>
+        <div><div class="fi-name">manifest.json</div><div class="fi-desc">Configuracao PWA</div></div>
+      </div>
+      <div class="file-item">
+        <div class="fi-icon" style="background:rgba(168,85,247,.15);color:#a855f7">&#x1F6E1;</div>
+        <div><div class="fi-name">service-worker.js</div><div class="fi-desc">Cache offline do app</div></div>
+      </div>
+      <div class="file-item">
+        <div class="fi-icon" style="background:rgba(35,104,255,.15);color:var(--blue">&#x1F5BC;</div>
+        <div><div class="fi-name">icon-192.svg</div><div class="fi-desc">Icone do app</div></div>
+      </div>
+      <div class="file-item">
+        <div class="fi-icon" style="background:rgba(234,179,8,.15);color:var(--yellow">&#x2728;</div>
+        <div><div class="fi-name">index.html</div><div class="fi-desc">Dashboard principal</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COMANDOS RAPIDOS -->
+  <div class="section">
+    <div class="section-title"><span class="num">7</span> Comandos Rapidos</div>
+
+    <div class="step">
+      <h3>&#x1F680; Iniciar tudo (local)</h3>
+      <div class="code-block">node server.js</div>
+    </div>
+
+    <div class="step">
+      <h3>&#x1F310; Iniciar tudo (remoto)</h3>
+      <p>Terminal 1:</p>
+      <div class="code-block">node server.js</div>
+      <p>Terminal 2:</p>
+      <div class="code-block">node tunnel.js</div>
+    </div>
+
+    <div class="step">
+      <h3>&#x1F50D; Verificar status do relay</h3>
+      <p>No navegador, acesse:</p>
+      <div class="code-block">http://localhost:3000/status</div>
+      <p>Retorna JSON com status das conexoes:</p>
+      <div class="code-block" style="color:var(--text2)">{
+  "uptime": 120,
+  "wheel": { "upstream": true, "clients": 1 },
+  "double": { "upstream": true, "clients": 1 }
+}</div>
+    </div>
+
+    <div class="step">
+      <h3>&#x1F4E5; Instalar dependencias (primeira vez)</h3>
+      <div class="code-block">npm install</div>
+    </div>
+  </div>
+
+  <!-- DIAGNOSTICO -->
+  <div class="section">
+    <div class="section-title"><span class="num">8</span> Diagnostico de Problemas</div>
+
+    <div class="faq-item">
+      <div class="faq-q" onclick="toggleFaq(this)">
+        Celular nao conecta no PC
+        <span class="arrow">&#x25BC;</span>
+      </div>
+      <div class="faq-a">
+        <strong>Verifique:</strong><br>
+        1. PC e celular estao no mesmo WiFi?<br>
+        2. O firewall do PC esta bloqueando a porta 3000?<br>
+        3. Tente desativar o firewall temporariamente<br>
+        4. No Windows: painel de controle > firewall > regras > liberar porta 3000
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q" onclick="toggleFaq(this)">
+        URL do tunnel nao funciona
+        <span class="arrow">&#x25BC;</span>
+      </div>
+      <div class="faq-a">
+        <strong>Verifique:</strong><br>
+        1. O tunnel.js esta rodando?<br>
+        2. O server.js esta rodando?<br>
+        3. A URL expirou? (reinicie o tunnel)<br>
+        4. Tente usar o endereco IP local em vez da URL publica
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q" onclick="toggleFaq(this)">
+        Dados nao aparecem em tempo real
+        <span class="arrow">&#x25BC;</span>
+      </div>
+      <div class="faq-a">
+        <strong>Verifique:</strong><br>
+        1. A VPN esta ligada no PC?<br>
+        2. O relay esta conectado? (acesse /status)<br>
+        3. Os tokens JWT nao expiraram?<br>
+        4. Recarregue a pagina no celular (pull to refresh)
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q" onclick="toggleFaq(this)">
+        "Adicionar a tela inicial" nao aparece
+        <span class="arrow">&#x25BC;</span>
+      </div>
+      <div class="faq-a">
+        <strong>No Android:</strong> Use Chrome (nao outro navegador)<br>
+        <strong>No iPhone:</strong> Use Safari (nao Chrome)<br>
+        <strong>No PC:</strong> Use Chrome e acesse via HTTP (nao file://)<br>
+        <strong>Dica:</strong> O endereco precisa ser HTTP/HTTPS, nao file://
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q" onclick="toggleFaq(this)">
+        Como parar o servidor?
+        <span class="arrow">&#x25BC;</span>
+      </div>
+      <div class="faq-a">
+        No terminal onde o server.js esta rodando:<br>
+        <strong>Windows:</strong> Pressione <code>Ctrl + C</code><br>
+        <strong>Mac/Linux:</strong> Pressione <code>Ctrl + C</code><br>
+        Isso encerra o servidor e o tunnel automaticamente.
+      </div>
+    </div>
+  </div>
+
+  <!-- DICAS -->
+  <div class="section">
+    <div class="section-title"><span class="num">9</span> Dicas</div>
+
+    <div class="tip">
+      <span class="icon">&#x1F4A1;</span>
+      <div><strong>Iniciar automaticamente:</strong> Crie um atalho do <code>server.js</code> na area de trabalho e configure para rodar com <code>node</code>.</div>
+    </div>
+
+    <div class="tip">
+      <span class="icon">&#x1F4A1;</span>
+      <div><strong>Manter rodando:</strong> Use <code>pm2</code> para manter o servidor rodando em background:<br><code>npm install -g pm2 && pm2 start server.js</code></div>
+    </div>
+
+    <div class="tip">
+      <span class="icon">&#x1F4A1;</span>
+      <div><strong>URL fixa no tunnel:</strong> Use um subdominio proprio:<br><code>lt --port 3000 --subdomain meuapp</code><br>URL: <code>https://meuapp.loca.lt</code></div>
+    </div>
+
+    <div class="tip">
+      <span class="icon">&#x1F4A1;</span>
+      <div><strong>Verificar IP do PC:</strong> No PowerShell, execute:<br><code>ipconfig</code><br>Procure o endereco IPv4 under "Adaptador Wi-Fi".</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function toggleTheme() {
+  const html = document.documentElement;
+  const isLight = html.getAttribute('data-theme') === 'light';
+  html.setAttribute('data-theme', isLight ? 'dark' : 'light');
+  localStorage.setItem('theme', isLight ? 'dark' : 'light');
+  const moon = document.getElementById('themeIconMoon');
+  const sun = document.getElementById('themeIconSun');
+  if (moon && sun) { moon.style.display = isLight ? 'none' : 'block'; sun.style.display = isLight ? 'block' : 'none'; }
+}
+(function() {
+  const saved = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', saved);
+  const moon = document.getElementById('themeIconMoon');
+  const sun = document.getElementById('themeIconSun');
+  if (moon && sun) { moon.style.display = saved === 'light' ? 'none' : 'block'; sun.style.display = saved === 'light' ? 'block' : 'none'; }
+})();
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+function toggleFaq(el) {
+  const answer = el.nextElementSibling;
+  const isOpen = el.classList.contains('open');
+  el.classList.toggle('open');
+  answer.classList.toggle('show');
+}
+
+// Connection status
+const dot = document.getElementById('connDot');
+const text = document.getElementById('connText');
+function checkStatus() {
+  fetch('/status').then(r => r.json()).then(d => {
+    const anyUp = d.wheel?.upstream || d.double?.upstream;
+    dot.className = 'dot' + (anyUp ? '' : ' off');
+    text.textContent = anyUp ? 'Online' : 'Offline';
+  }).catch(() => {
+    dot.className = 'dot off';
+    text.textContent = 'Servidor offline';
+  });
+}
+checkStatus();
+setInterval(checkStatus, 5000);
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/service-worker.js').catch(() => {});
+}
+</script>
+</body>
+</html>
