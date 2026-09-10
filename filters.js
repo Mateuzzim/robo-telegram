@@ -239,8 +239,13 @@ const Filters = {
   },
 
   confiancaMinima(candidates, ctx, robot) {
-    const min = robot.minimumConfidence !== undefined ? robot.minimumConfidence : 50;
-    return candidates.filter(c => (c.confidence || 0) >= min);
+    const defaultMin = robot.minimumConfidence ?? 50;
+    return candidates.filter(c => {
+      const min = typeof robot.getConfidenceForTarget === 'function'
+        ? robot.getConfidenceForTarget(c.color) ?? defaultMin
+        : defaultMin;
+      return (c.confidence || 0) >= min;
+    });
   },
 
   diferencaCandidatos(candidates, ctx, robot) {

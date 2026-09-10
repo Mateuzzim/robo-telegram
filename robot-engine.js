@@ -1864,7 +1864,8 @@ const RobotEngine = {
       agressivo: { minConf: 45, minConfluences: 1, minScore: 30 }
     };
     const th = thresholds[filterMode] || thresholds.moderado;
-    const effectiveConf = robot.minimumConfidence !== undefined && robot.minimumConfidence !== null ? Math.max(th.minConf || 0, robot.minimumConfidence) : (th.minConf || 0);
+    const targetConf = robot.getConfidenceForTarget ? robot.getConfidenceForTarget(strategyResult.target) : robot.minimumConfidence;
+    const effectiveConf = targetConf !== undefined && targetConf !== null ? Math.max(th.minConf || 0, targetConf) : (th.minConf || 0);
 
     const filter = {
       padraoEncontrado: true,
@@ -1948,8 +1949,8 @@ const RobotEngine = {
   getAllRobots() { return [...this.robots.values()]; },
   getAllStates() { return this.getAllRobots().map(r => r.getState()); },
 
-  startRobot(id) { const r = this.robots.get(id); if (r) { r.status = 'online'; r.startedAt = Date.now(); r.startDelayUntil = Date.now() + 30000; this.loadHistoryFromStorage(r); if (r._startDelayTimer) clearTimeout(r._startDelayTimer); r._startDelayTimer = setTimeout(() => { r.startDelayUntil = null; r.analyze(); }, 30000); EventBus.emit('robot:started', { id }); this.save(); } },
-  stopRobot(id) { const r = this.robots.get(id); if (r) { r.status = 'offline'; r.startedAt = null; r.currentSignal = null; if (r._startDelayTimer) { clearTimeout(r._startDelayTimer); r._startDelayTimer = null; } r.startDelayUntil = null; if (typeof TelegramService !== 'undefined' && TelegramService.isDynamicMode(r)) TelegramService.updateDynamicMessage(r); EventBus.emit('robot:stopped', { id }); this.save(); } },
+  startRobot(id) { const r = this.robots.get(id); if (r) { r.status = 'online'; r.startedAt = Date.now(); r.startDelayUntil = Date.now() + 30000; r._signalLimitNotified = false; r._signalLimitPaused = false; if (r._signalLimitPauseTimer) { clearTimeout(r._signalLimitPauseTimer); r._signalLimitPauseTimer = null; } if (r._signalLimitWarningTimer) { clearTimeout(r._signalLimitWarningTimer); r._signalLimitWarningTimer = null; } this.loadHistoryFromStorage(r); if (r._startDelayTimer) clearTimeout(r._startDelayTimer); r._startDelayTimer = setTimeout(() => { r.startDelayUntil = null; if (r.signalLimit?.enabled) { const notify = { id, type: 'start', time: Date.now(), signalLimit: r.signalLimit, timestamps: r._signalTimestamps || [] }; localStorage.setItem('signalLimitNotify', JSON.stringify(notify)); EventBus.emit('robot:signalLimitStart', notify); } r.analyze(); }, 30000); EventBus.emit('robot:started', { id }); this.save(); } },
+  stopRobot(id) { const r = this.robots.get(id); if (r) { r.status = 'offline'; r.startedAt = null; r.currentSignal = null; r._signalLimitNotified = false; r._signalLimitPaused = false; if (r._signalLimitPauseTimer) { clearTimeout(r._signalLimitPauseTimer); r._signalLimitPauseTimer = null; } if (r._signalLimitWarningTimer) { clearTimeout(r._signalLimitWarningTimer); r._signalLimitWarningTimer = null; } if (r._startDelayTimer) { clearTimeout(r._startDelayTimer); r._startDelayTimer = null; } r.startDelayUntil = null; if (typeof TelegramService !== 'undefined' && TelegramService.isDynamicMode(r)) TelegramService.updateDynamicMessage(r); EventBus.emit('robot:stopped', { id }); this.save(); } },
   pauseRobot(id) { const r = this.robots.get(id); if (r) { r.status = 'paused'; EventBus.emit('robot:paused', { id }); this.save(); } },
   resumeRobot(id) { const r = this.robots.get(id); if (r) { r.status = 'online'; EventBus.emit('robot:resumed', { id }); this.save(); } },
   deleteRobot(id) {
@@ -1974,7 +1975,47 @@ const RobotEngine = {
     if (config.status) robot.status = config.status;
     else robot.status = 'online';
     this.robots.set(robot.id, robot);
-    if (options.emitStarted) EventBus.emit('robot:started', { id: robot.id });
+    if (robot.status === 'online') {
+      if (robot.signalLimit?.enabled && robot._signalTimestamps?.length) {
+        const intervalMs = (robot.signalLimit.intervalHours || 5) * 60 * 60 * 1000;
+        const maxSignals = robot.signalLimit.maxSignals || 10;
+        const windowStart = Date.now() - intervalMs;
+        robot._signalTimestamps = robot._signalTimestamps.filter(t => t > windowStart);
+        if (robot._signalTimestamps.length >= maxSignals) {
+          const firstTs = Math.min(...robot._signalTimestamps);
+          const nextWindowAt = firstTs + intervalMs;
+          const msUntilNext = nextWindowAt - Date.now();
+          if (msUntilNext > 0) {
+            robot._signalLimitPaused = true;
+            const msWarning = Math.max(0, msUntilNext - 5 * 60 * 1000);
+            robot._signalLimitWarningTimer = setTimeout(() => {
+              localStorage.setItem('signalLimitNotify', JSON.stringify({ robotId: robot.id, type: 'warning', time: Date.now(), nextWindowAt }));
+              EventBus.emit('robot:signalLimitWarning', { robotId: robot.id, nextWindowAt });
+            }, msWarning);
+            robot._signalLimitPauseTimer = setTimeout(() => {
+              robot._signalLimitPaused = false;
+              robot._signalLimitPauseTimer = null;
+              robot._signalLimitWarningTimer = null;
+              robot.analyze();
+            }, msUntilNext);
+          } else {
+            robot._signalLimitPaused = false;
+          }
+        }
+      }
+      if (!robot._signalLimitPaused) {
+        if (robot.startDelayUntil && Date.now() < robot.startDelayUntil) {
+          const delay = robot.startDelayUntil - Date.now();
+          robot._startDelayTimer = setTimeout(() => { robot.startDelayUntil = null; robot.analyze(); }, delay);
+        } else {
+          robot.startDelayUntil = null;
+          setTimeout(() => { if (robot.status === 'online') robot.analyze(); }, 100);
+        }
+      }
+    }
+    if (options.emitStarted) {
+      EventBus.emit('robot:started', { id: robot.id });
+    }
     return robot;
   },
 
@@ -1989,7 +2030,17 @@ const RobotEngine = {
   },
 
   syncFromStorage() {
+    const prevStates = {};
+    this.robots.forEach((r, id) => { prevStates[id] = r.status; });
     this.load({ loadHistory: false, emitStarted: false });
+    this.robots.forEach((r, id) => {
+      if (prevStates[id] !== 'online' && r.status === 'online' && r.signalLimit?.enabled && !r._signalLimitNotified) {
+        r._signalLimitNotified = true;
+        const notify = { id, type: 'start', time: Date.now(), signalLimit: r.signalLimit, timestamps: r._signalTimestamps || [] };
+        localStorage.setItem('signalLimitNotify', JSON.stringify(notify));
+        EventBus.emit('robot:signalLimitStart', notify);
+      }
+    });
     EventBus.emit('robots:synced', { robots: this.getAllStates() });
   },
 

@@ -8,7 +8,8 @@ class Robot {
     this.status = 'offline';
     this.mode = config.mode || 'monitoramento';
     this.resultsToAnalyze = config.resultsToAnalyze || 500;
-    this.minimumConfidence = config.minimumConfidence || 80;
+    const configuredMinimumConfidence = Number(config.minimumConfidence ?? 80);
+    this.minimumConfidence = Number.isFinite(configuredMinimumConfidence) ? Math.max(0, Math.min(100, configuredMinimumConfidence)) : 80;
     this.minScore = config.minScore || 52;
     this.confirmations = config.confirmations || 2;
     this.intervalMin = config.intervalMin || 60;
@@ -46,23 +47,75 @@ class Robot {
     this.diagnostic = config.diagnostic || { status: 'IDLE', analyzedResults: 0, mainPattern: null, confidence: 0, suggestedEntry: null, patternScores: {}, totalScore: 0, filterResults: {}, decision: null, risk: 'BAIXO', signalScore: 0, confluences: 0, signalBlocked: false, blockReason: '' };
     this.signalFlow = config.signalFlow || { step1: 'Aguardando padrao...', step2: 'Nenhuma entrada pendente', step3: 'Aguardando entrada...', step4: 'Placar sera atualizado apos resultado' };
     this.strategyIndex = config.strategyIndex || 0;
-    this.usedPatterns = config.usedPatterns || { RED: [], BLACK: [], GREY: [] };
+    this.usedPatterns = config.usedPatterns || { RED: [], BLACK: [], GREY: [], GREEN: [], BLUE: [] };
     this._lastResolvedTime = 0;
     this.greenProtection = config.greenProtection || false;
     this.filters = config.filters || [];
-    this.galeByColor = config.galeByColor || { grey: 1, red: 3, blue: 5, green: 10 };
+    const savedGaleByColor = config.galeByColor || {};
+    const galeValue = (value, fallback) => {
+      const number = Number(value);
+      return Number.isFinite(number) && number >= 0 ? number : fallback;
+    };
+    this.galeByColor = {
+      grey: galeValue(savedGaleByColor.grey, 1),
+      red: galeValue(savedGaleByColor.red, 3),
+      blue: galeValue(savedGaleByColor.blue, 5),
+      green: galeValue(savedGaleByColor.green, 10),
+      black: galeValue(savedGaleByColor.black, 1)
+    };
+    const confidenceValue = (value) => {
+      const number = Number(value);
+      return Number.isFinite(number) ? Math.max(0, Math.min(100, number)) : 80;
+    };
+    const savedConfidenceByColor = config.confidenceByColor || {};
+    this.confidenceByColor = {
+      grey: confidenceValue(savedConfidenceByColor.grey),
+      red: confidenceValue(savedConfidenceByColor.red),
+      blue: confidenceValue(savedConfidenceByColor.blue),
+      green: confidenceValue(savedConfidenceByColor.green),
+      black: confidenceValue(savedConfidenceByColor.black)
+    };
     this.autoPause = config.autoPause || 0;
     this.iaInteligente = config.iaInteligente || false;
+    this.signalLimit = config.signalLimit || { enabled: false, intervalHours: 5, maxSignals: 10 };
     this.iaState = config.iaState || { activeStrategy: null, activeTarget: null, evaluations: [], colorAnalyses: {}, scoreboard: null, lastAnalysisTime: 0 };
+    this._signalTimestamps = Array.isArray(config._signalTimestamps) ? config._signalTimestamps : [];
+    this.signalLimitTotal = config.signalLimitTotal || { wins: 0, losses: 0 };
+    this._signalLimitNotified = config._signalLimitNotified || false;
   }
 
   getGaleMaxForTarget(targetColor) {
     if (this.target?.color === 'any' && this.game === 'wheel') {
-      const normalizedTarget = String(targetColor || '').toLowerCase();
-      const galeMap = { grey: this.galeByColor.grey, red: this.galeByColor.red, blue: this.galeByColor.blue, green: this.galeByColor.green };
+      const normalizedTarget = this.normalizeColor(targetColor);
+      const galeMap = {
+        GREY: this.galeByColor.grey,
+        RED: this.galeByColor.red,
+        BLUE: this.galeByColor.blue,
+        GREEN: this.galeByColor.green
+      };
       return galeMap[normalizedTarget] ?? this.gale.max;
     }
     return this.gale.max;
+  }
+
+  getConfidenceForTarget(targetColor) {
+    if (this.target?.color !== 'any') {
+      return this.minimumConfidence;
+    }
+    const normalizedTarget = this.normalizeColor(targetColor);
+    const confMap = this.game === 'wheel'
+      ? {
+          GREY: this.confidenceByColor.grey,
+          RED: this.confidenceByColor.red,
+          BLUE: this.confidenceByColor.blue,
+          GREEN: this.confidenceByColor.green
+        }
+      : {
+          BLACK: this.confidenceByColor.black,
+          RED: this.confidenceByColor.red,
+          GREEN: this.confidenceByColor.green
+        };
+    return confMap[normalizedTarget] ?? this.minimumConfidence;
   }
 
   normalizeColor(color) {
@@ -192,11 +245,31 @@ class Robot {
       this.diagnostic.signalBlocked = true;
       this.diagnostic.blockReason = 'Robo offline';
       this.signalFlow = {
-        step1: 'Robo offline',
-        step2: 'Aguardando PLAY para iniciar',
-        step3: '---',
-        step4: '---'
+        step1: 'Verificando status',
+        step2: 'Robot offline',
+        step3: 'Aguardando online',
+        step4: 'IDLE'
       };
+      EventBus.emit('robot:state', this.getState());
+      if (this._analyzeTimer) { clearTimeout(this._analyzeTimer); this._analyzeTimer = null; }
+      return;
+    }
+    if (this._signalLimitPaused) {
+      this.diagnostic.status = 'LIMIT_PAUSED';
+      this.diagnostic.mainPattern = 'Limite atingido - aguardando proxima janela';
+      this.diagnostic.confidence = 0;
+      this.diagnostic.suggestedEntry = null;
+      this.diagnostic.signalBlocked = true;
+      this.diagnostic.blockReason = 'Pausado por limite de sinais';
+      this.signalFlow = {
+        step1: 'Limite de sinais',
+        step2: 'Pausado automaticamente',
+        step3: 'Aguardando proxima janela',
+        step4: 'LIMIT_PAUSED'
+      };
+      EventBus.emit('robot:state', this.getState());
+      if (this._analyzeTimer) { clearTimeout(this._analyzeTimer); this._analyzeTimer = null; }
+      return;
     }
     if (!isOffline && this.startDelayUntil && Date.now() < this.startDelayUntil) {
       this.diagnostic.status = 'LOADING';
@@ -210,6 +283,22 @@ class Robot {
         step2: 'Enviando live...',
         step3: 'Aguardando 30s...',
         step4: 'Depois inicia analises'
+      };
+      EventBus.emit('robot:state', this.getState());
+      return;
+    }
+    if (this._signalLimitPaused) {
+      this.diagnostic.status = 'WAITING_RESULT';
+      this.diagnostic.mainPattern = 'Limite de sinais - aguardando nova janela';
+      this.diagnostic.confidence = 0;
+      this.diagnostic.suggestedEntry = null;
+      this.diagnostic.signalBlocked = true;
+      this.diagnostic.blockReason = 'Limite de sinais pausado até nova janela';
+      this.signalFlow = {
+        step1: 'Limite atingido',
+        step2: 'Pausado até nova janela',
+        step3: 'Aguardando liberação...',
+        step4: '---'
       };
       EventBus.emit('robot:state', this.getState());
       return;
@@ -264,7 +353,7 @@ class Robot {
 
     const strategies = RobotEngine.strategies;
     const strategyNames = Object.keys(strategies);
-    const minConf = this.minimumConfidence || 65;
+    const defaultMinConf = this.minimumConfidence ?? 65;
 
     const scores = {};
     let total = 0;
@@ -353,7 +442,11 @@ class Robot {
       if (result.analyses) this.diagnostic.analyses = result.analyses;
       if (result.confluences !== undefined) this.diagnostic.confluences = result.confluences;
 
-      const effectiveMinConf = Math.max(minConf, sc.minConfidence || 0);
+      const confidenceTarget = this.iaInteligente && this.iaState.activeTarget
+        ? this.iaState.activeTarget
+        : result.target;
+      const targetMinConf = this.getConfidenceForTarget(confidenceTarget) ?? defaultMinConf;
+      const effectiveMinConf = Math.max(targetMinConf, sc.minConfidence || 0);
 
       if (!result.matched || result.confidence < effectiveMinConf) {
         const multiStrat = namesToTry.length > 1;
@@ -392,17 +485,55 @@ class Robot {
       }
       this.diagnostic.suggestedEntry = result.target || null;
 
-      signal = RobotEngine.evaluate(this, result);
-      if (signal) {
-        this.markPatternUsed(name, signal.target);
-        this.addLog('SINAL APROVADO: ' + signal.target + ' (' + signal.confidence + '%) via ' + name + (this.iaInteligente ? ' [IA]' : ''));
-        signal.strategy = name;
-        if (this.iaInteligente) {
-          signal.iaDriven = true;
-          signal.iaTarget = this.iaState.activeTarget;
-          signal.iaMultiplier = this.iaState.activeMultiplier;
-        }
-        EventBus.emit('signal:created', { ...signal, robotId: this.id });
+signal = RobotEngine.evaluate(this, result);
+       if (signal) {
+         if (this.signalLimit?.enabled) {
+           const intervalMs = (this.signalLimit.intervalHours || 5) * 60 * 60 * 1000;
+           const maxSignals = this.signalLimit.maxSignals || 10;
+           const windowStart = Date.now() - intervalMs;
+           this._signalTimestamps = this._signalTimestamps.filter(t => t > windowStart);
+            if (this._signalTimestamps.length >= maxSignals) {
+              this._signalLimitPaused = true;
+              const firstTs = Math.min(...this._signalTimestamps);
+              const nextWindowAt = firstTs + intervalMs;
+              const msUntilNext = nextWindowAt - Date.now();
+              const msWarning = Math.max(0, msUntilNext - 5 * 60 * 1000);
+              if (this._signalLimitPauseTimer) clearTimeout(this._signalLimitPauseTimer);
+              if (this._signalLimitWarningTimer) clearTimeout(this._signalLimitWarningTimer);
+              this._signalLimitWarningTimer = setTimeout(() => {
+                localStorage.setItem('signalLimitNotify', JSON.stringify({ robotId: this.id, type: 'warning', time: Date.now(), nextWindowAt }));
+                EventBus.emit('robot:signalLimitWarning', { robotId: this.id, nextWindowAt });
+              }, msWarning);
+              this._signalLimitPauseTimer = setTimeout(() => {
+                this._signalLimitPaused = false;
+                this._signalLimitPauseTimer = null;
+                this._signalLimitWarningTimer = null;
+                this.analyze();
+              }, msUntilNext);
+              this.diagnostic.status = 'WAITING_RESULT';
+              this.diagnostic.mainPattern = 'Limite de sinais atingido (' + this._signalTimestamps.length + '/' + maxSignals + ')';
+              this.diagnostic.confidence = 0;
+              this.diagnostic.suggestedEntry = null;
+              this.diagnostic.signalBlocked = true;
+              this.diagnostic.blockReason = 'Limite de sinais: ' + this._signalTimestamps.length + '/' + maxSignals + ' em ' + (this.signalLimit.intervalHours || 5) + 'h';
+              this.signalFlow = { step1: 'Limite de sinais', step2: this._signalTimestamps.length + '/' + maxSignals + ' em ' + (this.signalLimit.intervalHours || 5) + 'h', step3: 'Aguardando proximo ciclo', step4: 'Sinal bloqueado' };
+               EventBus.emit('robot:state', this.getState());
+               const reachedData = { robotId: this.id, type: 'reached', time: Date.now(), count: this._signalTimestamps.length, max: maxSignals, intervalHours: this.signalLimit.intervalHours || 5 };
+               localStorage.setItem('signalLimitNotify', JSON.stringify(reachedData));
+               EventBus.emit('robot:signalLimitReached', reachedData);
+               continue;
+            }
+           this._signalTimestamps.push(Date.now());
+         }
+         this.markPatternUsed(name, signal.target);
+         this.addLog('SINAL APROVADO: ' + signal.target + ' (' + signal.confidence + '%) via ' + name + (this.iaInteligente ? ' [IA]' : ''));
+         signal.strategy = name;
+         if (this.iaInteligente) {
+           signal.iaDriven = true;
+           signal.iaTarget = this.iaState.activeTarget;
+           signal.iaMultiplier = this.iaState.activeMultiplier;
+         }
+         EventBus.emit('signal:created', { ...signal, robotId: this.id });
         break;
       }
     }
@@ -437,7 +568,7 @@ class Robot {
   }
 
   resetUsedPatterns() {
-    this.usedPatterns = { RED: [], BLACK: [], GREY: [] };
+    this.usedPatterns = { RED: [], BLACK: [], GREY: [], GREEN: [], BLUE: [] };
     this.strategyIndex = 0;
   }
 
@@ -692,7 +823,7 @@ class Robot {
     const winG2 = stats.winG2 || 0;
     const galeEfficiency = totalDecided > 0 ? Math.round((winSG / totalDecided) * 100) : 0;
 
-    const sb = (typeof IAConfig !== 'undefined' && IAConfig.scoreboard) ? IAConfig.scoreboard : {};
+    const sb = (typeof IAConfig !== 'undefined') ? IAConfig.getConfigForRobot(this.id).scoreboard : {};
 
     const recentWindow = 20;
     const recentSignals = signalHistory.slice(-recentWindow);
@@ -809,7 +940,7 @@ class Robot {
     const strategies = RobotEngine.strategies;
     if (!strategies || Object.keys(strategies).length === 0) return;
     const history = this.history;
-    const minHistory = (typeof IAConfig !== 'undefined') ? IAConfig.settings.minHistoryRequired : 50;
+    const minHistory = (typeof IAConfig !== 'undefined') ? IAConfig.getConfigForRobot(this.id).settings.minHistoryRequired : 50;
     if (history.length < minHistory) return;
 
     const scoreboard = this.analyzeScoreboard();
@@ -819,7 +950,7 @@ class Robot {
     const colorTargets = game === 'wheel'
       ? [{ color: 'GREY', mult: 2 }, { color: 'RED', mult: 3 }, { color: 'BLUE', mult: 5 }, { color: 'GREEN', mult: 50 }]
       : [{ color: 'RED', mult: 2 }, { color: 'BLACK', mult: 2 }, { color: 'GREEN', mult: 14 }];
-    const windowSize = (typeof IAConfig !== 'undefined') ? IAConfig.settings.windowSize : 30;
+    const windowSize = (typeof IAConfig !== 'undefined') ? IAConfig.getConfigForRobot(this.id).settings.windowSize : 30;
     const evals = [];
     for (const [name, fn] of Object.entries(strategies)) {
       if (name === 'iaInteligente') continue;
@@ -855,7 +986,7 @@ class Robot {
               multiplier: t.mult,
               penalty: 0,
               winStreak: this.stats?.currentStreak || 0
-            });
+            }, this.id);
           } else {
             const recentWeight = Math.max(0.3, 1 - (this.signalHistory.length > 0 ? Math.min(20, this.signalHistory.length) * 0.03 : 0));
             score = Math.round(
@@ -902,7 +1033,7 @@ class Robot {
             }
           }
           if (typeof IAConfig !== 'undefined') {
-            evaluation = IAConfig.applyRules(evaluation, this.getState());
+            evaluation = IAConfig.applyRules(evaluation, this.getState(), this.id);
             evaluation.multiplierScore = Math.round(evaluation.score * (t.mult / 50));
           }
           if (scoreboard) {
@@ -934,13 +1065,13 @@ class Robot {
     }
     if (typeof IAConfig !== 'undefined') {
       evals.sort((a, b) => b.multiplierScore - a.multiplierScore || b.score - a.score);
-      const prioritized = IAConfig.runCustomPrioritize(evals);
+      const prioritized = IAConfig.runCustomPrioritize(evals, this.id);
       evals.length = 0;
       evals.push(...prioritized);
     } else {
       evals.sort((a, b) => b.multiplierScore - a.multiplierScore || b.score - a.score);
     }
-    this.iaState.evaluations = evals.slice(0, (typeof IAConfig !== 'undefined' ? IAConfig.settings.maxEvaluations : 20));
+    this.iaState.evaluations = evals.slice(0, (typeof IAConfig !== 'undefined' ? IAConfig.getConfigForRobot(this.id).settings.maxEvaluations : 20));
     this.iaState.lastAnalysisTime = Date.now();
     const colorAnalyses = {};
     for (const ev of evals) {
@@ -1011,6 +1142,7 @@ class Robot {
       signal.gale = resolvedGale;
       signal.result = { color: rColor, number: normalized.number, multiplier: normalized.multiplier, time: Date.now() };
       this.stats.wins++;
+      if (this.signalLimit?.enabled) this.signalLimitTotal.wins++;
       this.stats.currentStreak = Math.max(1, (this.stats.currentStreak || 0) + 1);
       this.stats.sequenceWins = Math.max(this.stats.sequenceWins || 0, this.stats.currentStreak - 1);
       if (resolvedGale === 0) this.stats.winSG = (this.stats.winSG || 0) + 1;
@@ -1035,8 +1167,18 @@ class Robot {
       EventBus.emit('signal:resolved', { ...signal, robotId: this.id, type: 'win' });
       this.signalHistory.push({ type: 'win', target: targetColor, result: rColor, gale: resolvedGale, time: Date.now(), greenProtection: isGreenProtection });
       if (this.signalHistory.length > 100) this.signalHistory.shift();
+      if (this.signalLimit?.enabled) {
+        const maxSig = this.signalLimit.maxSignals || 10;
+        const usedCount = (this._signalTimestamps || []).length;
+        if (usedCount < maxSig) {
+          setTimeout(() => {
+            localStorage.setItem('signalLimitNotify', JSON.stringify({ robotId: this.id, type: 'update', time: Date.now() }));
+            EventBus.emit('robot:signalLimitUpdate', { robotId: this.id });
+          }, 3000);
+        }
+      }
       if (typeof IAConfig !== 'undefined') {
-        IAConfig.runOnWin({ strategy: this.strategy, target: targetColor, gale: resolvedGale, confidence: signal.confidence || 0 });
+        IAConfig.runOnWin({ strategy: this.strategy, target: targetColor, gale: resolvedGale, confidence: signal.confidence || 0 }, this.id);
       }
       if (this.iaInteligente) this.analyzeIntelligentStrategy();
     } else {
@@ -1065,6 +1207,7 @@ class Robot {
         signal.gale = maxGale;
         signal.result = { color: rColor, number: normalized.number, multiplier: normalized.multiplier, time: Date.now() };
         this.stats.losses++;
+        if (this.signalLimit?.enabled) this.signalLimitTotal.losses++;
         this.stats.currentStreak = Math.min(-1, (this.stats.currentStreak || 0) - 1);
         this.stats.sequenceLosses = Math.max(this.stats.sequenceLosses || 0, Math.abs(this.stats.currentStreak) - 1);
         this.stats.maxLossStreak = Math.max(this.stats.maxLossStreak || 0, Math.abs(this.stats.currentStreak));
@@ -1086,8 +1229,18 @@ class Robot {
         EventBus.emit('signal:resolved', { ...signal, robotId: this.id, type: 'loss' });
         this.signalHistory.push({ type: 'loss', target: targetColor, result: rColor, gale: maxGale, time: Date.now() });
         if (this.signalHistory.length > 100) this.signalHistory.shift();
+        if (this.signalLimit?.enabled) {
+          const maxSig = this.signalLimit.maxSignals || 10;
+          const usedCount = (this._signalTimestamps || []).length;
+          if (usedCount < maxSig) {
+            setTimeout(() => {
+              localStorage.setItem('signalLimitNotify', JSON.stringify({ robotId: this.id, type: 'update', time: Date.now() }));
+              EventBus.emit('robot:signalLimitUpdate', { robotId: this.id });
+            }, 3000);
+          }
+        }
         if (typeof IAConfig !== 'undefined') {
-          IAConfig.runOnLoss({ strategy: this.strategy, target: targetColor, gale: maxGale, confidence: signal.confidence || 0 });
+          IAConfig.runOnLoss({ strategy: this.strategy, target: targetColor, gale: maxGale, confidence: signal.confidence || 0 }, this.id);
         }
         if (this.iaInteligente) this.analyzeIntelligentStrategy();
         if (this.autoPause > 0 && Math.abs(this.stats.currentStreak) >= this.autoPause) {
@@ -1268,10 +1421,10 @@ class Robot {
   }
 
   getState() {
-    return { id: this.id, name: this.name, game: this.game, strategy: this.strategy, strategies: this.strategies, status: this.status, mode: this.mode, target: this.target, filterMode: this.filterMode, patternSize: this.patternSize, lastPatternAnalysisTime: this.lastPatternAnalysisTime, telegram: { ...this.telegram, message: { ...(this.telegram.message || {}) } }, lastHeartbeat: this.lastHeartbeat, stats: { ...this.stats }, lastResult: this.lastResult, lastSignal: this.lastSignal, currentSignal: this.currentSignal, diagnostic: { ...this.diagnostic }, signalFlow: { ...this.signalFlow }, logs: [...this.logs], history: [...this.history], signalHistory: [...this.signalHistory], minimumConfidence: this.minimumConfidence, minScore: this.minScore, intervalMin: this.intervalMin, gale: { ...this.gale }, resultsToAnalyze: this.resultsToAnalyze, confirmations: this.confirmations, strategyIndex: this.strategyIndex, usedPatterns: JSON.parse(JSON.stringify(this.usedPatterns)), startedAt: this.startedAt, strategyConfig: JSON.parse(JSON.stringify(this.strategyConfig || {})), greenProtection: this.greenProtection, filters: this.filters, galeByColor: { ...this.galeByColor }, autoPause: this.autoPause, startDelayUntil: this.startDelayUntil, iaInteligente: this.iaInteligente, iaState: { ...this.iaState, evaluations: (this.iaState.evaluations || []).slice(0, 10) } };
+    return { id: this.id, name: this.name, game: this.game, strategy: this.strategy, strategies: this.strategies, status: this.status, mode: this.mode, target: this.target, filterMode: this.filterMode, patternSize: this.patternSize, lastPatternAnalysisTime: this.lastPatternAnalysisTime, telegram: { ...this.telegram, message: { ...(this.telegram.message || {}) } }, lastHeartbeat: this.lastHeartbeat, stats: { ...this.stats }, lastResult: this.lastResult, lastSignal: this.lastSignal, currentSignal: this.currentSignal, diagnostic: { ...this.diagnostic }, signalFlow: { ...this.signalFlow }, logs: [...this.logs], history: [...this.history], signalHistory: [...this.signalHistory], minimumConfidence: this.minimumConfidence, minScore: this.minScore, intervalMin: this.intervalMin, gale: { ...this.gale }, resultsToAnalyze: this.resultsToAnalyze, confirmations: this.confirmations, strategyIndex: this.strategyIndex, usedPatterns: JSON.parse(JSON.stringify(this.usedPatterns)), startedAt: this.startedAt, strategyConfig: JSON.parse(JSON.stringify(this.strategyConfig || {})), greenProtection: this.greenProtection, filters: this.filters, galeByColor: { ...this.galeByColor }, confidenceByColor: { ...this.confidenceByColor }, autoPause: this.autoPause, startDelayUntil: this.startDelayUntil, iaInteligente: this.iaInteligente, iaState: { ...this.iaState, evaluations: (this.iaState.evaluations || []).slice(0, 10) } };
   }
 
   toJSON() {
-    return { id: this.id, name: this.name, game: this.game, strategy: this.strategy, strategies: this.strategies, status: this.status, mode: this.mode, target: this.target, filterMode: this.filterMode, patternSize: this.patternSize, lastPatternAnalysisTime: this.lastPatternAnalysisTime, history: this.history.slice(0, 1000), resultsToAnalyze: this.resultsToAnalyze, minimumConfidence: this.minimumConfidence, minScore: this.minScore, confirmations: this.confirmations, intervalMin: this.intervalMin, galeMax: this.gale.max, telegram: { ...this.telegram, message: { ...(this.telegram.message || {}) } }, stats: this.stats, lastHeartbeat: this.lastHeartbeat, lastResult: this.lastResult, lastSignal: this.lastSignal, currentSignal: this.currentSignal, galeCount: this.galeCount, lastSignalTime: this.lastSignalTime, diagnostic: this.diagnostic, signalFlow: this.signalFlow, logs: this.logs, signalHistory: this.signalHistory, strategyIndex: this.strategyIndex, usedPatterns: this.usedPatterns, startedAt: this.startedAt, strategyConfig: this.strategyConfig || {}, greenProtection: this.greenProtection, filters: this.filters, galeByColor: this.galeByColor, autoPause: this.autoPause, startDelayUntil: this.startDelayUntil, iaInteligente: this.iaInteligente, iaState: this.iaState };
+    return { id: this.id, name: this.name, game: this.game, strategy: this.strategy, strategies: this.strategies, status: this.status, mode: this.mode, target: this.target, filterMode: this.filterMode, patternSize: this.patternSize, lastPatternAnalysisTime: this.lastPatternAnalysisTime, history: this.history.slice(0, 1000), resultsToAnalyze: this.resultsToAnalyze, minimumConfidence: this.minimumConfidence, minScore: this.minScore, confirmations: this.confirmations, intervalMin: this.intervalMin, galeMax: this.gale.max, telegram: { ...this.telegram, message: { ...(this.telegram.message || {}) } }, stats: this.stats, lastHeartbeat: this.lastHeartbeat, lastResult: this.lastResult, lastSignal: this.lastSignal, currentSignal: this.currentSignal, galeCount: this.galeCount, lastSignalTime: this.lastSignalTime, diagnostic: this.diagnostic, signalFlow: this.signalFlow, logs: this.logs, signalHistory: this.signalHistory, strategyIndex: this.strategyIndex, usedPatterns: this.usedPatterns, startedAt: this.startedAt, strategyConfig: this.strategyConfig || {}, greenProtection: this.greenProtection, filters: this.filters, galeByColor: this.galeByColor, confidenceByColor: this.confidenceByColor, autoPause: this.autoPause, startDelayUntil: this.startDelayUntil, iaInteligente: this.iaInteligente, iaState: this.iaState, signalLimit: this.signalLimit, signalLimitTotal: this.signalLimitTotal, _signalTimestamps: this._signalTimestamps, _signalLimitNotified: this._signalLimitNotified };
   }
 }

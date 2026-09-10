@@ -24,6 +24,8 @@ const TelegramService = {
     return this._cachedTime;
   },
 
+  _signalLimitSent: new Set(),
+
   init() {
     if (this.initialized) return;
     this.initialized = true;
@@ -35,6 +37,22 @@ const TelegramService = {
     EventBus.on('signal:loss', (signal) => this.handleSignalChange(signal));
     EventBus.on('signal:resolved', (signal) => this.handleSignalResolved(signal));
     EventBus.on('robot:started', (d) => this.handleRobotStarted(d));
+    EventBus.on('robot:signalLimitStart', (d) => this.handleSignalLimitStart(d));
+    EventBus.on('robot:signalLimitReached', (d) => this.handleSignalLimitReached(d));
+    EventBus.on('robot:signalLimitUpdate', (d) => this.handleSignalLimitUpdate(d));
+    EventBus.on('robot:signalLimitWarning', (d) => this.handleSignalLimitWarning(d));
+    window.addEventListener('storage', (e) => {
+      if (e.key === 'signalLimitNotify' && e.newValue) {
+        try {
+          const data = JSON.parse(e.newValue);
+          if (data.type === 'start') this.handleSignalLimitStart(data);
+          else if (data.type === 'reached') this.handleSignalLimitReached(data);
+          else if (data.type === 'update') this.handleSignalLimitUpdate(data);
+          else if (data.type === 'warning') this.handleSignalLimitWarning(data);
+        } catch {}
+      }
+    });
+    this.checkPendingSignalLimitNotifications();
     this.startRecalibration();
     setTimeout(() => this.sendAllPendingEntryMessages(), 0);
     setTimeout(() => this.sendAllInitialLiveMessages(), 0);
@@ -1116,7 +1134,7 @@ const TelegramService = {
     let galeMax;
     if (robot.game === 'wheel') {
       const galeByColor = robot.galeByColor || {};
-      const colorKey = { RED: 'red', BLACK: 'grey', GREY: 'grey', BLUE: 'blue' };
+      const colorKey = { RED: 'red', BLACK: 'grey', GREY: 'grey', BLUE: 'blue', GREEN: 'green' };
       const key = colorKey[target.color] || 'grey';
       galeMax = galeByColor[key] ?? 1;
     } else {
@@ -1148,7 +1166,7 @@ const TelegramService = {
     let galeMax;
     if (robot.game === 'wheel') {
       const galeByColor = robot.galeByColor || {};
-      const colorKey = { RED: 'red', BLACK: 'grey', GREY: 'grey', BLUE: 'blue' };
+      const colorKey = { RED: 'red', BLACK: 'grey', GREY: 'grey', BLUE: 'blue', GREEN: 'green' };
       const key = colorKey[target.color] || 'grey';
       galeMax = galeByColor[key] ?? 1;
     } else {
@@ -1710,7 +1728,7 @@ const TelegramService = {
     let galeMax;
     if (robot.game === 'wheel') {
       const galeByColor = robot.galeByColor || {};
-      const colorKey = { RED: 'red', BLACK: 'grey', GREY: 'grey', BLUE: 'blue' };
+      const colorKey = { RED: 'red', BLACK: 'grey', GREY: 'grey', BLUE: 'blue', GREEN: 'green' };
       const key = colorKey[target.color] || 'grey';
       galeMax = galeByColor[key] ?? 1;
     } else {
@@ -1925,6 +1943,215 @@ const TelegramService = {
     }
     if (!destinations.length) return;
     const text = this.buildScheduleMessage(robot, schedule, action);
+    for (const dest of destinations) {
+      const chatId = dest.channelId;
+      if (!chatId) continue;
+      const token = this.getTokenForChat(chatId);
+      const payload = {
+        chat_id: chatId,
+        text: this.prepareTelegramText(text),
+        parse_mode: 'HTML',
+        disable_web_page_preview: true
+      };
+      if (dest.threadId) payload.message_thread_id = dest.threadId;
+      await this.api(token, 'sendMessage', payload).catch(() => {});
+    }
+  },
+
+  checkPendingSignalLimitNotifications() {
+    try {
+      const raw = localStorage.getItem('signalLimitNotify');
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      if (!data || !data.time) return;
+      const age = Date.now() - data.time;
+      if (age > 60000) { localStorage.removeItem('signalLimitNotify'); return; }
+      if (data.type === 'start') this.handleSignalLimitStart(data);
+      else if (data.type === 'reached') this.handleSignalLimitReached(data);
+      else if (data.type === 'update') this.handleSignalLimitUpdate(data);
+      else if (data.type === 'warning') this.handleSignalLimitWarning(data);
+      localStorage.removeItem('signalLimitNotify');
+    } catch { localStorage.removeItem('signalLimitNotify'); }
+  },
+
+  async handleSignalLimitStart(d) {
+    if (!this.hasAnyToken()) return;
+    const robot = RobotEngine.getRobot(d?.id);
+    if (!robot || !this.isTelegramEnabled(robot)) return;
+    const sl = robot.signalLimit;
+    if (!sl?.enabled) return;
+    const dedupKey = 'slStart:' + (d?.id || robot.id);
+    if (this._signalLimitSent.has(dedupKey)) return;
+    this._signalLimitSent.add(dedupKey);
+    setTimeout(() => this._signalLimitSent.delete(dedupKey), 5000);
+    const intervalMs = (sl.intervalHours || 5) * 60 * 60 * 1000;
+    const now = Date.now();
+    const timestamps = (d?.timestamps || robot._signalTimestamps || []).filter(t => t > now - intervalMs);
+    const remaining = Math.max(0, (sl.maxSignals || 10) - timestamps.length);
+    const name = robot.name || 'Robô';
+    const signalHistory = robot.signalHistory || [];
+    const windowSignals = signalHistory.filter(h => h.time && h.time > now - intervalMs);
+    const emojiMap = { RED: '🔴', BLACK: '⚫', GREY: '⚫', GREEN: '🟢', BLUE: '🔵', VERMELHO: '🔴', PRETO: '⚫', VERDE: '🟢', AZUL: '🔵' };
+    const targetColor = (robot.target?.color || 'any').toUpperCase();
+    const targetLabel = targetColor === 'ANY' ? 'QUALQUER' : (emojiMap[targetColor] || '') + ' ' + targetColor;
+    const resultsLine = windowSignals.length > 0
+      ? windowSignals.map(h => h.type === 'win' ? '✅' : '❌').join('')
+      : 'Sem entradas ainda';
+    const winsCount = windowSignals.filter(h => h.type === 'win').length;
+    const lossesCount = windowSignals.filter(h => h.type === 'loss').length;
+    const statusLine = remaining <= 2
+      ? '⚠️ <i>Poucas entradas restantes!</i>'
+      : '✅ Operando normalmente';
+    const text = [
+      '🚦 <b>LIMITE DE SINAIS ATIVO</b>',
+      '🤖 Robô: ' + name,
+      '📊 Entradas restantes: <b>' + remaining + '/' + (sl.maxSignals || 10) + '</b>',
+      '-----------------------',
+      '🔰 META === DAS === ESNTRADAS',
+      resultsLine,
+      '-----------------------',
+      '✅ ' + winsCount + 'W | ❌ ' + lossesCount + 'L',
+      '-----------------------',
+      '⏱️ Janela: ' + (sl.intervalHours || 5) + 'h',
+      statusLine
+    ].join('\n');
+    const destinations = this.getDestinations(robot);
+    for (const dest of destinations) {
+      const chatId = dest.channelId;
+      if (!chatId) continue;
+      const token = this.getTokenForChat(chatId);
+      const payload = {
+        chat_id: chatId,
+        text: this.prepareTelegramText(text),
+        parse_mode: 'HTML',
+        disable_web_page_preview: true
+      };
+      if (dest.threadId) payload.message_thread_id = dest.threadId;
+      await this.api(token, 'sendMessage', payload).catch(() => {});
+    }
+  },
+
+  async handleSignalLimitReached(d) {
+    if (!this.hasAnyToken()) return;
+    const robot = RobotEngine.getRobot(d?.robotId);
+    if (!robot || !this.isTelegramEnabled(robot)) return;
+    const sl = robot.signalLimit;
+    if (!sl?.enabled) return;
+    const dedupKey = 'slReached:' + (d?.robotId || robot.id);
+    if (this._signalLimitSent.has(dedupKey)) return;
+    this._signalLimitSent.add(dedupKey);
+    setTimeout(() => this._signalLimitSent.delete(dedupKey), 5000);
+    const name = robot.name || 'Robô';
+    const intervalMs = (sl.intervalHours || 5) * 60 * 60 * 1000;
+    const now = Date.now();
+    const timestamps = (robot._signalTimestamps || []).filter(t => t > now - intervalMs);
+    const firstTimestamp = timestamps.length > 0 ? Math.min(...timestamps) : now;
+    const nextWindowTime = new Date(firstTimestamp + intervalMs);
+    const nextWindowStr = nextWindowTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const signalHistory = robot.signalHistory || [];
+    const windowSignals = signalHistory.filter(h => h.time && h.time > now - intervalMs);
+    const windowWins = windowSignals.filter(h => h.type === 'win').length;
+    const windowLosses = signalHistory.filter(h => h.type === 'loss').length;
+    const slTotal = robot.signalLimitTotal || { wins: 0, losses: 0 };
+    const totalWins = slTotal.wins;
+    const totalLosses = slTotal.losses;
+    const text = [
+      '🚫 <b>LIMITE DE SINAIS ATINGIDO</b>',
+      '🤖 Robô: ' + name,
+      '📊 ' + (d?.count || 0) + '/' + (d?.max || 10) + ' sinais utilizados',
+      '-----------------------',
+      '🧾 PLACAR= ✅ ' + windowWins + 'W | ❌ ' + windowLosses + 'L',
+      '-----------------------',
+      '🌐 TOTAL GERAL= ✅ ' + totalWins + 'W | ❌ ' + totalLosses + 'L',
+      '-----------------------',
+      '⏱️ Próxima janela às: ' + nextWindowStr,
+      '🔒 Sinais bloqueados até liberação'
+    ].join('\n');
+    const destinations = this.getDestinations(robot);
+    for (const dest of destinations) {
+      const chatId = dest.channelId;
+      if (!chatId) continue;
+      const token = this.getTokenForChat(chatId);
+      const payload = {
+        chat_id: chatId,
+        text: this.prepareTelegramText(text),
+        parse_mode: 'HTML',
+        disable_web_page_preview: true
+      };
+      if (dest.threadId) payload.message_thread_id = dest.threadId;
+      await this.api(token, 'sendMessage', payload).catch(() => {});
+    }
+  },
+
+  async handleSignalLimitUpdate(d) {
+    if (!this.hasAnyToken()) return;
+    const robot = RobotEngine.getRobot(d?.robotId);
+    if (!robot || !this.isTelegramEnabled(robot)) return;
+    const sl = robot.signalLimit;
+    if (!sl?.enabled) return;
+    const intervalMs = (sl.intervalHours || 5) * 60 * 60 * 1000;
+    const now = Date.now();
+    const timestamps = (robot._signalTimestamps || []).filter(t => t > now - intervalMs);
+    const remaining = Math.max(0, (sl.maxSignals || 10) - timestamps.length);
+    const name = robot.name || 'Robô';
+    const signalHistory = robot.signalHistory || [];
+    const windowSignals = signalHistory.filter(h => h.time && h.time > now - intervalMs);
+    const resultsLine = windowSignals.length > 0
+      ? windowSignals.map(h => h.type === 'win' ? '✅' : '❌').join('')
+      : 'Sem entradas ainda';
+    const winsCount = windowSignals.filter(h => h.type === 'win').length;
+    const lossesCount = windowSignals.filter(h => h.type === 'loss').length;
+    const statusLine = remaining <= 2
+      ? '⚠️ <i>Poucas entradas restantes!</i>'
+      : '✅ Operando normalmente';
+    const text = [
+      '🚦 <b>LIMITE DE SINAIS ATIVO</b>',
+      '🤖 Robô: ' + name,
+      '📊 Entradas restantes: <b>' + remaining + '/' + (sl.maxSignals || 10) + '</b>',
+      '-----------------------',
+      '🔰 META === DAS === ESNTRADAS',
+      resultsLine,
+      '-----------------------',
+      '✅ ' + winsCount + 'W | ❌ ' + lossesCount + 'L',
+      '-----------------------',
+      '⏱️ Janela: ' + (sl.intervalHours || 5) + 'h',
+      statusLine
+    ].join('\n');
+    const destinations = this.getDestinations(robot);
+    for (const dest of destinations) {
+      const chatId = dest.channelId;
+      if (!chatId) continue;
+      const token = this.getTokenForChat(chatId);
+      const payload = {
+        chat_id: chatId,
+        text: this.prepareTelegramText(text),
+        parse_mode: 'HTML',
+        disable_web_page_preview: true
+      };
+      if (dest.threadId) payload.message_thread_id = dest.threadId;
+      await this.api(token, 'sendMessage', payload).catch(() => {});
+    }
+  },
+
+  async handleSignalLimitWarning(d) {
+    if (!this.hasAnyToken()) return;
+    const robot = RobotEngine.getRobot(d?.robotId);
+    if (!robot || !this.isTelegramEnabled(robot)) return;
+    const sl = robot.signalLimit;
+    if (!sl?.enabled) return;
+    const name = robot.name || 'Robô';
+    const nextTime = d?.nextWindowAt ? new Date(d.nextWindowAt) : new Date(Date.now() + 5 * 60 * 1000);
+    const nextStr = nextTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const text = [
+      '⚡ <b>ALERTA - NOVA JANELA EM BREVE</b>',
+      '🤖 Robô: ' + name,
+      '-----------------------',
+      '⏰ Nova janela às: <b>' + nextStr + '</b>',
+      '📊 ' + (sl.maxSignals || 10) + ' novas entradas disponíveis',
+      '-----------------------',
+      '✅ Operando normalmente em breve'
+    ].join('\n');
+    const destinations = this.getDestinations(robot);
     for (const dest of destinations) {
       const chatId = dest.channelId;
       if (!chatId) continue;

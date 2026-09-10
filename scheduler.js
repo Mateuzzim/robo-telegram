@@ -196,7 +196,7 @@ const Scheduler = {
       if (active && !maxReached && robot.status === 'offline') {
         robot.currentSignal = null;
         robot.galeCount = 0;
-        robot.usedPatterns = { RED: [], BLACK: [], GREY: [] };
+        robot.usedPatterns = { RED: [], BLACK: [], GREY: [], GREEN: [], BLUE: [] };
         if (typeof TelegramService !== 'undefined') TelegramService.clearAllMessages(robot);
         RobotEngine.startRobot(s.robotId);
         if (s._maxNotified) {

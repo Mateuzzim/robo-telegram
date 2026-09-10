@@ -1206,7 +1206,7 @@ const NewsService = (() => {
   function getGaleMax(robot, targetColor) {
     if (robot.game === 'wheel') {
       const galeByColor = robot.galeByColor || {};
-      const colorKey = { RED: 'red', BLACK: 'grey', GREY: 'grey', BLUE: 'blue' };
+      const colorKey = { RED: 'red', BLACK: 'grey', GREY: 'grey', BLUE: 'blue', GREEN: 'green' };
       const key = colorKey[targetColor?.toUpperCase()] || 'grey';
       return galeByColor[key] ?? 1;
     }

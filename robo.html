@@ -96,6 +96,10 @@
 </div>
 <script src="config.js"></script>
 <script src="saved-data.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="firebase-storage.js"></script>
 <script src="store.js"></script>
 <script src="event-bus.js"></script>
 <script src="utils.js"></script>
@@ -523,7 +527,7 @@ function renderAll() {
             <div class="cfg-field"><label>Preto</label><input id="cfgGaleGrey" type="number" value="${galeByColor.grey??1}" min="0"></div>
             <div class="cfg-field"><label>Vermelho</label><input id="cfgGaleRed" type="number" value="${galeByColor.red??3}" min="0"></div>
             <div class="cfg-field"><label>Azul</label><input id="cfgGaleBlue" type="number" value="${galeByColor.blue??5}" min="0"></div>
-            <div class="cfg-field"><label>Verde</label><input id="cfgGaleGreen" type="number" value="${galeByColor.green??10}" min="0"></div>
+            <div class="cfg-field" style="display:${showGaleByColor?'none':''}"><label>Verde</label><input id="cfgGaleGreen" type="number" value="${galeByColor.green??10}" min="0"></div>
             <div class="cfg-field"><label>Auto-Pausar</label><input id="cfgAutoPauseColor" type="number" value="${r.autoPause||0}" min="0" placeholder="0=off"><div class="cfg-hint">0 = off</div></div>
           </div>
         </div>
@@ -689,8 +693,10 @@ function updateCfgGaleByColor() {
   const show = game === 'wheel' && target === 'any';
   const gbc = document.getElementById('cfgGaleByColor');
   const gm = document.getElementById('cfgGaleMaxGroup');
+  const greenField = document.getElementById('cfgGaleGreen')?.closest('.cfg-field');
   if (gbc) gbc.style.display = show ? 'block' : 'none';
   if (gm) gm.style.display = show ? 'none' : 'block';
+  if (greenField) greenField.style.display = show ? 'none' : '';
 }
 
 function getCfgSelectedStrategies() {
@@ -746,7 +752,10 @@ function toggleCfgIaInteligente() {
 
       if (tag === 'GERAL' || tag === 'ADV') { cb.checked = true; return; }
 
-      if (isAny || multiTarget) {
+      if (isAny) {
+        const allNames = Object.entries(map).filter(([k]) => k !== 'green').map(([, v]) => v).flat();
+        cb.checked = allNames.includes(name);
+      } else if (multiTarget) {
         const allNames = Object.values(map).flat();
         cb.checked = allNames.includes(name);
       } else {
@@ -875,10 +884,9 @@ function saveConfig() {
     robot.galeByColor = {
       grey: parseInt(document.getElementById('cfgGaleGrey')?.value) || 1,
       red: parseInt(document.getElementById('cfgGaleRed')?.value) || 3,
-      blue: parseInt(document.getElementById('cfgGaleBlue')?.value) || 5,
-      green: parseInt(document.getElementById('cfgGaleGreen')?.value) || 10
+      blue: parseInt(document.getElementById('cfgGaleBlue')?.value) || 5
     };
-    robot.gale.max = Math.max(robot.galeByColor.grey, robot.galeByColor.red, robot.galeByColor.blue, robot.galeByColor.green);
+    robot.gale.max = Math.max(robot.galeByColor.grey, robot.galeByColor.red, robot.galeByColor.blue);
   } else {
     robot.gale.max = parseInt(document.getElementById('cfgGale')?.value) || 0;
   }
