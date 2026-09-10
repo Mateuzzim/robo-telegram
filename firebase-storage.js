@@ -83,6 +83,21 @@ const FirebaseStorage = {
     pending.forEach(({ key, value, attempt }) => this.save(key, value, attempt));
   },
 
+  _sanitizeForFirestore(value) {
+    if (value === undefined) return null;
+    if (value === null || typeof value !== 'object') return value;
+    if (Array.isArray(value)) {
+      return value.map(item => this._sanitizeForFirestore(item));
+    }
+    const cleaned = {};
+    Object.keys(value).forEach(prop => {
+      if (value[prop] !== undefined) {
+        cleaned[prop] = this._sanitizeForFirestore(value[prop]);
+      }
+    });
+    return cleaned;
+  },
+
   save(key, value, attempt = 0) {
     if (!this.initialized) {
       this._pendingSaves.push({ key, value, attempt: 0 });
@@ -90,7 +105,7 @@ const FirebaseStorage = {
     }
     this._docRef(key).set({
       key,
-      value,
+      value: this._sanitizeForFirestore(value),
       ts: Date.now()
     }).catch(e => {
       console.error('[Firebase] save (tentativa ' + (attempt + 1) + '):', e.message);
