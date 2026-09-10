@@ -303,7 +303,7 @@
     <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
       <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Limite de Sinais</div>
       <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:10px;cursor:pointer">
-        <input type="checkbox" id="fSignalLimitEnabled"> Habilitar limite de sinais
+        <input type="checkbox" id="fSignalLimitEnabled" onchange="toggleSignalLimitFields()"> Habilitar limite de sinais
       </label>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px" id="fSignalLimitFields">
         <div class="form-group"><label>Intervalo (horas)</label><input id="fSignalLimitHours" type="number" value="5" min="1"></div>
@@ -938,7 +938,18 @@ function createRobot(){
       RobotEngine.save();
     }
   } else {
-    const id = game + '-' + name.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'');
+    const slug = name.toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9-]/g, '') || 'robo';
+    const baseId = game + '-' + slug;
+    let id = baseId;
+    let suffix = 2;
+    while (RobotEngine.getRobot(id)) {
+      id = baseId + '-' + suffix;
+      suffix++;
+    }
     RobotEngine.createRobot({
       id, name, game, strategy, strategies, filterMode,
       target: { color: targetColor, multiplier: targetMult ? parseInt(targetMult) : null },

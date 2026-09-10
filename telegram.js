@@ -25,6 +25,51 @@ const TelegramService = {
   },
 
   _signalLimitSent: new Set(),
+  signalLimitProcessedKey: 'telegram-signal-limit-processed-v1',
+
+  getSignalLimitProcessed() {
+    try { return JSON.parse(localStorage.getItem(this.signalLimitProcessedKey) || '{}'); }
+    catch { return {}; }
+  },
+
+  saveSignalLimitProcessed(data) {
+    localStorage.setItem(this.signalLimitProcessedKey, JSON.stringify(data));
+  },
+
+  getSignalLimitNotificationKey(data, fallbackType, fallbackRobotId) {
+    const type = data?.type || fallbackType || '';
+    const robotId = data?.robotId || data?.id || fallbackRobotId || '';
+    const time = data?.time || '';
+    if (!type || !robotId || !time) return '';
+    return [type, robotId, time].join(':');
+  },
+
+  shouldProcessSignalLimitNotification(data, fallbackType, fallbackRobotId) {
+    const key = this.getSignalLimitNotificationKey(data, fallbackType, fallbackRobotId);
+    if (!key) return true;
+    const now = Date.now();
+    const processed = this.getSignalLimitProcessed();
+    Object.keys(processed).forEach(k => {
+      if (now - processed[k] > 10 * 60 * 1000) delete processed[k];
+    });
+    if (processed[key]) {
+      this.saveSignalLimitProcessed(processed);
+      return false;
+    }
+    processed[key] = now;
+    this.saveSignalLimitProcessed(processed);
+    return true;
+  },
+
+  clearSignalLimitNotification(data, fallbackType, fallbackRobotId) {
+    const handledKey = this.getSignalLimitNotificationKey(data, fallbackType, fallbackRobotId);
+    if (!handledKey) return;
+    try {
+      const current = JSON.parse(localStorage.getItem('signalLimitNotify') || 'null');
+      const currentKey = this.getSignalLimitNotificationKey(current, fallbackType, fallbackRobotId);
+      if (currentKey === handledKey) localStorage.removeItem('signalLimitNotify');
+    } catch {}
+  },
 
   init() {
     if (this.initialized) return;
@@ -369,16 +414,6 @@ const TelegramService = {
     ));
     for (const robot of robots) {
       const snapshot = { ...robot.currentSignal };
-      const destinations = this.getDestinations(robot);
-      let anyProcessed = false;
-      for (const dest of destinations) {
-        if (!this.shouldProcessEntryEvent(robot, snapshot, dest)) continue;
-        anyProcessed = true;
-      }
-      if (!anyProcessed) {
-        robot.currentSignal.entrySent = true;
-        continue;
-      }
       if (robot.currentSignal?.id === snapshot.id) robot.currentSignal.entrySending = true;
       try {
         const sent = await this.enqueueEntryMessage(robot, snapshot);
@@ -402,17 +437,11 @@ const TelegramService = {
       result: signal.result ? { ...signal.result } : null,
       pattern: Array.isArray(signal.pattern) ? [...signal.pattern] : signal.pattern
     };
-    const destinations = this.getDestinations(robot);
-
-    for (const dest of destinations) {
-      if (!this.shouldProcessEntryEvent(robot, snapshot, dest)) {
-        if (robot.currentSignal?.id === signal.id) robot.currentSignal.entrySent = true;
-      }
-    }
 
     if (this.isDynamicMode(robot)) {
       if (robot.currentSignal?.id === signal.id) robot.currentSignal.entrySending = true;
       try {
+        const destinations = this.getDestinations(robot);
         for (const dest of destinations) {
           await this.updateDynamicMessage(robot, dest);
         }
@@ -492,12 +521,8 @@ const TelegramService = {
     const shouldSend = status === 'win' || status === 'loss' || status === 'gale_pending';
     if (!shouldSend) return;
 
-    const destinations = this.getDestinations(robot);
-    for (const dest of destinations) {
-      this.shouldProcessEntryEvent(robot, snapshot, dest);
-    }
-
     if (this.isDynamicMode(robot)) {
+      const destinations = this.getDestinations(robot);
       for (const dest of destinations) {
         await this.updateDynamicMessage(robot, dest);
       }
@@ -619,17 +644,21 @@ const TelegramService = {
     let anySent = false;
     for (const dest of destinations) {
       const key = 'entry:' + this.entryMessageKey(robot, dest);
+      const task = () => this.withLock(key, async () => {
+        if (!this.shouldProcessEntryEvent(robot, signal, dest)) return true;
+        if (this.isNormalMode(robot)) {
+          if (this.isNormalProcessed(robot.id, signal.id, signal.status, signal.gale, dest)) return true;
+          const sent = await this.sendEntryNormal(robot, signal, dest);
+          if (sent) this.markNormalProcessed(robot.id, signal.id, signal.status, signal.gale, dest);
+          return sent;
+        }
+        return this.sendEntryMessage(robot, signal, dest);
+      });
       if (this.isNormalMode(robot)) {
-        if (this.isNormalProcessed(robot.id, signal.id, signal.status, signal.gale, dest)) {
-          continue;
-        }
-        const sent = await this.enqueue(key, () => this.sendEntryNormal(robot, signal, dest));
-        if (sent) {
-          this.markNormalProcessed(robot.id, signal.id, signal.status, signal.gale, dest);
-          anySent = true;
-        }
+        const sent = await this.enqueue(key, task);
+        if (sent) anySent = true;
       } else {
-        const sent = await this.enqueue(key, () => this.withLock(key, () => this.sendEntryMessage(robot, signal, dest)));
+        const sent = await this.enqueue(key, task);
         if (sent) anySent = true;
       }
     }
@@ -1604,7 +1633,10 @@ const TelegramService = {
     const destResults = [];
     for (const dest of destinations) {
       const key = 'entry:' + this.entryMessageKey(robot, dest);
-      const task = () => this._sendFreshEntryMessage(robot, signal, dest);
+      const task = () => this.withLock(key, async () => {
+        if (signal?.id && signal.id !== 'cleanup' && !this.shouldProcessEntryEvent(robot, signal, dest)) return true;
+        return this._sendFreshEntryMessage(robot, signal, dest);
+      });
       destResults.push(await this.enqueue(key, task));
     }
     return destResults.some(r => r);
@@ -1980,6 +2012,10 @@ const TelegramService = {
     if (!robot || !this.isTelegramEnabled(robot)) return;
     const sl = robot.signalLimit;
     if (!sl?.enabled) return;
+    if (!this.shouldProcessSignalLimitNotification(d, 'start', robot.id)) {
+      this.clearSignalLimitNotification(d, 'start', robot.id);
+      return;
+    }
     const dedupKey = 'slStart:' + (d?.id || robot.id);
     if (this._signalLimitSent.has(dedupKey)) return;
     this._signalLimitSent.add(dedupKey);
@@ -2003,11 +2039,11 @@ const TelegramService = {
       ? '⚠️ <i>Poucas entradas restantes!</i>'
       : '✅ Operando normalmente';
     const text = [
-      '🚦 <b>LIMITE DE SINAIS ATIVO</b>',
+      '🚦 <b>LIMITE DE SINAIS ATIVO</b> 🚦',
       '🤖 Robô: ' + name,
       '📊 Entradas restantes: <b>' + remaining + '/' + (sl.maxSignals || 10) + '</b>',
       '-----------------------',
-      '🔰 META === DAS === ESNTRADAS',
+      '🔰 META == ENTRADAS 🔰',
       resultsLine,
       '-----------------------',
       '✅ ' + winsCount + 'W | ❌ ' + lossesCount + 'L',
@@ -2029,6 +2065,7 @@ const TelegramService = {
       if (dest.threadId) payload.message_thread_id = dest.threadId;
       await this.api(token, 'sendMessage', payload).catch(() => {});
     }
+    this.clearSignalLimitNotification(d, 'start', robot.id);
   },
 
   async handleSignalLimitReached(d) {
@@ -2037,6 +2074,10 @@ const TelegramService = {
     if (!robot || !this.isTelegramEnabled(robot)) return;
     const sl = robot.signalLimit;
     if (!sl?.enabled) return;
+    if (!this.shouldProcessSignalLimitNotification(d, 'reached', robot.id)) {
+      this.clearSignalLimitNotification(d, 'reached', robot.id);
+      return;
+    }
     const dedupKey = 'slReached:' + (d?.robotId || robot.id);
     if (this._signalLimitSent.has(dedupKey)) return;
     this._signalLimitSent.add(dedupKey);
@@ -2051,7 +2092,7 @@ const TelegramService = {
     const signalHistory = robot.signalHistory || [];
     const windowSignals = signalHistory.filter(h => h.time && h.time > now - intervalMs);
     const windowWins = windowSignals.filter(h => h.type === 'win').length;
-    const windowLosses = signalHistory.filter(h => h.type === 'loss').length;
+    const windowLosses = windowSignals.filter(h => h.type === 'loss').length;
     const slTotal = robot.signalLimitTotal || { wins: 0, losses: 0 };
     const totalWins = slTotal.wins;
     const totalLosses = slTotal.losses;
@@ -2081,6 +2122,7 @@ const TelegramService = {
       if (dest.threadId) payload.message_thread_id = dest.threadId;
       await this.api(token, 'sendMessage', payload).catch(() => {});
     }
+    this.clearSignalLimitNotification(d, 'reached', robot.id);
   },
 
   async handleSignalLimitUpdate(d) {
@@ -2089,6 +2131,10 @@ const TelegramService = {
     if (!robot || !this.isTelegramEnabled(robot)) return;
     const sl = robot.signalLimit;
     if (!sl?.enabled) return;
+    if (!this.shouldProcessSignalLimitNotification(d, 'update', robot.id)) {
+      this.clearSignalLimitNotification(d, 'update', robot.id);
+      return;
+    }
     const intervalMs = (sl.intervalHours || 5) * 60 * 60 * 1000;
     const now = Date.now();
     const timestamps = (robot._signalTimestamps || []).filter(t => t > now - intervalMs);
@@ -2105,11 +2151,11 @@ const TelegramService = {
       ? '⚠️ <i>Poucas entradas restantes!</i>'
       : '✅ Operando normalmente';
     const text = [
-      '🚦 <b>LIMITE DE SINAIS ATIVO</b>',
+      '🚦 <b>LIMITE DE SINAIS ATIVO</b> 🚦',
       '🤖 Robô: ' + name,
       '📊 Entradas restantes: <b>' + remaining + '/' + (sl.maxSignals || 10) + '</b>',
       '-----------------------',
-      '🔰 META === DAS === ESNTRADAS',
+      '🔰 META == ENTRADAS 🔰',
       resultsLine,
       '-----------------------',
       '✅ ' + winsCount + 'W | ❌ ' + lossesCount + 'L',
@@ -2131,6 +2177,7 @@ const TelegramService = {
       if (dest.threadId) payload.message_thread_id = dest.threadId;
       await this.api(token, 'sendMessage', payload).catch(() => {});
     }
+    this.clearSignalLimitNotification(d, 'update', robot.id);
   },
 
   async handleSignalLimitWarning(d) {
@@ -2139,6 +2186,10 @@ const TelegramService = {
     if (!robot || !this.isTelegramEnabled(robot)) return;
     const sl = robot.signalLimit;
     if (!sl?.enabled) return;
+    if (!this.shouldProcessSignalLimitNotification(d, 'warning', robot.id)) {
+      this.clearSignalLimitNotification(d, 'warning', robot.id);
+      return;
+    }
     const name = robot.name || 'Robô';
     const nextTime = d?.nextWindowAt ? new Date(d.nextWindowAt) : new Date(Date.now() + 5 * 60 * 1000);
     const nextStr = nextTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -2165,5 +2216,6 @@ const TelegramService = {
       if (dest.threadId) payload.message_thread_id = dest.threadId;
       await this.api(token, 'sendMessage', payload).catch(() => {});
     }
+    this.clearSignalLimitNotification(d, 'warning', robot.id);
   }
 };

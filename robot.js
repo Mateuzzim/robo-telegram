@@ -41,6 +41,7 @@ class Robot {
     this.startedAt = config.startedAt || null;
     this.startDelayUntil = config.startDelayUntil || null;
     this._startDelayTimer = null;
+    this._signalLimitStartTimer = null;
     this.normalizeSavedSignalTargets();
     this.logs = Array.isArray(config.logs) ? config.logs : [];
     this.signalHistory = Array.isArray(config.signalHistory) ? config.signalHistory : [];
@@ -82,6 +83,71 @@ class Robot {
     this._signalTimestamps = Array.isArray(config._signalTimestamps) ? config._signalTimestamps : [];
     this.signalLimitTotal = config.signalLimitTotal || { wins: 0, losses: 0 };
     this._signalLimitNotified = config._signalLimitNotified || false;
+  }
+
+  getSignalLimitState(now = Date.now()) {
+    const intervalHours = this.signalLimit?.intervalHours || 5;
+    const intervalMs = intervalHours * 60 * 60 * 1000;
+    const maxSignals = this.signalLimit?.maxSignals || 10;
+    const windowStart = now - intervalMs;
+    this._signalTimestamps = (this._signalTimestamps || []).filter(t => t > windowStart);
+    const usedCount = this._signalTimestamps.length;
+    const firstTs = usedCount ? Math.min(...this._signalTimestamps) : now;
+    return {
+      intervalHours,
+      intervalMs,
+      maxSignals,
+      usedCount,
+      nextWindowAt: firstTs + intervalMs,
+      remaining: Math.max(0, maxSignals - usedCount)
+    };
+  }
+
+  scheduleSignalLimitRelease(nextWindowAt) {
+    const msUntilNext = Math.max(0, nextWindowAt - Date.now());
+    const msWarning = Math.max(0, msUntilNext - 5 * 60 * 1000);
+    if (this._signalLimitPauseTimer) clearTimeout(this._signalLimitPauseTimer);
+    if (this._signalLimitWarningTimer) clearTimeout(this._signalLimitWarningTimer);
+    this._signalLimitWarningTimer = setTimeout(() => {
+      localStorage.setItem('signalLimitNotify', JSON.stringify({ robotId: this.id, type: 'warning', time: Date.now(), nextWindowAt }));
+      EventBus.emit('robot:signalLimitWarning', { robotId: this.id, nextWindowAt });
+    }, msWarning);
+    this._signalLimitPauseTimer = setTimeout(() => {
+      this._signalLimitPaused = false;
+      this._signalLimitPauseTimer = null;
+      this._signalLimitWarningTimer = null;
+      this.analyze();
+    }, msUntilNext);
+  }
+
+  blockBySignalLimit(state = this.getSignalLimitState()) {
+    this._signalLimitPaused = true;
+    this.currentSignal = null;
+    this.scheduleSignalLimitRelease(state.nextWindowAt);
+    this.diagnostic.status = 'LIMIT_PAUSED';
+    this.diagnostic.mainPattern = 'Limite de sinais atingido (' + state.usedCount + '/' + state.maxSignals + ')';
+    this.diagnostic.confidence = 0;
+    this.diagnostic.suggestedEntry = null;
+    this.diagnostic.signalBlocked = true;
+    this.diagnostic.blockReason = 'Limite de sinais: ' + state.usedCount + '/' + state.maxSignals + ' em ' + state.intervalHours + 'h';
+    this.signalFlow = { step1: 'Limite de sinais', step2: state.usedCount + '/' + state.maxSignals + ' em ' + state.intervalHours + 'h', step3: 'Aguardando proximo ciclo', step4: 'Sinal bloqueado' };
+    EventBus.emit('robot:state', this.getState());
+    const reachedData = { robotId: this.id, type: 'reached', time: Date.now(), count: state.usedCount, max: state.maxSignals, intervalHours: state.intervalHours };
+    localStorage.setItem('signalLimitNotify', JSON.stringify(reachedData));
+    EventBus.emit('robot:signalLimitReached', reachedData);
+  }
+
+  notifySignalLimitAfterResolution() {
+    if (!this.signalLimit?.enabled) return;
+    setTimeout(() => {
+      const state = this.getSignalLimitState();
+      if (state.usedCount >= state.maxSignals) {
+        this.blockBySignalLimit(state);
+        return;
+      }
+      localStorage.setItem('signalLimitNotify', JSON.stringify({ robotId: this.id, type: 'update', time: Date.now() }));
+      EventBus.emit('robot:signalLimitUpdate', { robotId: this.id });
+    }, 3000);
   }
 
   getGaleMaxForTarget(targetColor) {
@@ -485,44 +551,18 @@ class Robot {
       }
       this.diagnostic.suggestedEntry = result.target || null;
 
-signal = RobotEngine.evaluate(this, result);
+      if (this.signalLimit?.enabled) {
+        const limitState = this.getSignalLimitState();
+        if (limitState.usedCount >= limitState.maxSignals) {
+          this.blockBySignalLimit(limitState);
+          return;
+        }
+      }
+
+      signal = RobotEngine.evaluate(this, result);
        if (signal) {
          if (this.signalLimit?.enabled) {
-           const intervalMs = (this.signalLimit.intervalHours || 5) * 60 * 60 * 1000;
-           const maxSignals = this.signalLimit.maxSignals || 10;
-           const windowStart = Date.now() - intervalMs;
-           this._signalTimestamps = this._signalTimestamps.filter(t => t > windowStart);
-            if (this._signalTimestamps.length >= maxSignals) {
-              this._signalLimitPaused = true;
-              const firstTs = Math.min(...this._signalTimestamps);
-              const nextWindowAt = firstTs + intervalMs;
-              const msUntilNext = nextWindowAt - Date.now();
-              const msWarning = Math.max(0, msUntilNext - 5 * 60 * 1000);
-              if (this._signalLimitPauseTimer) clearTimeout(this._signalLimitPauseTimer);
-              if (this._signalLimitWarningTimer) clearTimeout(this._signalLimitWarningTimer);
-              this._signalLimitWarningTimer = setTimeout(() => {
-                localStorage.setItem('signalLimitNotify', JSON.stringify({ robotId: this.id, type: 'warning', time: Date.now(), nextWindowAt }));
-                EventBus.emit('robot:signalLimitWarning', { robotId: this.id, nextWindowAt });
-              }, msWarning);
-              this._signalLimitPauseTimer = setTimeout(() => {
-                this._signalLimitPaused = false;
-                this._signalLimitPauseTimer = null;
-                this._signalLimitWarningTimer = null;
-                this.analyze();
-              }, msUntilNext);
-              this.diagnostic.status = 'WAITING_RESULT';
-              this.diagnostic.mainPattern = 'Limite de sinais atingido (' + this._signalTimestamps.length + '/' + maxSignals + ')';
-              this.diagnostic.confidence = 0;
-              this.diagnostic.suggestedEntry = null;
-              this.diagnostic.signalBlocked = true;
-              this.diagnostic.blockReason = 'Limite de sinais: ' + this._signalTimestamps.length + '/' + maxSignals + ' em ' + (this.signalLimit.intervalHours || 5) + 'h';
-              this.signalFlow = { step1: 'Limite de sinais', step2: this._signalTimestamps.length + '/' + maxSignals + ' em ' + (this.signalLimit.intervalHours || 5) + 'h', step3: 'Aguardando proximo ciclo', step4: 'Sinal bloqueado' };
-               EventBus.emit('robot:state', this.getState());
-               const reachedData = { robotId: this.id, type: 'reached', time: Date.now(), count: this._signalTimestamps.length, max: maxSignals, intervalHours: this.signalLimit.intervalHours || 5 };
-               localStorage.setItem('signalLimitNotify', JSON.stringify(reachedData));
-               EventBus.emit('robot:signalLimitReached', reachedData);
-               continue;
-            }
+           this.getSignalLimitState();
            this._signalTimestamps.push(Date.now());
          }
          this.markPatternUsed(name, signal.target);
@@ -1167,16 +1207,7 @@ signal = RobotEngine.evaluate(this, result);
       EventBus.emit('signal:resolved', { ...signal, robotId: this.id, type: 'win' });
       this.signalHistory.push({ type: 'win', target: targetColor, result: rColor, gale: resolvedGale, time: Date.now(), greenProtection: isGreenProtection });
       if (this.signalHistory.length > 100) this.signalHistory.shift();
-      if (this.signalLimit?.enabled) {
-        const maxSig = this.signalLimit.maxSignals || 10;
-        const usedCount = (this._signalTimestamps || []).length;
-        if (usedCount < maxSig) {
-          setTimeout(() => {
-            localStorage.setItem('signalLimitNotify', JSON.stringify({ robotId: this.id, type: 'update', time: Date.now() }));
-            EventBus.emit('robot:signalLimitUpdate', { robotId: this.id });
-          }, 3000);
-        }
-      }
+      this.notifySignalLimitAfterResolution();
       if (typeof IAConfig !== 'undefined') {
         IAConfig.runOnWin({ strategy: this.strategy, target: targetColor, gale: resolvedGale, confidence: signal.confidence || 0 }, this.id);
       }
@@ -1229,16 +1260,7 @@ signal = RobotEngine.evaluate(this, result);
         EventBus.emit('signal:resolved', { ...signal, robotId: this.id, type: 'loss' });
         this.signalHistory.push({ type: 'loss', target: targetColor, result: rColor, gale: maxGale, time: Date.now() });
         if (this.signalHistory.length > 100) this.signalHistory.shift();
-        if (this.signalLimit?.enabled) {
-          const maxSig = this.signalLimit.maxSignals || 10;
-          const usedCount = (this._signalTimestamps || []).length;
-          if (usedCount < maxSig) {
-            setTimeout(() => {
-              localStorage.setItem('signalLimitNotify', JSON.stringify({ robotId: this.id, type: 'update', time: Date.now() }));
-              EventBus.emit('robot:signalLimitUpdate', { robotId: this.id });
-            }, 3000);
-          }
-        }
+        this.notifySignalLimitAfterResolution();
         if (typeof IAConfig !== 'undefined') {
           IAConfig.runOnLoss({ strategy: this.strategy, target: targetColor, gale: maxGale, confidence: signal.confidence || 0 }, this.id);
         }

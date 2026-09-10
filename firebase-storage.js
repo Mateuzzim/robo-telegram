@@ -6,6 +6,7 @@ const FirebaseStorage = {
   _pullTimer: null,
   COLLECTION: 'robo-data',
   _lastPullTs: {},
+  LOCAL_TS_PREFIX: 'firebase-local-ts-',
 
   init() {
     try {
@@ -50,8 +51,10 @@ const FirebaseStorage = {
       this._docRef(key).get().then(doc => {
         if (doc.exists) {
           const data = doc.data();
-          if (data.ts && (!this._lastPullTs[key] || data.ts > this._lastPullTs[key])) {
-            this._lastPullTs[key] = data.ts;
+          const remoteTs = Number(data.ts || 0);
+          const knownLocalTs = Math.max(this._lastPullTs[key] || 0, this._getLocalChangeTs(key));
+          if (remoteTs && remoteTs > knownLocalTs) {
+            this._recordLocalChangeTs(key, remoteTs);
             const localRaw = localStorage.getItem(key);
             const localData = localRaw ? JSON.parse(localRaw) : null;
             if (JSON.stringify(localData) !== JSON.stringify(data.value)) {
@@ -80,7 +83,29 @@ const FirebaseStorage = {
   _flushPending() {
     const pending = [...this._pendingSaves];
     this._pendingSaves = [];
-    pending.forEach(({ key, value, attempt }) => this.save(key, value, attempt));
+    pending.forEach(({ key, value, attempt, ts }) => this.save(key, value, attempt, ts));
+  },
+
+  markLocalChange(key, ts = Date.now()) {
+    this._recordLocalChangeTs(key, ts);
+    return ts;
+  },
+
+  _recordLocalChangeTs(key, ts) {
+    const safeTs = Number(ts || Date.now());
+    this._lastPullTs[key] = Math.max(this._lastPullTs[key] || 0, safeTs);
+    try {
+      localStorage.setItem(this.LOCAL_TS_PREFIX + key, String(safeTs));
+    } catch {}
+  },
+
+  _getLocalChangeTs(key) {
+    try {
+      const ts = Number(localStorage.getItem(this.LOCAL_TS_PREFIX + key) || 0);
+      return Number.isFinite(ts) ? ts : 0;
+    } catch {
+      return 0;
+    }
   },
 
   _sanitizeForFirestore(value) {
@@ -98,19 +123,21 @@ const FirebaseStorage = {
     return cleaned;
   },
 
-  save(key, value, attempt = 0) {
+  save(key, value, attempt = 0, ts = null) {
+    const writeTs = ts || Date.now();
+    this.markLocalChange(key, writeTs);
     if (!this.initialized) {
-      this._pendingSaves.push({ key, value, attempt: 0 });
+      this._pendingSaves.push({ key, value, attempt: 0, ts: writeTs });
       return;
     }
     this._docRef(key).set({
       key,
       value: this._sanitizeForFirestore(value),
-      ts: Date.now()
+      ts: writeTs
     }).catch(e => {
       console.error('[Firebase] save (tentativa ' + (attempt + 1) + '):', e.message);
       if (attempt < 3) {
-        setTimeout(() => this.save(key, value, attempt + 1), 1000 * Math.pow(2, attempt));
+        setTimeout(() => this.save(key, value, attempt + 1, writeTs), 1000 * Math.pow(2, attempt));
       }
     });
   },
@@ -137,7 +164,7 @@ const FirebaseStorage = {
         if (doc.exists) {
           const data = doc.data();
           localStorage.setItem(key, JSON.stringify(data.value));
-          if (data.ts) this._lastPullTs[key] = data.ts;
+          if (data.ts) this._recordLocalChangeTs(key, data.ts);
           console.log('[Firebase] Restaurado:', key);
         }
       }).catch(() => {});
