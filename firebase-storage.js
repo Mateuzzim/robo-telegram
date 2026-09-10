@@ -3,7 +3,9 @@ const FirebaseStorage = {
   userId: null,
   initialized: false,
   _pendingSaves: [],
+  _pullTimer: null,
   COLLECTION: 'robo-data',
+  _lastPullTs: {},
 
   init() {
     try {
@@ -21,9 +23,45 @@ const FirebaseStorage = {
       console.log('[Firebase] Inicializado OK');
       this._flushPending();
       this.syncFromFirebase();
+      this._startPullSync();
     } catch (e) {
       console.error('[Firebase] Erro init:', e);
     }
+  },
+
+  _startPullSync() {
+    if (this._pullTimer) return;
+    this._pullTimer = setInterval(() => this._pullRemoteChanges(), 60000);
+    window.addEventListener('beforeunload', () => this._flushPending());
+  },
+
+  _pullRemoteChanges() {
+    if (!this.initialized) return;
+    const keys = [
+      'robots', 'robot-schedules',
+      'ia-inteligente-config', 'ia-inteligente-robot-configs',
+      'telegram-bot-token', 'telegram-bot-token-grupos',
+      'telegram-channels', 'telegram-owner-name',
+      'telegram-message-templates-v1',
+      'news-summary-config-v1', 'news-analysis-config-v1', 'news-global-channel-id',
+      'ws-config-v1'
+    ];
+    keys.forEach(key => {
+      this._docRef(key).get().then(doc => {
+        if (doc.exists) {
+          const data = doc.data();
+          if (data.ts && (!this._lastPullTs[key] || data.ts > this._lastPullTs[key])) {
+            this._lastPullTs[key] = data.ts;
+            const localRaw = localStorage.getItem(key);
+            const localData = localRaw ? JSON.parse(localRaw) : null;
+            if (JSON.stringify(localData) !== JSON.stringify(data.value)) {
+              localStorage.setItem(key, JSON.stringify(data.value));
+              console.log('[Firebase] Pull atualizado:', key);
+            }
+          }
+        }
+      }).catch(() => {});
+    });
   },
 
   getUserId() {
@@ -42,24 +80,29 @@ const FirebaseStorage = {
   _flushPending() {
     const pending = [...this._pendingSaves];
     this._pendingSaves = [];
-    pending.forEach(({ key, value }) => this.save(key, value));
+    pending.forEach(({ key, value, attempt }) => this.save(key, value, attempt));
   },
 
-  save(key, value) {
+  save(key, value, attempt = 0) {
     if (!this.initialized) {
-      this._pendingSaves.push({ key, value });
+      this._pendingSaves.push({ key, value, attempt: 0 });
       return;
     }
     this._docRef(key).set({
       key,
       value,
       ts: Date.now()
-    }).catch(e => console.error('[Firebase] save:', e));
+    }).catch(e => {
+      console.error('[Firebase] save (tentativa ' + (attempt + 1) + '):', e.message);
+      if (attempt < 3) {
+        setTimeout(() => this.save(key, value, attempt + 1), 1000 * Math.pow(2, attempt));
+      }
+    });
   },
 
   remove(key) {
     if (!this.initialized) return;
-    this._docRef(key).delete().catch(e => console.error('[Firebase] remove:', e));
+    this._docRef(key).delete().catch(e => console.error('[Firebase] remove:', e.message));
   },
 
   syncFromFirebase() {
@@ -77,7 +120,9 @@ const FirebaseStorage = {
       if (localStorage.getItem(key)) return;
       this._docRef(key).get().then(doc => {
         if (doc.exists) {
-          localStorage.setItem(key, JSON.stringify(doc.data().value));
+          const data = doc.data();
+          localStorage.setItem(key, JSON.stringify(data.value));
+          if (data.ts) this._lastPullTs[key] = data.ts;
           console.log('[Firebase] Restaurado:', key);
         }
       }).catch(() => {});

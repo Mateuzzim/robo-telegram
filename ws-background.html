@@ -248,6 +248,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 window.addEventListener('beforeunload', () => {
+  if (typeof Store !== 'undefined') Store.flushRobots();
   if (Sources.wheel) Sources.wheel.disconnect();
   if (Sources.double) Sources.double.disconnect();
 });
