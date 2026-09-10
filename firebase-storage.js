@@ -2,30 +2,27 @@ const FirebaseStorage = {
   db: null,
   userId: null,
   initialized: false,
-  syncQueue: {},
-  syncTimer: null,
-
+  _pendingSaves: [],
   COLLECTION: 'robo-data',
 
-  async init() {
+  init() {
     try {
       if (typeof firebase === 'undefined' || !firebase.firestore) {
-        console.log('Firebase SDK nao carregado, usando localStorage apenas');
-        return false;
+        console.log('[Firebase] SDK nao carregado');
+        return;
       }
-      if (this.initialized) return true;
+      if (this.initialized) return;
       if (!firebase.apps.length) {
         firebase.initializeApp(FirebaseConfig);
       }
       this.db = firebase.firestore();
       this.userId = this.getUserId();
       this.initialized = true;
-      console.log('Firebase Firestore inicializado');
-      await this.syncFromFirebase();
-      return true;
+      console.log('[Firebase] Inicializado OK');
+      this._flushPending();
+      this.syncFromFirebase();
     } catch (e) {
-      console.error('Erro ao inicializar Firebase:', e);
-      return false;
+      console.error('[Firebase] Erro init:', e);
     }
   },
 
@@ -38,48 +35,36 @@ const FirebaseStorage = {
     return uid;
   },
 
-  getDocRef(key) {
+  _docRef(key) {
     return this.db.collection(this.COLLECTION).doc(this.userId + '_' + key);
   },
 
-  async save(key, value) {
-    if (!this.initialized) return;
-    try {
-      await this.getDocRef(key).set({
-        key: key,
-        value: value,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
-    } catch (e) {
-      console.error('Firebase save error:', e);
-    }
+  _flushPending() {
+    const pending = [...this._pendingSaves];
+    this._pendingSaves = [];
+    pending.forEach(({ key, value }) => this.save(key, value));
   },
 
-  async load(key, def) {
-    if (!this.initialized) return def;
-    try {
-      const doc = await this.getDocRef(key).get();
-      if (doc.exists) {
-        return doc.data().value;
-      }
-    } catch (e) {
-      console.error('Firebase load error:', e);
+  save(key, value) {
+    if (!this.initialized) {
+      this._pendingSaves.push({ key, value });
+      return;
     }
-    return def;
+    this._docRef(key).set({
+      key,
+      value,
+      ts: Date.now()
+    }).catch(e => console.error('[Firebase] save:', e));
   },
 
-  async remove(key) {
+  remove(key) {
     if (!this.initialized) return;
-    try {
-      await this.getDocRef(key).delete();
-    } catch (e) {
-      console.error('Firebase remove error:', e);
-    }
+    this._docRef(key).delete().catch(e => console.error('[Firebase] remove:', e));
   },
 
-  async syncFromFirebase() {
+  syncFromFirebase() {
     if (!this.initialized) return;
-    const keysToSync = [
+    const keys = [
       'robots', 'robot-schedules',
       'ia-inteligente-config', 'ia-inteligente-robot-configs',
       'telegram-bot-token', 'telegram-bot-token-grupos',
@@ -88,22 +73,20 @@ const FirebaseStorage = {
       'news-summary-config-v1', 'news-analysis-config-v1', 'news-global-channel-id',
       'ws-config-v1'
     ];
-    for (const key of keysToSync) {
-      const local = localStorage.getItem(key);
-      if (!local) {
-        try {
-          const doc = await this.getDocRef(key).get();
-          if (doc.exists) {
-            localStorage.setItem(key, JSON.stringify(doc.data().value));
-          }
-        } catch (e) { /* skip */ }
-      }
-    }
+    keys.forEach(key => {
+      if (localStorage.getItem(key)) return;
+      this._docRef(key).get().then(doc => {
+        if (doc.exists) {
+          localStorage.setItem(key, JSON.stringify(doc.data().value));
+          console.log('[Firebase] Restaurado:', key);
+        }
+      }).catch(() => {});
+    });
   },
 
-  async syncAllToFirebase() {
+  syncAllToFirebase() {
     if (!this.initialized) return;
-    const keysToSync = [
+    const keys = [
       'robots', 'robot-schedules',
       'ia-inteligente-config', 'ia-inteligente-robot-configs',
       'telegram-bot-token', 'telegram-bot-token-grupos',
@@ -112,17 +95,9 @@ const FirebaseStorage = {
       'news-summary-config-v1', 'news-analysis-config-v1', 'news-global-channel-id',
       'ws-config-v1'
     ];
-    for (const key of keysToSync) {
-      const local = localStorage.getItem(key);
-      if (local) {
-        try {
-          await this.getDocRef(key).set({
-            key: key,
-            value: JSON.parse(local),
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-          });
-        } catch (e) { /* skip */ }
-      }
-    }
+    keys.forEach(key => {
+      const raw = localStorage.getItem(key);
+      if (raw) this.save(key, JSON.parse(raw));
+    });
   }
 };

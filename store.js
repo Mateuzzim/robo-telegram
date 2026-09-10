@@ -7,14 +7,14 @@ const Store = {
   },
   set(key, val) {
     localStorage.setItem(key, JSON.stringify(val));
-    if (typeof FirebaseStorage !== 'undefined' && FirebaseStorage.initialized) {
-      FirebaseStorage.save(key, val).catch(() => {});
+    if (typeof FirebaseStorage !== 'undefined') {
+      FirebaseStorage.save(key, val);
     }
   },
   remove(key) {
     localStorage.removeItem(key);
-    if (typeof FirebaseStorage !== 'undefined' && FirebaseStorage.initialized) {
-      FirebaseStorage.remove(key).catch(() => {});
+    if (typeof FirebaseStorage !== 'undefined') {
+      FirebaseStorage.remove(key);
     }
   }
 };

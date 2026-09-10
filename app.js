@@ -12,11 +12,6 @@ const App = {
   init() {
     const isBackground = document.title === 'WS Background';
     this.applySavedProjectData();
-    if (typeof FirebaseStorage !== 'undefined') {
-      FirebaseStorage.init().then(() => {
-        console.log('Firebase sync ativo');
-      }).catch(() => {});
-    }
     RobotEngine.load({ loadHistory: isBackground, emitStarted: isBackground });
     if (isBackground) {
       if (!this.claimBackgroundLeadership()) {
