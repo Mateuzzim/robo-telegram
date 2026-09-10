@@ -39,9 +39,8 @@ const TelegramService = {
   getSignalLimitNotificationKey(data, fallbackType, fallbackRobotId) {
     const type = data?.type || fallbackType || '';
     const robotId = data?.robotId || data?.id || fallbackRobotId || '';
-    const time = data?.time || '';
-    if (!type || !robotId || !time) return '';
-    return [type, robotId, time].join(':');
+    if (!type || !robotId) return '';
+    return [type, robotId].join(':');
   },
 
   shouldProcessSignalLimitNotification(data, fallbackType, fallbackRobotId) {
@@ -2190,6 +2189,10 @@ const TelegramService = {
       this.clearSignalLimitNotification(d, 'warning', robot.id);
       return;
     }
+    const dedupKey = 'slWarning:' + (d?.robotId || robot.id);
+    if (this._signalLimitSent.has(dedupKey)) return;
+    this._signalLimitSent.add(dedupKey);
+    setTimeout(() => this._signalLimitSent.delete(dedupKey), 5000);
     const name = robot.name || 'Robô';
     const nextTime = d?.nextWindowAt ? new Date(d.nextWindowAt) : new Date(Date.now() + 5 * 60 * 1000);
     const nextStr = nextTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
