@@ -2,6 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Robos</title>
 <link rel="stylesheet" href="style.css">
@@ -306,7 +307,7 @@
         <input type="checkbox" id="fSignalLimitEnabled" onchange="toggleSignalLimitFields()"> Habilitar limite de sinais
       </label>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px" id="fSignalLimitFields">
-        <div class="form-group"><label>Intervalo (horas)</label><input id="fSignalLimitHours" type="number" value="5" min="1"></div>
+        <div class="form-group"><label>Intervalo</label><div style="display:flex;gap:6px;align-items:center"><input id="fSignalLimitHours" type="number" value="5" min="0" style="width:60px">h<input id="fSignalLimitMinutes" type="number" value="0" min="0" max="59" style="width:60px">min</div></div>
         <div class="form-group"><label>Maximo sinais</label><input id="fSignalLimitMax" type="number" value="10" min="1"></div>
       </div>
     </div>
@@ -316,12 +317,7 @@
 </div>
 <script src="config.js"></script>
 <script src="saved-data.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-<script src="firebase-config.js"></script>
-<script src="firebase-storage.js"></script>
 <script src="store.js"></script>
-<script>try{FirebaseStorage.init();}catch(e){}</script>
 <script src="event-bus.js"></script>
 <script src="utils.js"></script>
 <script src="ws-source.js"></script>
@@ -573,6 +569,47 @@ function autoSetGale() {
     document.getElementById('fGaleBlue').value = 5;
   }
 }
+
+// --- Modern Confirm/Alert Modals ---
+function showConfirm(title, message, danger) {
+  return new Promise(resolve => {
+    const id = 'cmodal-' + Date.now();
+    const html = `<div class="modal-overlay" id="${id}" style="display:flex;z-index:10000">
+      <div class="modal" style="max-width:380px">
+        <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:12px">${title}</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:20px;line-height:1.6;white-space:pre-line">${message}</div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn-ghost" id="${id}-cancel">Cancelar</button>
+          <button class="btn ${danger ? 'btn-red' : 'btn-blue'}" id="${id}-ok">Confirmar</button>
+        </div>
+      </div>
+    </div>`;
+    document.body.insertAdjacentHTML('beforeend', html);
+    const el = document.getElementById(id);
+    el.querySelector('#' + id + '-cancel').onclick = () => { el.remove(); resolve(false); };
+    el.querySelector('#' + id + '-ok').onclick = () => { el.remove(); resolve(true); };
+    el.addEventListener('click', e => { if (e.target === el) { el.remove(); resolve(false); } });
+  });
+}
+function showAlert(title, message) {
+  return new Promise(resolve => {
+    const id = 'amodal-' + Date.now();
+    const html = `<div class="modal-overlay" id="${id}" style="display:flex;z-index:10000">
+      <div class="modal" style="max-width:380px">
+        <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:12px">${title}</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:20px;line-height:1.6;white-space:pre-line">${message}</div>
+        <div style="display:flex;justify-content:flex-end">
+          <button class="btn btn-blue" id="${id}-ok">OK</button>
+        </div>
+      </div>
+    </div>`;
+    document.body.insertAdjacentHTML('beforeend', html);
+    const el = document.getElementById(id);
+    el.querySelector('#' + id + '-ok').onclick = () => { el.remove(); resolve(); };
+    el.addEventListener('click', e => { if (e.target === el) { el.remove(); resolve(); } });
+  });
+}
+
 function showCreate(){
   document.getElementById('modalTitle').textContent = 'Novo Robo';
   document.getElementById('modalBtn').textContent = 'Criar';
@@ -603,6 +640,7 @@ function showCreate(){
   document.getElementById('fSignalLimitEnabled').checked = false;
   toggleSignalLimitFields();
   document.getElementById('fSignalLimitHours').value = '5';
+  document.getElementById('fSignalLimitMinutes').value = '0';
   document.getElementById('fSignalLimitMax').value = '10';
   document.getElementById('fTgEnabled').checked = false;
   document.getElementById('fTgMsgType').value = '';
@@ -666,8 +704,9 @@ function showEdit(id){
   const sl = robot.signalLimit || { enabled: false, intervalHours: 5, maxSignals: 10 };
   document.getElementById('fSignalLimitEnabled').checked = sl.enabled;
   toggleSignalLimitFields();
-  document.getElementById('fSignalLimitHours').value = sl.intervalHours || 5;
-  document.getElementById('fSignalLimitMax').value = sl.maxSignals || 10;
+  document.getElementById('fSignalLimitHours').value = sl.intervalHours ?? 5;
+  document.getElementById('fSignalLimitMinutes').value = sl.intervalMinutes ?? 0;
+  document.getElementById('fSignalLimitMax').value = sl.maxSignals ?? 10;
   const galeByColor = robot.galeByColor || {};
   document.getElementById('fGaleGrey').value = galeByColor.grey ?? 1;
   document.getElementById('fGaleRed').value = galeByColor.red ?? 3;
@@ -723,9 +762,10 @@ function toggleSignalLimitEdit(id){
 function saveSignalLimit(id){
   const robot = RobotEngine.getRobot(id);
   if (!robot) return;
-  const hours = parseInt(document.getElementById('slHours-' + id)?.value) || 5;
+  const hours = parseInt(document.getElementById('slHours-' + id)?.value) || 0;
+  const minutes = parseInt(document.getElementById('slMinutes-' + id)?.value) || 0;
   const max = parseInt(document.getElementById('slMax-' + id)?.value) || 10;
-  robot.signalLimit = { enabled: true, intervalHours: hours, maxSignals: max };
+  robot.signalLimit = { enabled: true, intervalHours: hours, intervalMinutes: minutes, maxSignals: max };
   RobotEngine.save();
   loadRobots();
 }
@@ -883,7 +923,8 @@ function createRobot(){
   const autoPause = readNumber(document.getElementById('fAutoPause').value, 0, 0);
   const iaInteligente = document.getElementById('fIaInteligente')?.checked || false;
   const signalLimitEnabled = document.getElementById('fSignalLimitEnabled')?.checked || false;
-  const signalLimitHours = readNumber(document.getElementById('fSignalLimitHours')?.value, 5, 1);
+  const signalLimitHours = readNumber(document.getElementById('fSignalLimitHours')?.value, 5, 0);
+  const signalLimitMinutes = readNumber(document.getElementById('fSignalLimitMinutes')?.value, 0, 0, 59);
   const signalLimitMax = readNumber(document.getElementById('fSignalLimitMax')?.value, 10, 1);
   const galeByColor = {
     grey: readNumber(document.getElementById('fGaleGrey')?.value, 1, 0),
@@ -932,24 +973,13 @@ function createRobot(){
       robot.greenProtection = greenProtection;
       robot.autoPause = autoPause;
       robot.iaInteligente = iaInteligente;
-      robot.signalLimit = { enabled: signalLimitEnabled, intervalHours: signalLimitHours, maxSignals: signalLimitMax };
+      robot.signalLimit = { enabled: signalLimitEnabled, intervalHours: signalLimitHours, intervalMinutes: signalLimitMinutes, maxSignals: signalLimitMax };
       robot.galeByColor = galeByColor;
       robot.confidenceByColor = confidenceByColor;
       RobotEngine.save();
     }
   } else {
-    const slug = name.toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/[^a-z0-9-]/g, '') || 'robo';
-    const baseId = game + '-' + slug;
-    let id = baseId;
-    let suffix = 2;
-    while (RobotEngine.getRobot(id)) {
-      id = baseId + '-' + suffix;
-      suffix++;
-    }
+    const id = game + '-' + name.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'');
     RobotEngine.createRobot({
       id, name, game, strategy, strategies, filterMode,
       target: { color: targetColor, multiplier: targetMult ? parseInt(targetMult) : null },
@@ -964,7 +994,7 @@ function createRobot(){
       greenProtection,
       autoPause,
       iaInteligente,
-      signalLimit: { enabled: signalLimitEnabled, intervalHours: signalLimitHours, maxSignals: signalLimitMax },
+      signalLimit: { enabled: signalLimitEnabled, intervalHours: signalLimitHours, intervalMinutes: signalLimitMinutes, maxSignals: signalLimitMax },
       galeByColor,
       confidenceByColor
     });
@@ -1099,7 +1129,7 @@ function loadRobots(){
     return false;
   }
 
-  function renderRow(r) {
+  function renderRow(r, showEntries) {
     const robotId = escapeAttr(r.id);
     const robotIdJs = escapeAttr(escapeJsString(r.id));
     const schedule = getScheduleForRobot(r.id);
@@ -1117,6 +1147,7 @@ function loadRobots(){
     }).join(' ');
     const iaTag = r.iaInteligente ? `<span class="strategy-active" style="display:inline-block;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700;background:${stratColors.iaInteligente}22;color:${stratColors.iaInteligente};border:1px solid ${stratColors.iaInteligente}44">${stratLabels.iaInteligente}</span>` : '';
     
+    const colCount = 9 + (showEntries ? 1 : 0);
     return `<tr>
       <td>
         <div style="display:flex;align-items:center;gap:8px">
@@ -1127,40 +1158,44 @@ function loadRobots(){
           </div>
         </div>
       </td>
+      <td>${scheduledActive ? '<span class="badge badge-yellow" style="font-size:10px">AGENDADO ' + schedEntries.current + '/' + schedEntries.max + '</span> ' : ''}${createBadge(r.status)}</td>
       <td>
         <div style="display:flex;flex-wrap:wrap;gap:3px;max-width:200px">
           ${iaTag}
           ${strategyTags}
         </div>
       </td>
-      <td>${scheduledActive ? '<span class="badge badge-yellow" style="font-size:10px">AGENDADO ' + schedEntries.current + '/' + schedEntries.max + '</span> ' : ''}${createBadge(r.status)}</td>
-      <td style="font-size:11px">${schedEntries.max > 0 ? '<span style="color:var(--yellow)">' + schedEntries.current + ' / ' + schedEntries.max + '</span>' : '-'}</td>
+      ${showEntries ? `<td style="font-size:11px">${schedEntries.max > 0 ? '<span style="color:var(--yellow)">' + schedEntries.current + ' / ' + schedEntries.max + '</span>' : '-'}</td>` : ''}
       <td style="font-size:11px">${getTargetLabel(r)}</td>
+      <td style="font-size:11px;color:var(--text3)">${r.mode}</td>
       <td style="font-size:12px;font-weight:700;color:${confColor}">${conf}%</td>
       <td style="font-size:11px"><span style="color:var(--green)">${wins}W</span> <span style="color:var(--red)">${losses}L</span></td>
-      <td style="font-size:11px;color:var(--text3)">${r.mode}</td>
       <td style="font-size:11px;color:var(--text3)">${r.intervalMin||60}s</td>
-<td style="font-size:11px;color:var(--text3)">${r.gale?.max||0}</td>
-<td style="display:flex;gap:3px;align-items:center;flex-wrap:wrap">
-         <a href="robo.html?id=${encodeURIComponent(r.id)}" class="btn btn-sm btn-blue">Abrir</a>
-         <button class="btn btn-sm btn-yellow" onclick="showEdit('${robotIdJs}')">Editar</button>
-         ${r.status==='offline'
-           ? `<button class="btn btn-sm btn-green" onclick="start('${robotIdJs}')">Play</button>`
-           : `<button class="btn btn-sm btn-red" onclick="openStopModal('${robotIdJs}')">Stop</button>`}
-         <button class="btn btn-sm btn-cyan" onclick="analyzeRobotAuto('${robotIdJs}')" title="Analise Automatica">Analise</button>
-         <button class="btn btn-sm btn-purple" onclick="resetTelegramMessages('${robotIdJs}')" title="Resetar mensagens do Telegram">Reset TG</button>
-         <button class="btn btn-sm btn-orange" onclick="showResetStats('${robotIdJs}')" title="Resetar estatisticas">Reset Stats</button>
-         <button class="btn btn-sm btn-red" onclick="cleanRobot('${robotIdJs}')" title="Limpar entradas, gales, win/loss - iniciar do zero">🧹 Limpar</button>
-         <button class="btn btn-sm btn-blue" onclick="showSignalHistory('${robotIdJs}')" title="Historico de sinais">Historico</button>
-         <button class="btn btn-sm btn-red" onclick="deleteRobot('${robotIdJs}')">Del</button>
-          ${r.signalLimit?.enabled ? `<button class="btn btn-sm ${r.signalLimit?.maxSignals>=10?'btn-green':'btn-orange'}" onclick="toggleSignalLimitEdit('${robotIdJs}')" title="Editar limite">${r.signalLimit?.intervalHours||5}h/${r.signalLimit?.maxSignals||10}</button><span style="font-size:9px;color:var(--text3);margin-left:2px" title="Placar total signal limit">✅${r.signalLimitTotal?.wins||0}W ❌${r.signalLimitTotal?.losses||0}L</span><span id="slEdit-${robotIdJs}" style="display:none"><input type="number" id="slHours-${robotIdJs}" value="${r.signalLimit?.intervalHours||5}" min="1" style="width:40px;font-size:10px;padding:2px">h/<input type="number" id="slMax-${robotIdJs}" value="${r.signalLimit?.maxSignals||10}" min="1" style="width:40px;font-size:10px;padding:2px"><button class="btn btn-sm btn-green" onclick="saveSignalLimit('${robotIdJs}')" style="padding:2px 6px;font-size:10px">OK</button><button class="btn btn-sm btn-ghost" onclick="toggleSignalLimitEdit('${robotIdJs}')" style="padding:2px 6px;font-size:10px">X</button></span>` : ''}
-        </td>
-     </tr>`;
+      <td style="font-size:11px;color:var(--text3)">${r.gale?.max > 0 ? 'G' + r.gale.max : 'SG'}</td>
+    </tr>
+    <tr>
+      <td colspan="${colCount}" style="padding:6px 8px;border-top:1px solid var(--border);background:var(--bg2)">
+        <div style="display:flex;gap:3px;align-items:center;flex-wrap:wrap">
+          <a href="robo.html?id=${encodeURIComponent(r.id)}" class="btn btn-sm btn-black"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg> Abrir</a>
+          <button class="btn btn-sm btn-black" onclick="showEdit('${robotIdJs}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Editar</button>
+          ${r.status==='offline'
+            ? `<button class="btn btn-sm btn-black" onclick="start('${robotIdJs}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px"><polygon points="5 3 19 12 5 21 5 3"/></svg> Play</button>`
+            : `<button class="btn btn-sm btn-black" onclick="openStopModal('${robotIdJs}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Stop</button>`}
+          <button class="btn btn-sm btn-black" onclick="analyzeRobotAuto('${robotIdJs}')" title="Analise Automatica"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Analise</button>
+          <button class="btn btn-sm btn-black" onclick="resetTelegramMessages('${robotIdJs}')" title="Resetar mensagens do Telegram"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Reset TG</button>
+          <button class="btn btn-sm btn-black" onclick="showResetStats('${robotIdJs}')" title="Resetar estatisticas"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Reset Stats</button>
+          <button class="btn btn-sm btn-black" onclick="cleanRobot('${robotIdJs}')" title="Limpar entradas, gales, win/loss - iniciar do zero"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg> Limpar</button>
+          <button class="btn btn-sm btn-black" onclick="showSignalHistory('${robotIdJs}')" title="Historico de sinais"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Historico</button>
+          <button class="btn btn-sm btn-black" onclick="deleteRobot('${robotIdJs}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg> Del</button>
+          ${r.signalLimit?.enabled ? `<button class="btn btn-sm ${r.signalLimit?.maxSignals>=10?'btn-green':'btn-orange'}" onclick="toggleSignalLimitEdit('${robotIdJs}')" title="Editar limite">${r.signalLimit?.intervalHours||0}h${(r.signalLimit?.intervalMinutes||0)>0?r.signalLimit.intervalMinutes+'min':''}/${r.signalLimit?.maxSignals||10}</button><span style="font-size:9px;color:var(--text3);margin-left:2px" title="Placar total signal limit">✅${r.signalLimitTotal?.wins||0}W ❌${r.signalLimitTotal?.losses||0}L</span><span id="slEdit-${robotIdJs}" style="display:none"><input type="number" id="slHours-${robotIdJs}" value="${r.signalLimit?.intervalHours||0}" min="0" style="width:35px;font-size:10px;padding:2px">h<input type="number" id="slMinutes-${robotIdJs}" value="${r.signalLimit?.intervalMinutes||0}" min="0" max="59" style="width:35px;font-size:10px;padding:2px">min/<input type="number" id="slMax-${robotIdJs}" value="${r.signalLimit?.maxSignals||10}" min="1" style="width:40px;font-size:10px;padding:2px"><button class="btn btn-sm btn-green" onclick="saveSignalLimit('${robotIdJs}')" style="padding:2px 6px;font-size:10px">OK</button><button class="btn btn-sm btn-ghost" onclick="toggleSignalLimitEdit('${robotIdJs}')" style="padding:2px 6px;font-size:10px">X</button></span>` : ''}
+        </div>
+      </td>
+    </tr>`;
   }
 
   function renderSection(title, icon, robotList, color, showEntries) {
     if (!robotList.length) return '';
-    const rows = robotList.map(renderRow).join('');
+    const rows = robotList.map(r => renderRow(r, showEntries)).join('');
     const entriesHeader = showEntries ? '<th>Entradas</th>' : '';
     return `
       <div style="margin-bottom:16px">
@@ -1170,7 +1205,7 @@ function loadRobots(){
           <span style="font-size:11px;color:var(--text3);background:var(--bg3);padding:2px 8px;border-radius:10px">${robotList.length}</span>
         </div>
         <div class="card"><div class="table-wrap"><table>
-          <thead><tr><th>Robo</th><th>Estrategia</th><th>Status</th>${entriesHeader}<th>Alvo</th><th>Conf</th><th>W/L</th><th>Modo</th><th>Intervalo</th><th>Gale</th><th>Acoes</th></tr></thead>
+          <thead><tr><th>Robo</th><th>Status</th><th>Estrategia</th>${entriesHeader}<th>Alvo</th><th>Modo</th><th>Conf</th><th>W/L</th><th>Intervalo</th><th>Gale</th></tr></thead>
           <tbody>${rows}</tbody>
         </table></div></div>
       </div>`;
@@ -1190,8 +1225,8 @@ function loadRobots(){
 
   let html = '';
   if (agendados.length) html += renderSection('Agendados', '⏰', agendados, 'var(--yellow)', true);
-  html += renderSection('Canais', '📢', canais, 'var(--blue)');
-  html += renderSection('Grupos', '👥', grupos, 'var(--orange,#f97316)');
+  html += renderSection('Canal', '📢', canais, 'var(--blue)');
+  html += renderSection('Grupo', '👥', grupos, 'var(--orange,#f97316)');
   html += renderSection('Sem Destino', '⚪', semDestino, 'var(--text3)');
 
   document.getElementById('robotsSections').innerHTML = html || '<div class="card" style="text-align:center;padding:20px;color:var(--text3)">Nenhum robo criado</div>';
@@ -1216,22 +1251,23 @@ async function start(id){
   loadRobots(); 
 }
 let _pendingStopId = null;
-function openStopModal(id){ _pendingStopId = id; document.getElementById('stopMsgType').value = ''; document.getElementById('stopModal').style.display = 'flex'; }
-function confirmStop(sendMessage){
+function openStopModal(id){ _pendingStopId = id; document.getElementById('stopModal').style.display = 'flex'; }
+function confirmStop(sendMessage, msgType){
   const id = _pendingStopId;
   if (!id) return;
   const robot = RobotEngine.getRobot(id);
-  const type = document.getElementById('stopMsgType').value;
   RobotEngine.stopRobot(id);
-  if (sendMessage && type && robot && typeof TelegramService !== 'undefined') {
-    TelegramService.sendMaintenanceMessage(robot, type);
+  if (sendMessage && msgType && robot && typeof TelegramService !== 'undefined') {
+    TelegramService.sendMaintenanceMessage(robot, msgType);
   }
   _pendingStopId = null;
   document.getElementById('stopModal').style.display = 'none';
   loadRobots();
 }
-function deleteRobot(id){ 
-  if(!confirm('Excluir este robo?')) return; 
+async function deleteRobot(id){ 
+  const robot = RobotEngine.getRobot(id);
+  const name = robot?.name || id;
+  if (!await showConfirm('Excluir Robô', `Tem certeza que deseja excluir "${name}"?\n\nEsta ação não pode ser desfeita.`, true)) return; 
   try {
     RobotEngine.deleteRobot(id); 
     loadRobots();
@@ -1285,7 +1321,7 @@ function showResetStats(id) {
   `;
   document.body.insertAdjacentHTML('beforeend', html);
 }
-function resetStat(id, type) {
+async function resetStat(id, type) {
   const robot = RobotEngine.getRobot(id);
   if (!robot) return;
   const msgs = {
@@ -1295,7 +1331,7 @@ function resetStat(id, type) {
     diagnostic: 'Diagnostico resetado!',
     all: 'Placar completo resetado!'
   };
-  if (!confirm(msgs[type])) return;
+  if (!await showConfirm('Resetar Stats', msgs[type])) return;
   if (type === 'sequence') {
     robot.stats.sequenceWins = 0;
     robot.stats.sequenceLosses = 0;
@@ -1328,7 +1364,7 @@ function resetStat(id, type) {
   RobotEngine.save();
   document.querySelector('[style*="position:fixed"]')?.remove();
   loadRobots();
-  alert(msgs[type]);
+  showAlert('Concluído', msgs[type]);
 }
 function showSignalHistory(id) {
   const robot = RobotEngine.getRobot(id);
@@ -1377,24 +1413,33 @@ function showSignalHistory(id) {
         </div>
         <div style="margin-top:12px;display:flex;gap:8px">
           <button class="btn btn-sm btn-blue" onclick="this.closest('[style*=fixed]').remove()">Fechar</button>
-          <button class="btn btn-sm btn-red" onclick="if(confirm('Limpar historico?')){RobotEngine.getRobot('${safeId}').signalHistory=[];RobotEngine.save();this.closest('[style*=fixed]').remove();showSignalHistory('${safeId}')}">Limpar</button>
+          <button class="btn btn-sm btn-red" onclick="confirmClearHistory('${safeId}')">Limpar</button>
         </div>
       </div>
     </div>
   `;
   document.body.insertAdjacentHTML('beforeend', html);
 }
-function cleanRobot(id) {
+async function confirmClearHistory(id) {
+  if (!await showConfirm('Limpar Histórico', 'Limpar todo o histórico de sinais deste robô?', true)) return;
+  const r = RobotEngine.getRobot(id);
+  if (r) { r.signalHistory = []; RobotEngine.save(); }
+  document.querySelector('[style*="position:fixed"]')?.remove();
+  showSignalHistory(id);
+}
+async function cleanRobot(id) {
   const robot = RobotEngine.getRobot(id);
   if (!robot) return;
-  if (!confirm('Limpar TODO o historico do robo "' + robot.name + '"?\n\nIsso vai apagar:\n- Sinal atual pendente\n- Contador de gales\n- Todas as estatisticas (W/L, streaks)\n- Historico de sinais\n- Logs\n- Diagnosticos\n- Padroes usados\n\nO robo vai recomecar DO ZERO.')) return;
+  if (!await showConfirm('Limpar Robô', `Resetar TODO o robo "${robot.name}"?\n\nIsso vai apagar:\n• Sinal atual e gales\n• Todas estatisticas (W/L, streaks)\n• Historico de sinais\n• Logs e diagnosticos\n• Padroes usados\n• Controle de limite de sinais\n\nO robo vai recomecar DO ZERO.`, true)) return;
   robot.currentSignal = null;
   robot.galeCount = 0;
   robot.lastSignal = null;
+  robot.lastResult = null;
   robot.lastSignalTime = 0;
   robot.stats = { signals: 0, wins: 0, losses: 0, winSG: 0, winG1: 0, winG2: 0, currentStreak: 0, maxWinStreak: 0, maxLossStreak: 0, patternsFound: 0, signalsApproved: 0, signalsRejected: 0 };
   robot.signalHistory = [];
   robot.usedPatterns = { RED: [], BLACK: [], GREY: [], GREEN: [], BLUE: [] };
+  robot.strategyIndex = 0;
   robot.logs = [];
   robot.diagnostic = { status: 'IDLE', analyzedResults: 0, mainPattern: null, confidence: 0, suggestedEntry: null, patternScores: {}, totalScore: 0, filterResults: {}, decision: null, risk: 'BAIXO', signalScore: 0, confluences: 0, signalBlocked: false, blockReason: '' };
   robot.signalFlow = { step1: 'Aguardando padrao...', step2: 'Nenhuma entrada pendente', step3: 'Aguardando entrada...', step4: 'Placar sera atualizado apos resultado' };
@@ -1402,23 +1447,32 @@ function cleanRobot(id) {
   robot.iaState = { activeStrategy: null, activeTarget: null, evaluations: [], lastAnalysisTime: 0 };
   robot.history = [];
   robot.signalLimitTotal = { wins: 0, losses: 0 };
+  robot._signalTimestamps = [];
+  robot._signalLimitPaused = false;
+  robot._signalLimitWarningNotified = false;
+  robot._signalLimitWarningCycleKey = '';
+  robot._signalLimitReachedCycleKey = '';
+  if (robot._signalLimitPauseTimer) { clearTimeout(robot._signalLimitPauseTimer); robot._signalLimitPauseTimer = null; }
+  if (robot._signalLimitWarningTimer) { clearTimeout(robot._signalLimitWarningTimer); robot._signalLimitWarningTimer = null; }
   RobotEngine.save();
   EventBus.emit('robot:state', robot.getState());
-  alert('Robo limpo! Historico e estatisticas apagados.');
+  showAlert('Robô Limpo', 'Robô resetado! Tudo limpo, recomeça do zero.');
 }
-function cleanAllRobots() {
+async function cleanAllRobots() {
   const robots = RobotEngine.getAllRobots();
-  if (!robots.length) { alert('Nenhum robo para limpar.'); return; }
-  if (!confirm('Limpar TODOS os ' + robots.length + ' robos?\n\nIsso vai apagar o historico, estatisticas, sinais e logs de TODOS os robos.\nCada robo vai recomecar DO ZERO.')) return;
+  if (!robots.length) { showAlert('Aviso', 'Nenhum robô para limpar.'); return; }
+  if (!await showConfirm('Limpar Todos', `Limpar TODOS os ${robots.length} robôs?\n\nIsso vai apagar o historico, estatisticas, sinais e logs de TODOS os robôs.\nCada robô vai recomeçar DO ZERO.`, true)) return;
   let count = 0;
   robots.forEach(robot => {
     robot.currentSignal = null;
     robot.galeCount = 0;
     robot.lastSignal = null;
+    robot.lastResult = null;
     robot.lastSignalTime = 0;
     robot.stats = { signals: 0, wins: 0, losses: 0, winSG: 0, winG1: 0, winG2: 0, currentStreak: 0, maxWinStreak: 0, maxLossStreak: 0, patternsFound: 0, signalsApproved: 0, signalsRejected: 0 };
     robot.signalHistory = [];
     robot.usedPatterns = { RED: [], BLACK: [], GREY: [], GREEN: [], BLUE: [] };
+    robot.strategyIndex = 0;
     robot.logs = [];
     robot.diagnostic = { status: 'IDLE', analyzedResults: 0, mainPattern: null, confidence: 0, suggestedEntry: null, patternScores: {}, totalScore: 0, filterResults: {}, decision: null, risk: 'BAIXO', signalScore: 0, confluences: 0, signalBlocked: false, blockReason: '' };
     robot.signalFlow = { step1: 'Aguardando padrao...', step2: 'Nenhuma entrada pendente', step3: 'Aguardando entrada...', step4: 'Placar sera atualizado apos resultado' };
@@ -1426,15 +1480,22 @@ function cleanAllRobots() {
     robot.iaState = { activeStrategy: null, activeTarget: null, evaluations: [], lastAnalysisTime: 0 };
     robot.history = [];
     robot.signalLimitTotal = { wins: 0, losses: 0 };
+    robot._signalTimestamps = [];
+    robot._signalLimitPaused = false;
+    robot._signalLimitWarningNotified = false;
+    robot._signalLimitWarningCycleKey = '';
+    robot._signalLimitReachedCycleKey = '';
+    if (robot._signalLimitPauseTimer) { clearTimeout(robot._signalLimitPauseTimer); robot._signalLimitPauseTimer = null; }
+    if (robot._signalLimitWarningTimer) { clearTimeout(robot._signalLimitWarningTimer); robot._signalLimitWarningTimer = null; }
     count++;
   });
   RobotEngine.save();
   loadRobots();
-  alert(count + ' robos limpos com sucesso!');
+  showAlert('Limpeza Concluída', count + ' robôs limpos com sucesso!');
 }
 function exportRobots() {
   const robots = RobotEngine.getAllRobots();
-  if (!robots.length) { alert('Nenhum robo para exportar.'); return; }
+  if (!robots.length) { showAlert('Aviso', 'Nenhum robô para exportar.'); return; }
   const data = robots.map(r => r.toJSON());
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -1445,7 +1506,7 @@ function exportRobots() {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
-  alert('Exportado ' + data.length + ' robos com sucesso!');
+  showAlert('Exportado', 'Exportado ' + data.length + ' robôs com sucesso!');
 }
 
 function importRobots(event) {
@@ -1456,34 +1517,31 @@ function importRobots(event) {
   reader.onload = function(e) {
     try {
       const imported = JSON.parse(e.target.result);
-      if (!Array.isArray(imported)) { alert('Formato invalido. Esperado um array de robos.'); return; }
+      if (!Array.isArray(imported)) { showAlert('Erro', 'Formato inválido. Esperado um array de robôs.'); return; }
       const existing = RobotEngine.getAllRobots();
       const existingIds = new Set(existing.map(r => r.id));
       let importedCount = 0;
       let skippedCount = 0;
       imported.forEach(config => {
-        if (existingIds.has(config.id)) {
-          const overwrite = confirm('O robo "' + (config.name || config.id) + '" ja existe. Sobrescrever?\n\nClique OK para sobrescrever ou Cancelar para pular.');
-          if (!overwrite) { skippedCount++; return; }
-        }
+        if (existingIds.has(config.id)) { skippedCount++; return; }
         RobotEngine.createRobotFromStorage(config, { emitStarted: false });
         importedCount++;
       });
       RobotEngine.save();
       loadRobots();
-      alert('Importacao concluida!\nImportados: ' + importedCount + '\nIgnorados: ' + skippedCount);
+      showAlert('Importação Concluída', 'Importados: ' + importedCount + '\nIgnorados: ' + skippedCount);
     } catch (err) {
-      alert('Erro ao importar: ' + err.message);
+      showAlert('Erro', 'Erro ao importar: ' + err.message);
     }
   };
   reader.readAsText(file);
 }
 
 async function resetTelegramMessages(id) {
-  if (!confirm('Resetar todas as mensagens do Telegram deste robo? Isso vai deletar as mensagens de live, entrada e manutencao do chat.')) return;
+  if (!await showConfirm('Resetar Mensagens', 'Resetar todas as mensagens do Telegram deste robô?\n\nIsso vai deletar as mensagens de live, entrada e manutenção do chat.', true)) return;
   const robot = RobotEngine.getRobot(id);
-  if (!robot) { alert('Robo nao encontrado.'); return; }
-  if (!TelegramService.getToken()) { alert('Token do bot nao configurado.'); return; }
+  if (!robot) { showAlert('Aviso', 'Robô não encontrado.'); return; }
+  if (!TelegramService.getToken()) { showAlert('Aviso', 'Token do bot não configurado.'); return; }
   let deletedCount = 0;
   const prefix = id + ':';
   try {
@@ -1550,12 +1608,12 @@ async function resetTelegramMessages(id) {
     }
     localStorage.setItem('telegram-entry-events-v1', JSON.stringify(events));
   } catch {}
-  alert('Mensagens resetadas! ' + deletedCount + ' mensagem(ns) deletada(s) do Telegram.');
+  showAlert('Concluído', 'Mensagens resetadas! ' + deletedCount + ' mensagem(ns) deletada(s) do Telegram.');
   loadRobots();
 }
 async function resetAllTelegramMessages() {
-  if (!confirm('Resetar TODAS as mensagens do Telegram de TODOS os robos? Isso vai deletar todas as mensagens de live e entrada do chat.')) return;
-  if (!TelegramService.getToken()) { alert('Token do bot nao configurado.'); return; }
+  if (!await showConfirm('Resetar Todas as Mensagens', 'Resetar TODAS as mensagens do Telegram de TODOS os robôs?\n\nIsso vai deletar todas as mensagens de live e entrada do chat.', true)) return;
+  if (!TelegramService.getToken()) { showAlert('Aviso', 'Token do bot não configurado.'); return; }
   let deletedCount = 0;
   const robots = RobotEngine.getAllStates();
   const channels = new Map();
@@ -1626,7 +1684,7 @@ async function resetAllTelegramMessages() {
     }
     localStorage.setItem('telegram-maintenance-messages-v1', JSON.stringify(maintRaw));
   } catch {}
-  alert('Todas as mensagens resetadas! ' + deletedCount + ' mensagem(ns) deletada(s) do Telegram.');
+  showAlert('Concluído', 'Todas as mensagens resetadas! ' + deletedCount + ' mensagem(ns) deletada(s) do Telegram.');
   loadRobots();
 }
 let autoAnaliseSnapshot = null;
@@ -1645,10 +1703,10 @@ function getHistoryForRobot(robot) {
 
 function analyzeRobotAuto(robotId) {
   const robot = RobotEngine.getRobot(robotId);
-  if (!robot) { alert('Robo nao encontrado'); return; }
+  if (!robot) { showAlert('Aviso', 'Robô não encontrado'); return; }
   const history = getHistoryForRobot(robot);
   if (history.length < 10) {
-    alert('Historico insuficiente (minimo 10 resultados). Conecte o WebSocket primeiro.');
+    showAlert('Aviso', 'Histórico insuficiente (mínimo 10 resultados). Conecte o WebSocket primeiro.');
     return;
   }
 
@@ -1676,10 +1734,10 @@ function analyzeRobotAuto(robotId) {
 function rerunAutoAnalysis() {
   if (!autoAnaliseRobotId) return;
   const robot = RobotEngine.getRobot(autoAnaliseRobotId);
-  if (!robot) { alert('Robo nao encontrado'); return; }
+  if (!robot) { showAlert('Aviso', 'Robô não encontrado'); return; }
   const history = getHistoryForRobot(robot);
   if (history.length < 10) {
-    alert('Historico insuficiente (minimo 10 resultados).');
+    showAlert('Aviso', 'Histórico insuficiente (mínimo 10 resultados).');
     return;
   }
 
@@ -2264,11 +2322,11 @@ function applyAutoAnalise() {
   document.getElementById('btnUndoAnalise').style.display = 'inline-flex';
 
   loadRobots();
-  alert('Ajustes aplicados com sucesso! Estrategia: ' + data.bestStrategy);
+  showAlert('Sucesso', 'Ajustes aplicados com sucesso! Estratégia: ' + data.bestStrategy);
 }
 
 function undoAutoAnalise() {
-  if (!autoAnaliseSnapshot || !autoAnaliseRobotId) { alert('Nada para desfazer'); return; }
+  if (!autoAnaliseSnapshot || !autoAnaliseRobotId) { showAlert('Aviso', 'Nada para desfazer'); return; }
   const robot = RobotEngine.getRobot(autoAnaliseRobotId);
   if (!robot) return;
 
@@ -2289,7 +2347,7 @@ function undoAutoAnalise() {
   document.getElementById('btnUndoAnalise').style.display = 'none';
   document.getElementById('btnApplyAnalise').style.display = 'inline-flex';
   loadRobots();
-  alert('Configuracao anterior restaurada!');
+  showAlert('Restaurado', 'Configuração anterior restaurada!');
 }
 
 loadRobots();
@@ -2303,18 +2361,14 @@ EventBus.on('robot:state', () => {
 </script>
 <div class="modal-overlay" id="stopModal">
   <div class="modal">
-    <h3>Parar Robô e Enviar Mensagem</h3>
-    <select id="stopMsgType">
-      <option value="">Sem mensagem</option>
-      <option value="maintenance">🔧 Manutenção Simples</option>
-      <option value="update">🔄 Atualização Programada</option>
-      <option value="pause">⏸️ Pausa Estratégica</option>
-      <option value="recalibration">🛠️ Recalibração do Sistema</option>
-      <option value="full">🚀 Manutenção Completa</option>
-    </select>
-    <div class="modal-actions">
-      <button class="btn btn-red" onclick="confirmStop(false)">Parar sem enviar</button>
-      <button class="btn btn-blue" onclick="confirmStop(true)">Parar e Enviar</button>
+    <h3>Parar Robô</h3>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <button class="btn btn-red" onclick="confirmStop(false)" style="width:100%">⏹️ Parar sem enviar</button>
+      <button class="btn btn-blue" onclick="confirmStop(true, 'maintenance')" style="width:100%">🔧 Parar + Manutenção Simples</button>
+      <button class="btn btn-blue" onclick="confirmStop(true, 'update')" style="width:100%">🔄 Parar + Atualização Programada</button>
+      <button class="btn btn-blue" onclick="confirmStop(true, 'pause')" style="width:100%">⏸️ Parar + Pausa Estratégica</button>
+      <button class="btn btn-blue" onclick="confirmStop(true, 'recalibration')" style="width:100%">🛠️ Parar + Recalibração do Sistema</button>
+      <button class="btn btn-blue" onclick="confirmStop(true, 'full')" style="width:100%">🚀 Parar + Manutenção Completa</button>
     </div>
   </div>
 </div>

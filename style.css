@@ -66,8 +66,9 @@ a:hover{text-decoration:underline}
 .btn-orange{background:linear-gradient(135deg,#f97316,#ea580c);color:#fff}
 .btn-cyan{background:linear-gradient(135deg,#06b6d4,#0891b2);color:#fff}
 .btn-ghost{background:transparent;border:1px solid var(--border);color:var(--text2)}
+.btn-black{background:#222;color:#fff}
 .btn:hover{opacity:.85;transform:translateY(-1px)}
-.btn-sm{padding:5px 10px;font-size:12px}
+.btn-sm{padding:5px 10px;font-size:12px;text-transform:uppercase;letter-spacing:.3px}
 
 /* TABLE */
 .table-wrap{overflow-x:auto}

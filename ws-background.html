@@ -2,6 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>WS Background</title>
 </head>
@@ -9,12 +10,7 @@
 <p id="status" style="font:12px monospace;color:#666;padding:8px">WebSocket Background rodando...</p>
 <script src="config.js"></script>
 <script src="saved-data.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-<script src="firebase-config.js"></script>
-<script src="firebase-storage.js"></script>
 <script src="store.js"></script>
-<script>try{FirebaseStorage.init();}catch(e){}</script>
 <script src="event-bus.js"></script>
 <script src="utils.js"></script>
 <script src="ws-source.js"></script>
@@ -248,7 +244,6 @@ document.addEventListener('visibilitychange', () => {
 });
 
 window.addEventListener('beforeunload', () => {
-  if (typeof Store !== 'undefined') Store.flushRobots();
   if (Sources.wheel) Sources.wheel.disconnect();
   if (Sources.double) Sources.double.disconnect();
 });

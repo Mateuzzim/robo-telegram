@@ -2,6 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>IA Inteligente - Sistema</title>
 <link rel="stylesheet" href="style.css">
@@ -9,7 +10,6 @@
   html{zoom:0.8}
   :root{--radius:12px}
   .ia-page{display:grid;grid-template-columns:280px 1fr 320px;gap:16px;min-height:calc(100vh - 120px)}
-  .ia-page.no-selection{grid-template-columns:1fr}
   .ia-panel{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
   .ia-panel-title{font-size:13px;font-weight:700;margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--green);display:flex;align-items:center;gap:8px}
   .ia-panel-title .dot{width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
@@ -18,27 +18,12 @@
   .robot-card:hover{border-color:var(--blue);transform:translateY(-1px)}
   .robot-card.active{border-color:var(--green);box-shadow:0 0 12px rgba(41,217,120,.15)}
   .robot-card .rc-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
-  .robot-card .rc-name{font-size:11px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px}
+  .robot-card .rc-name{font-size:11px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100px}
   .robot-card .rc-status{font-size:8px;padding:1px 4px;border-radius:8px;font-weight:700;text-transform:uppercase}
   .robot-card .rc-status.online{background:rgba(41,217,120,.15);color:var(--green)}
   .robot-card .rc-status.offline{background:rgba(255,74,85,.15);color:var(--red)}
-  .robot-card .rc-tags{display:flex;gap:3px;font-size:7px;margin-bottom:4px;flex-wrap:wrap}
-  .robot-card .rc-tag{padding:1px 4px;border-radius:4px;font-weight:600}
-  .robot-card .rc-tag.game{background:var(--bg3);color:var(--text3)}
-  .robot-card .rc-tag.target{background:var(--bg3);color:var(--text)}
-  .robot-card .rc-tag.ia{background:rgba(233,69,96,.12);color:#e94560}
-  .robot-card .rc-tag.config{background:rgba(41,217,120,.12);color:var(--green)}
-  .robot-card .rc-stats{display:grid;grid-template-columns:1fr 1fr;gap:2px 6px;font-size:8px;margin-top:4px}
-  .robot-card .rc-stat{display:flex;align-items:center;gap:3px}
-  .robot-card .rc-stat .label{color:var(--text3)}
-  .robot-card .rc-stat .value{font-weight:700}
-  .robot-card .rc-strategy{font-size:7px;color:var(--text3);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-top:1px solid var(--border);padding-top:4px}
-  .robot-card .rc-actions{display:flex;justify-content:flex-end;margin-top:4px}
-  .rc-btn{width:22px;height:22px;border:none;border-radius:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;transition:all .15s}
-  .rc-btn:hover{opacity:.8}
-  .rc-btn.ia{background:rgba(41,217,120,.15);color:var(--green);border:1px solid rgba(41,217,120,.3)}
-  .ia-editor-panels{display:none}
-  .ia-editor-panels.visible{display:block}
+  .robot-card .rc-info{display:flex;gap:4px;font-size:8px;color:var(--text3);flex-wrap:wrap}
+  .robot-card .rc-info span{display:flex;align-items:center;gap:2px}
   .robot-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
   .weight-slider{display:flex;align-items:center;gap:10px;margin-bottom:10px}
   .weight-slider label{font-size:11px;color:var(--text3);min-width:90px}
@@ -49,21 +34,18 @@
   .weight-bar-fill{height:100%;border-radius:2px;transition:width .3s}
   .settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   .setting-item{display:flex;flex-direction:column;gap:3px}
-  .setting-item label{font-size:10px;color:var(--text3);font-weight:600}
-  .setting-item input,.setting-item select{padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px}
+  .setting-item label{font-size:10px;color:var(--text3)}
+  .setting-item input,.setting-item select{padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:11px}
   .setting-item input:focus{outline:none;border-color:var(--green)}
-  .toggle-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)}
+  .toggle-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)}
   .toggle-row:last-child{border-bottom:none}
-  .toggle-label{font-size:11px;color:var(--text);font-weight:600}
+  .toggle-label{font-size:11px;color:var(--text)}
   .toggle-switch{position:relative;width:36px;height:20px}
   .toggle-switch input{opacity:0;width:0;height:0}
   .toggle-slider{position:absolute;cursor:pointer;inset:0;background:var(--bg3);border-radius:20px;transition:.2s}
   .toggle-slider:before{content:'';position:absolute;height:14px;width:14px;left:3px;bottom:3px;background:var(--text3);border-radius:50%;transition:.2s}
   .toggle-switch input:checked + .toggle-slider{background:var(--green)}
   .toggle-switch input:checked + .toggle-slider:before{transform:translateX(16px);background:#fff}
-  .section-group{margin-bottom:12px}
-  .section-group:last-child{margin-bottom:0}
-  .section-label{font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid var(--border)}
   .rule-card{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px}
   .rule-card .rule-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
   .rule-card .rule-name{font-size:12px;font-weight:700}
@@ -142,44 +124,38 @@
     </div>
 
     <!-- MAIN EDITOR -->
-    <div class="ia-editor-panels" id="editorPanels">
     <div>
       <!-- WEIGHTS -->
       <div class="ia-panel">
         <div class="ia-panel-title">Pesos da IA</div>
         <div id="weightsEditor">
-          <div class="section-group">
-            <div class="section-label">Pesos</div>
-            <div class="weight-slider">
-              <label>Confianca</label>
-              <input type="range" min="0" max="100" id="wConfidence" oninput="updateWeight('confidence',this.value)">
-              <span class="weight-val" id="wConfidenceVal">35</span>
-            </div>
-            <div class="weight-bar"><div class="weight-bar-fill" id="wConfidenceBar" style="width:35%;background:var(--blue)"></div></div>
-            <div class="weight-slider" style="margin-top:8px">
-              <label>Confluencias</label>
-              <input type="range" min="0" max="100" id="wConfluences" oninput="updateWeight('confluences',this.value)">
-              <span class="weight-val" id="wConfluencesVal">20</span>
-            </div>
-            <div class="weight-bar"><div class="weight-bar-fill" id="wConfluencesBar" style="width:20%;background:var(--green)"></div></div>
-            <div class="weight-slider" style="margin-top:8px">
-              <label>WinRate</label>
-              <input type="range" min="0" max="100" id="wWinRate" oninput="updateWeight('winRate',this.value)">
-              <span class="weight-val" id="wWinRateVal">30</span>
-            </div>
-            <div class="weight-bar"><div class="weight-bar-fill" id="wWinRateBar" style="width:30%;background:var(--yellow)"></div></div>
-            <div class="weight-slider" style="margin-top:8px">
-              <label>Matched</label>
-              <input type="range" min="0" max="100" id="wMatched" oninput="updateWeight('matched',this.value)">
-              <span class="weight-val" id="wMatchedVal">15</span>
-            </div>
-            <div class="weight-bar"><div class="weight-bar-fill" id="wMatchedBar" style="width:15%;background:var(--red)"></div></div>
+          <div class="weight-slider">
+            <label>Confianca</label>
+            <input type="range" min="0" max="100" id="wConfidence" oninput="updateWeight('confidence',this.value)">
+            <span class="weight-val" id="wConfidenceVal">35</span>
           </div>
-          <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
+          <div class="weight-bar"><div class="weight-bar-fill" id="wConfidenceBar" style="width:35%;background:var(--blue)"></div></div>
+          <div class="weight-slider" style="margin-top:8px">
+            <label>Confluencias</label>
+            <input type="range" min="0" max="100" id="wConfluences" oninput="updateWeight('confluences',this.value)">
+            <span class="weight-val" id="wConfluencesVal">20</span>
+          </div>
+          <div class="weight-bar"><div class="weight-bar-fill" id="wConfluencesBar" style="width:20%;background:var(--green)"></div></div>
+          <div class="weight-slider" style="margin-top:8px">
+            <label>WinRate</label>
+            <input type="range" min="0" max="100" id="wWinRate" oninput="updateWeight('winRate',this.value)">
+            <span class="weight-val" id="wWinRateVal">30</span>
+          </div>
+          <div class="weight-bar"><div class="weight-bar-fill" id="wWinRateBar" style="width:30%;background:var(--yellow)"></div></div>
+          <div class="weight-slider" style="margin-top:8px">
+            <label>Matched</label>
+            <input type="range" min="0" max="100" id="wMatched" oninput="updateWeight('matched',this.value)">
+            <span class="weight-val" id="wMatchedVal">15</span>
+          </div>
+          <div class="weight-bar"><div class="weight-bar-fill" id="wMatchedBar" style="width:15%;background:var(--red)"></div></div>
+          <div style="margin-top:12px;display:flex;gap:8px">
             <button class="btn btn-sm btn-ghost" onclick="normalizeWeights()">Normalizar</button>
             <button class="btn btn-sm btn-ghost" onclick="resetWeights()">Resetar</button>
-            <button class="btn btn-sm btn-ghost" onclick="resetRobotToGlobal()" id="btnResetGlobal" style="display:none;margin-left:auto;color:var(--yellow)">Resetar p/ Global</button>
-            <span id="robotConfigBadge" style="display:none;font-size:8px;padding:2px 5px;border-radius:6px;background:rgba(41,217,120,.15);color:var(--green);font-weight:700">CONFIG PERSONALIZADA</span>
           </div>
         </div>
       </div>
@@ -187,42 +163,36 @@
       <!-- SETTINGS -->
       <div class="ia-panel" style="margin-top:16px">
         <div class="ia-panel-title">Configuracoes</div>
-        <div class="section-group">
-          <div class="section-label">Intervalos</div>
-          <div class="settings-grid">
-            <div class="setting-item">
-              <label>Reavaliacao (ms)</label>
-              <input type="number" id="sReavaliation" min="5000" max="120000" step="1000" onchange="updateSetting('reavaliationInterval',this.value)">
-            </div>
-            <div class="setting-item">
-              <label>Historico Min.</label>
-              <input type="number" id="sMinHistory" min="10" max="200" onchange="updateSetting('minHistoryRequired',this.value)">
-            </div>
-            <div class="setting-item">
-              <label>Confianca Min.</label>
-              <input type="number" id="sMinConfidence" min="30" max="90" onchange="updateSetting('minConfidenceToAct',this.value)">
-            </div>
-            <div class="setting-item">
-              <label>Janela Analise</label>
-              <input type="number" id="sWindowSize" min="10" max="100" onchange="updateSetting('windowSize',this.value)">
-            </div>
+        <div class="settings-grid">
+          <div class="setting-item">
+            <label>Intervalo Reavaliacao (ms)</label>
+            <input type="number" id="sReavaliation" min="5000" max="120000" step="1000" onchange="updateSetting('reavaliationInterval',this.value)">
+          </div>
+          <div class="setting-item">
+            <label>Historico Minimo</label>
+            <input type="number" id="sMinHistory" min="10" max="200" onchange="updateSetting('minHistoryRequired',this.value)">
+          </div>
+          <div class="setting-item">
+            <label>Confianca Minima</label>
+            <input type="number" id="sMinConfidence" min="30" max="90" onchange="updateSetting('minConfidenceToAct',this.value)">
+          </div>
+          <div class="setting-item">
+            <label>Janela Analise</label>
+            <input type="number" id="sWindowSize" min="10" max="100" onchange="updateSetting('windowSize',this.value)">
           </div>
         </div>
-        <div class="section-group">
-          <div class="section-label">Ativadores</div>
-          <div>
-            <div class="toggle-row">
-              <span class="toggle-label">Boost Multiplicador</span>
-              <label class="toggle-switch"><input type="checkbox" id="tMultiplier" onchange="updateSetting('enableMultiplierBoost',this.checked)"><span class="toggle-slider"></span></label>
-            </div>
-            <div class="toggle-row">
-              <span class="toggle-label">Penalidade</span>
-              <label class="toggle-switch"><input type="checkbox" id="tPenalty" onchange="updateSetting('enablePenalty',this.checked)"><span class="toggle-slider"></span></label>
-            </div>
-            <div class="toggle-row">
-              <span class="toggle-label">Boost Win Streak</span>
-              <label class="toggle-switch"><input type="checkbox" id="tWinStreak" onchange="updateSetting('enableWinStreakBoost',this.checked)"><span class="toggle-slider"></span></label>
-            </div>
+        <div style="margin-top:12px">
+          <div class="toggle-row">
+            <span class="toggle-label">Boost Multiplicador</span>
+            <label class="toggle-switch"><input type="checkbox" id="tMultiplier" onchange="updateSetting('enableMultiplierBoost',this.checked)"><span class="toggle-slider"></span></label>
+          </div>
+          <div class="toggle-row">
+            <span class="toggle-label">Penalidade</span>
+            <label class="toggle-switch"><input type="checkbox" id="tPenalty" onchange="updateSetting('enablePenalty',this.checked)"><span class="toggle-slider"></span></label>
+          </div>
+          <div class="toggle-row">
+            <span class="toggle-label">Boost Win Streak</span>
+            <label class="toggle-switch"><input type="checkbox" id="tWinStreak" onchange="updateSetting('enableWinStreakBoost',this.checked)"><span class="toggle-slider"></span></label>
           </div>
         </div>
       </div>
@@ -230,38 +200,30 @@
       <!-- PENALTY & BOOST -->
       <div class="ia-panel" style="margin-top:16px">
         <div class="ia-panel-title">Penalidade & Boost</div>
-        <div class="section-group">
-          <div class="section-label">Penalidade</div>
-          <div class="settings-grid">
-            <div class="setting-item">
-              <label>Por Loss</label>
-              <input type="number" id="pOnLoss" min="0" max="20" onchange="updatePenalty('onLoss',this.value)">
-            </div>
-            <div class="setting-item">
-              <label>Max</label>
-              <input type="number" id="pMax" min="10" max="100" onchange="updatePenalty('maxPenalty',this.value)">
-            </div>
-            <div class="setting-item">
-              <label>Decaimento/Win</label>
-              <input type="number" id="pDecay" min="0" max="10" onchange="updatePenalty('decayPerWin',this.value)">
-            </div>
+        <div class="settings-grid">
+          <div class="setting-item">
+            <label>Penalidade por Loss</label>
+            <input type="number" id="pOnLoss" min="0" max="20" onchange="updatePenalty('onLoss',this.value)">
           </div>
-        </div>
-        <div class="section-group">
-          <div class="section-label">Boost</div>
-          <div class="settings-grid">
-            <div class="setting-item">
-              <label>Por Streak</label>
-              <input type="number" id="bStreak" min="0" max="30" onchange="updateBoost('onWinStreak',this.value)">
-            </div>
-            <div class="setting-item">
-              <label>Threshold</label>
-              <input type="number" id="bThreshold" min="1" max="10" onchange="updateBoost('streakThreshold',this.value)">
-            </div>
-            <div class="setting-item">
-              <label>Max</label>
-              <input type="number" id="bMax" min="10" max="50" onchange="updateBoost('maxBoost',this.value)">
-            </div>
+          <div class="setting-item">
+            <label>Penalidade max</label>
+            <input type="number" id="pMax" min="10" max="100" onchange="updatePenalty('maxPenalty',this.value)">
+          </div>
+          <div class="setting-item">
+            <label>Decaimento por Win</label>
+            <input type="number" id="pDecay" min="0" max="10" onchange="updatePenalty('decayPerWin',this.value)">
+          </div>
+          <div class="setting-item">
+            <label>Boost por Streak</label>
+            <input type="number" id="bStreak" min="0" max="30" onchange="updateBoost('onWinStreak',this.value)">
+          </div>
+          <div class="setting-item">
+            <label>Streak Threshold</label>
+            <input type="number" id="bThreshold" min="1" max="10" onchange="updateBoost('streakThreshold',this.value)">
+          </div>
+          <div class="setting-item">
+            <label>Boost max</label>
+            <input type="number" id="bMax" min="10" max="50" onchange="updateBoost('maxBoost',this.value)">
           </div>
         </div>
       </div>
@@ -269,84 +231,66 @@
       <!-- SCOREBOARD -->
       <div class="ia-panel" style="margin-top:16px">
         <div class="ia-panel-title">Placar & Decisao</div>
-        <div class="section-group">
-          <div class="section-label">Pausa</div>
-          <div class="settings-grid">
-            <div class="setting-item">
-              <label>Streak Loss</label>
-              <input type="number" id="sbLosingStreakPause" min="2" max="10" onchange="updateScoreboard('losingStreakPause',this.value)">
-            </div>
-            <div class="setting-item">
-              <label>Minutos Pausa</label>
-              <input type="number" id="sbLosingStreakPauseMin" min="1" max="60" onchange="updateScoreboard('losingStreakPauseMinutes',this.value)">
-            </div>
-            <div class="setting-item">
-              <label>Loss Recente</label>
-              <input type="number" id="sbRecentLossStreak" min="2" max="10" onchange="updateScoreboard('recentLossStreakPause',this.value)">
-            </div>
-            <div class="setting-item">
-              <label>Min. Recente</label>
-              <input type="number" id="sbRecentLossStreakMin" min="1" max="60" onchange="updateScoreboard('recentLossStreakPauseMinutes',this.value)">
-            </div>
+        <div class="settings-grid">
+          <div class="setting-item">
+            <label>Streak Loss (Pausar)</label>
+            <input type="number" id="sbLosingStreakPause" min="2" max="10" onchange="updateScoreboard('losingStreakPause',this.value)">
           </div>
-        </div>
-        <div class="section-group">
-          <div class="section-label">Win Rate</div>
-          <div class="settings-grid">
-            <div class="setting-item">
-              <label>WR Baixo</label>
-              <input type="number" id="sbLowWR" min="10" max="50" onchange="updateScoreboard('lowWinRateThreshold',this.value)">
-            </div>
-            <div class="setting-item">
-              <label>Sinais Min</label>
-              <input type="number" id="sbLowWRMin" min="1" max="20" onchange="updateScoreboard('lowWinRateMinSignals',this.value)">
-            </div>
-            <div class="setting-item">
-              <label>WR Descendente</label>
-              <input type="number" id="sbDecliningWR" min="10" max="60" onchange="updateScoreboard('decliningTrendWinRateThreshold',this.value)">
-            </div>
-            <div class="setting-item">
-              <label>WR Improv.</label>
-              <input type="number" id="sbImprovingWR" min="40" max="80" onchange="updateScoreboard('improvingTrendWinRateThreshold',this.value)">
-            </div>
+          <div class="setting-item">
+            <label>Pausa Loss Streak (min)</label>
+            <input type="number" id="sbLosingStreakPauseMin" min="1" max="60" onchange="updateScoreboard('losingStreakPauseMinutes',this.value)">
           </div>
-        </div>
-        <div class="section-group">
-          <div class="section-label">Streak & Boost</div>
-          <div class="settings-grid">
-            <div class="setting-item">
-              <label>Win Streak</label>
-              <input type="number" id="sbWinStreak" min="2" max="10" onchange="updateScoreboard('winningStreakThreshold',this.value)">
-            </div>
-            <div class="setting-item">
-              <label>Gale Eficiencia</label>
-              <input type="number" id="sbLowGale" min="10" max="50" onchange="updateScoreboard('lowGaleEfficiencyThreshold',this.value)">
-            </div>
-            <div class="setting-item">
-              <label>Penalidade Pause</label>
-              <input type="number" id="sbPausePenalty" min="0" max="50" onchange="updateScoreboard('pauseScorePenalty',this.value)">
-            </div>
-            <div class="setting-item">
-              <label>Penalidade Cautela</label>
-              <input type="number" id="sbCautionPenalty" min="0" max="30" onchange="updateScoreboard('cautionScorePenalty',this.value)">
-            </div>
-            <div class="setting-item">
-              <label>Boost Win Streak</label>
-              <input type="number" id="sbActBoost" min="0" max="20" onchange="updateScoreboard('actWinStreakBoost',this.value)">
-            </div>
+          <div class="setting-item">
+            <label>Loss Streak Recente</label>
+            <input type="number" id="sbRecentLossStreak" min="2" max="10" onchange="updateScoreboard('recentLossStreakPause',this.value)">
           </div>
-        </div>
-        <div class="section-group">
-          <div class="section-label">Cores</div>
-          <div class="settings-grid">
-            <div class="setting-item">
-              <label>Cor Boa WR</label>
-              <input type="number" id="sbGoodColor" min="40" max="80" onchange="updateScoreboard('goodColorWinRate',this.value)">
-            </div>
-            <div class="setting-item">
-              <label>Cor Ruim WR</label>
-              <input type="number" id="sbBadColor" min="10" max="50" onchange="updateScoreboard('badColorWinRate',this.value)">
-            </div>
+          <div class="setting-item">
+            <label>Pausa Recente (min)</label>
+            <input type="number" id="sbRecentLossStreakMin" min="1" max="60" onchange="updateScoreboard('recentLossStreakPauseMinutes',this.value)">
+          </div>
+          <div class="setting-item">
+            <label>WR Baixo Threshold</label>
+            <input type="number" id="sbLowWR" min="10" max="50" onchange="updateScoreboard('lowWinRateThreshold',this.value)">
+          </div>
+          <div class="setting-item">
+            <label>Sinais Min (WR Baixo)</label>
+            <input type="number" id="sbLowWRMin" min="1" max="20" onchange="updateScoreboard('lowWinRateMinSignals',this.value)">
+          </div>
+          <div class="setting-item">
+            <label>Streak Win (Agir)</label>
+            <input type="number" id="sbWinStreak" min="2" max="10" onchange="updateScoreboard('winningStreakThreshold',this.value)">
+          </div>
+          <div class="setting-item">
+            <label>WR Descendente</label>
+            <input type="number" id="sbDecliningWR" min="10" max="60" onchange="updateScoreboard('decliningTrendWinRateThreshold',this.value)">
+          </div>
+          <div class="setting-item">
+            <label>Gale Eficiencia Min</label>
+            <input type="number" id="sbLowGale" min="10" max="50" onchange="updateScoreboard('lowGaleEfficiencyThreshold',this.value)">
+          </div>
+          <div class="setting-item">
+            <label>WR Improv. Threshold</label>
+            <input type="number" id="sbImprovingWR" min="40" max="80" onchange="updateScoreboard('improvingTrendWinRateThreshold',this.value)">
+          </div>
+          <div class="setting-item">
+            <label>Penalidade Pause</label>
+            <input type="number" id="sbPausePenalty" min="0" max="50" onchange="updateScoreboard('pauseScorePenalty',this.value)">
+          </div>
+          <div class="setting-item">
+            <label>Penalidade Cautela</label>
+            <input type="number" id="sbCautionPenalty" min="0" max="30" onchange="updateScoreboard('cautionScorePenalty',this.value)">
+          </div>
+          <div class="setting-item">
+            <label>Boost Win Streak</label>
+            <input type="number" id="sbActBoost" min="0" max="20" onchange="updateScoreboard('actWinStreakBoost',this.value)">
+          </div>
+          <div class="setting-item">
+            <label>Cor Boa WR</label>
+            <input type="number" id="sbGoodColor" min="40" max="80" onchange="updateScoreboard('goodColorWinRate',this.value)">
+          </div>
+          <div class="setting-item">
+            <label>Cor Ruim WR</label>
+            <input type="number" id="sbBadColor" min="10" max="50" onchange="updateScoreboard('badColorWinRate',this.value)">
           </div>
         </div>
       </div>
@@ -369,10 +313,9 @@
         </div>
       </div>
     </div>
-    </div>
 
     <!-- RIGHT PANEL -->
-    <div class="ia-editor-panels" id="rightPanels">
+    <div>
       <!-- RULES -->
       <div class="ia-panel">
         <div class="ia-panel-title" style="justify-content:space-between">
@@ -394,14 +337,13 @@
       <!-- IMPORT/EXPORT -->
       <div class="ia-panel" style="margin-top:16px">
         <div class="ia-panel-title">Importar / Exportar</div>
-        <div style="display:flex;gap:6px;margin-bottom:8px">
-          <button class="btn btn-sm btn-blue" onclick="exportConfig()">Exportar</button>
-          <button class="btn btn-sm btn-ghost" onclick="importConfig()">Importar</button>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <button class="btn btn-sm btn-blue" onclick="exportConfig()">Exportar JSON</button>
+          <button class="btn btn-sm btn-ghost" onclick="importConfig()">Importar JSON</button>
           <button class="btn btn-sm btn-red" onclick="resetAll()">Resetar Tudo</button>
         </div>
         <textarea id="importExportArea" style="width:100%;min-height:80px;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'Courier New',monospace;font-size:10px;resize:vertical;display:none"></textarea>
       </div>
-    </div>
     </div>
   </div>
 </div>
@@ -444,13 +386,8 @@
   </div>
 </div>
 
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-<script src="firebase-config.js"></script>
-<script src="firebase-storage.js"></script>
 <script src="event-bus.js"></script>
 <script src="store.js"></script>
-<script>try{FirebaseStorage.init();}catch(e){}</script>
 <script src="utils.js"></script>
 <script src="ws-source.js"></script>
 <script src="robot.js"></script>
@@ -498,7 +435,6 @@ const stratTags = {
 };
 
 function init() {
-  document.querySelector('.ia-page').classList.add('no-selection');
   loadWeights();
   loadSettings();
   loadPenalty();
@@ -524,46 +460,23 @@ function startConnection() {
 }
 
 function renderRobots() {
-  const robots = RobotEngine.getAllRobots().filter(r => r.iaInteligente);
+  const robots = RobotEngine.getAllRobots();
   const el = document.getElementById('robotList');
-  if (!robots.length) { el.innerHTML = '<div class="no-robot">Nenhum robo com IA ativa</div>'; return; }
+  if (!robots.length) { el.innerHTML = '<div class="no-robot">Nenhum robo encontrado</div>'; return; }
   el.innerHTML = robots.map(r => {
+    const iaActive = r.iaInteligente;
+    const score = r.iaState?.activeConfidence || '--';
     const target = r.target?.color ? (r.target.color === 'any' ? 'QUALQUER' : r.target.color.toUpperCase()) : '--';
-    const hasCustom = IAConfig.hasRobotConfig(r.id);
-    const wins = r.stats?.wins || 0;
-    const losses = r.stats?.losses || 0;
-    const total = wins + losses;
-    const wr = total > 0 ? Math.round((wins / total) * 100) : 0;
-    const streak = r.stats?.currentStreak || 0;
-    const strategy = r.iaState?.activeStrategy || r.strategy || '--';
-    const galeMax = r.gale?.max || 0;
-    const sl = r.signalLimit;
-    const slUsed = r._signalTimestamps?.length || 0;
-    const slMax = sl?.maxSignals || 10;
-    const wrColor = wr >= 60 ? 'var(--green)' : wr >= 45 ? 'var(--yellow)' : 'var(--red)';
-    const streakStr = streak > 0 ? '+' + streak : streak < 0 ? '' + streak : '0';
-    const streakColor = streak > 0 ? 'var(--green)' : streak < 0 ? 'var(--red)' : 'var(--text3)';
     return `<div class="robot-card ${r.id === currentRobotId ? 'active' : ''}" onclick="selectRobot('${r.id}')">
       <div class="rc-header">
         <span class="rc-name" title="${escapeHtml(r.name)}">${escapeHtml(r.name)}</span>
         <span class="rc-status ${r.status}">${r.status.substring(0,3)}</span>
       </div>
-      <div class="rc-tags">
-        <span class="rc-tag game">${r.game}</span>
-        <span class="rc-tag target">${target}</span>
-        <span class="rc-tag ia">IA</span>
-        ${hasCustom ? '<span class="rc-tag config">CONFIG</span>' : ''}
-      </div>
-      <div class="rc-stats">
-        <div class="rc-stat"><span class="label">WR</span><span class="value" style="color:${wrColor}">${wr}%</span></div>
-        <div class="rc-stat"><span class="label">W/L</span><span class="value">${wins}/${losses}</span></div>
-        <div class="rc-stat"><span class="label">Streak</span><span class="value" style="color:${streakColor}">${streakStr}</span></div>
-        ${galeMax > 0 ? `<div class="rc-stat"><span class="label">Gale</span><span class="value">${galeMax}</span></div>` : ''}
-        ${sl?.enabled ? `<div class="rc-stat"><span class="label">Limit</span><span class="value" style="color:var(--blue)">${slUsed}/${slMax}</span></div>` : ''}
-      </div>
-      <div class="rc-strategy" title="${escapeHtml(strategy)}">${escapeHtml(strategy)}</div>
-      <div class="rc-actions">
-        <button class="rc-btn ia" onclick="event.stopPropagation();selectRobot('${r.id}')" title="Configurar IA">⚙</button>
+      <div class="rc-info">
+        <span>${r.game}</span>
+        <span>${target}</span>
+        ${iaActive ? '<span class="ia-badge">IA</span>' : ''}
+        <span>S:${score}</span>
       </div>
     </div>`;
   }).join('');
@@ -571,10 +484,6 @@ function renderRobots() {
 
 function selectRobot(id) {
   currentRobotId = id;
-  IAConfig.setActiveRobot(id);
-  document.querySelector('.ia-page').classList.remove('no-selection');
-  document.getElementById('editorPanels').classList.add('visible');
-  document.getElementById('rightPanels').classList.add('visible');
   const robot = RobotEngine.getAllRobots().find(r => r.id === id);
   if (robot && robot.history && robot.history.length >= 10) {
     const savedIA = robot.iaInteligente;
@@ -596,33 +505,8 @@ function selectRobot(id) {
     }
     robot.iaInteligente = savedIA;
   }
-  const hasCustom = IAConfig.hasRobotConfig(id);
-  document.getElementById('btnResetGlobal').style.display = hasCustom ? 'block' : 'none';
-  document.getElementById('robotConfigBadge').style.display = hasCustom ? 'inline-flex' : 'none';
-  loadWeights();
-  loadSettings();
-  loadPenalty();
-  loadBoost();
-  loadScoreboard();
-  loadRules();
-  loadCode();
   renderRobots();
   renderEvaluations();
-}
-
-function resetRobotToGlobal() {
-  if (!currentRobotId) return;
-  if (!confirm('Resetar todas as configs deste robô para o global?')) return;
-  IAConfig.deleteRobotConfig(currentRobotId);
-  document.getElementById('btnResetGlobal').style.display = 'none';
-  document.getElementById('robotConfigBadge').style.display = 'none';
-  loadWeights();
-  loadSettings();
-  loadPenalty();
-  loadBoost();
-  loadScoreboard();
-  loadRules();
-  loadCode();
 }
 
 function renderEvaluations() {
@@ -726,8 +610,7 @@ function renderEvaluations() {
 }
 
 function loadWeights() {
-  const cfg = IAConfig.getActiveConfig();
-  const w = cfg.weights;
+  const w = IAConfig.weights;
   document.getElementById('wConfidence').value = w.confidence;
   document.getElementById('wConfidenceVal').textContent = w.confidence;
   document.getElementById('wConfidenceBar').style.width = w.confidence + '%';
@@ -743,37 +626,25 @@ function loadWeights() {
 }
 
 function updateWeight(key, val) {
-  const cfg = IAConfig.getActiveConfig();
-  cfg.weights[key] = parseInt(val);
+  IAConfig.weights[key] = parseInt(val);
   document.getElementById('w' + key.charAt(0).toUpperCase() + key.slice(1) + 'Val').textContent = val;
   document.getElementById('w' + key.charAt(0).toUpperCase() + key.slice(1) + 'Bar').style.width = val + '%';
-  if (currentRobotId) {
-    IAConfig.saveRobotConfig(currentRobotId, { weights: cfg.weights });
-  } else {
-    IAConfig.weights = cfg.weights;
-    IAConfig.save();
-  }
+  IAConfig.save();
 }
 
 function normalizeWeights() {
-  IAConfig.normalizeWeights(currentRobotId);
+  IAConfig.normalizeWeights();
   loadWeights();
 }
 
 function resetWeights() {
-  const defaults = { confidence: 35, confluences: 20, winRate: 30, matched: 15 };
-  if (currentRobotId) {
-    IAConfig.saveRobotConfig(currentRobotId, { weights: defaults });
-  } else {
-    IAConfig.weights = { ...defaults };
-    IAConfig.save();
-  }
+  IAConfig.weights = { confidence: 35, confluences: 20, winRate: 30, matched: 15 };
+  IAConfig.save();
   loadWeights();
 }
 
 function loadSettings() {
-  const cfg = IAConfig.getActiveConfig();
-  const s = cfg.settings;
+  const s = IAConfig.settings;
   document.getElementById('sReavaliation').value = s.reavaliationInterval;
   document.getElementById('sMinHistory').value = s.minHistoryRequired;
   document.getElementById('sMinConfidence').value = s.minConfidenceToAct;
@@ -785,57 +656,36 @@ function loadSettings() {
 
 function updateSetting(key, val) {
   if (typeof val === 'string' && !isNaN(val)) val = parseInt(val);
-  const cfg = IAConfig.getActiveConfig();
-  cfg.settings[key] = val;
-  if (currentRobotId) {
-    IAConfig.saveRobotConfig(currentRobotId, { settings: cfg.settings });
-  } else {
-    IAConfig.settings = cfg.settings;
-    IAConfig.save();
-  }
+  IAConfig.settings[key] = val;
+  IAConfig.save();
 }
 
 function loadPenalty() {
-  const cfg = IAConfig.getActiveConfig();
-  const p = cfg.penalty;
+  const p = IAConfig.penalty;
   document.getElementById('pOnLoss').value = p.onLoss;
   document.getElementById('pMax').value = p.maxPenalty;
   document.getElementById('pDecay').value = p.decayPerWin;
 }
 
 function updatePenalty(key, val) {
-  const cfg = IAConfig.getActiveConfig();
-  cfg.penalty[key] = parseInt(val);
-  if (currentRobotId) {
-    IAConfig.saveRobotConfig(currentRobotId, { penalty: cfg.penalty });
-  } else {
-    IAConfig.penalty = cfg.penalty;
-    IAConfig.save();
-  }
+  IAConfig.penalty[key] = parseInt(val);
+  IAConfig.save();
 }
 
 function loadBoost() {
-  const cfg = IAConfig.getActiveConfig();
-  const b = cfg.boost;
+  const b = IAConfig.boost;
   document.getElementById('bStreak').value = b.onWinStreak;
   document.getElementById('bThreshold').value = b.streakThreshold;
   document.getElementById('bMax').value = b.maxBoost;
 }
 
 function updateBoost(key, val) {
-  const cfg = IAConfig.getActiveConfig();
-  cfg.boost[key] = parseInt(val);
-  if (currentRobotId) {
-    IAConfig.saveRobotConfig(currentRobotId, { boost: cfg.boost });
-  } else {
-    IAConfig.boost = cfg.boost;
-    IAConfig.save();
-  }
+  IAConfig.boost[key] = parseInt(val);
+  IAConfig.save();
 }
 
 function loadScoreboard() {
-  const cfg = IAConfig.getActiveConfig();
-  const s = cfg.scoreboard || {};
+  const s = IAConfig.scoreboard || {};
   document.getElementById('sbLosingStreakPause').value = s.losingStreakPause || 3;
   document.getElementById('sbLosingStreakPauseMin').value = s.losingStreakPauseMinutes || 15;
   document.getElementById('sbRecentLossStreak').value = s.recentLossStreakPause || 4;
@@ -854,20 +704,13 @@ function loadScoreboard() {
 }
 
 function updateScoreboard(key, val) {
-  const cfg = IAConfig.getActiveConfig();
-  if (!cfg.scoreboard) cfg.scoreboard = {};
-  cfg.scoreboard[key] = parseInt(val);
-  if (currentRobotId) {
-    IAConfig.saveRobotConfig(currentRobotId, { scoreboard: cfg.scoreboard });
-  } else {
-    IAConfig.scoreboard = cfg.scoreboard;
-    IAConfig.save();
-  }
+  if (!IAConfig.scoreboard) IAConfig.scoreboard = {};
+  IAConfig.scoreboard[key] = parseInt(val);
+  IAConfig.save();
 }
 
 function loadRules() {
-  const cfg = IAConfig.getActiveConfig();
-  const rules = cfg.rules;
+  const rules = IAConfig.rules;
   const el = document.getElementById('rulesList');
   if (!rules.length) { el.innerHTML = '<div style="text-align:center;color:var(--text3);font-size:11px;padding:16px">Nenhuma regra configurada</div>'; return; }
   el.innerHTML = rules.map(r => `
@@ -890,8 +733,7 @@ function openRuleModal(ruleId) {
   editingRuleId = ruleId || null;
   const modal = document.getElementById('ruleModal');
   if (editingRuleId) {
-    const cfg = IAConfig.getActiveConfig();
-    const rule = cfg.rules.find(r => r.id === editingRuleId);
+    const rule = IAConfig.rules.find(r => r.id === editingRuleId);
     if (rule) {
       document.getElementById('ruleModalTitle').textContent = 'Editar Regra';
       document.getElementById('ruleName').value = rule.name;
@@ -923,22 +765,10 @@ function saveRule() {
   const value = parseInt(document.getElementById('ruleValue').value) || 0;
   const description = document.getElementById('ruleDesc').value.trim();
   if (!name || !condition) return;
-  if (currentRobotId) {
-    const cfg = IAConfig.getActiveConfig();
-    const rules = cfg.rules.map(r => ({ ...r }));
-    if (editingRuleId) {
-      const idx = rules.findIndex(r => r.id === editingRuleId);
-      if (idx !== -1) { rules[idx] = { ...rules[idx], name, condition, action, value, description }; }
-    } else {
-      rules.push({ id: Date.now(), enabled: true, name, condition, action, value, description });
-    }
-    IAConfig.saveRobotConfig(currentRobotId, { rules });
+  if (editingRuleId) {
+    IAConfig.updateRule(editingRuleId, { name, condition, action, value, description });
   } else {
-    if (editingRuleId) {
-      IAConfig.updateRule(editingRuleId, { name, condition, action, value, description });
-    } else {
-      IAConfig.addRule({ name, condition, action, value, description });
-    }
+    IAConfig.addRule({ name, condition, action, value, description });
   }
   closeRuleModal();
   loadRules();
@@ -947,52 +777,29 @@ function saveRule() {
 function editRule(id) { openRuleModal(id); }
 
 function deleteRule(id) {
-  if (confirm('Deletar esta regra?')) {
-    if (currentRobotId) {
-      const cfg = IAConfig.getActiveConfig();
-      const rules = cfg.rules.filter(r => r.id !== id);
-      IAConfig.saveRobotConfig(currentRobotId, { rules });
-    } else {
-      IAConfig.removeRule(id);
-    }
-    loadRules();
-  }
+  if (confirm('Deletar esta regra?')) { IAConfig.removeRule(id); loadRules(); }
 }
 
 function toggleRule(id) {
-  if (currentRobotId) {
-    const cfg = IAConfig.getActiveConfig();
-    const rules = cfg.rules.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r);
-    IAConfig.saveRobotConfig(currentRobotId, { rules });
-  } else {
-    IAConfig.toggleRule(id);
-  }
+  IAConfig.toggleRule(id);
   loadRules();
 }
 
 function loadCode() {
-  const cfg = IAConfig.getActiveConfig();
-  document.getElementById('codeEditor').value = cfg.customFunctions[currentTab] || '';
+  document.getElementById('codeEditor').value = IAConfig.customFunctions[currentTab] || '';
 }
 
 function switchCodeTab(tab) {
   document.querySelectorAll('.code-tab').forEach(t => t.classList.remove('active'));
   document.querySelector(`.code-tab[onclick="switchCodeTab('${tab}')"]`).classList.add('active');
   currentTab = tab;
-  const cfg = IAConfig.getActiveConfig();
-  document.getElementById('codeEditor').value = cfg.customFunctions[tab] || '';
+  document.getElementById('codeEditor').value = IAConfig.customFunctions[tab] || '';
   document.getElementById('codeStatus').textContent = '';
 }
 
 function saveCode() {
-  const cfg = IAConfig.getActiveConfig();
-  cfg.customFunctions[currentTab] = document.getElementById('codeEditor').value;
-  if (currentRobotId) {
-    IAConfig.saveRobotConfig(currentRobotId, { customFunctions: cfg.customFunctions });
-  } else {
-    IAConfig.customFunctions = cfg.customFunctions;
-    IAConfig.save();
-  }
+  IAConfig.customFunctions[currentTab] = document.getElementById('codeEditor').value;
+  IAConfig.save();
   document.getElementById('codeStatus').textContent = 'Salvo!';
   document.getElementById('codeStatus').style.color = 'var(--green)';
 }

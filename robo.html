@@ -2,6 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Robo - Sistema</title>
 <link rel="stylesheet" href="style.css">
@@ -96,12 +97,7 @@
 </div>
 <script src="config.js"></script>
 <script src="saved-data.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-<script src="firebase-config.js"></script>
-<script src="firebase-storage.js"></script>
 <script src="store.js"></script>
-<script>try{FirebaseStorage.init();}catch(e){}</script>
 <script src="event-bus.js"></script>
 <script src="utils.js"></script>
 <script src="ws-source.js"></script>
@@ -1008,6 +1004,10 @@ async function resetRobot() {
   r.lastResult = null;
   r.lastSignalTime = 0;
   r.startedAt = null;
+  r._signalTimestamps = [];
+  r.strategyIndex = 0;
+  r._signalLimitPaused = false;
+  if (r._signalLimitTimer) { clearTimeout(r._signalLimitTimer); r._signalLimitTimer = null; }
   r.signalFlow = { step1:'Aguardando padrao...', step2:'Nenhuma entrada pendente', step3:'Aguardando entrada...', step4:'Placar sera atualizado apos resultado' };
   r.diagnostic = { status:'IDLE', analyzedResults:0, mainPattern:null, confidence:0, suggestedEntry:null, patternScores:{}, totalScore:0, filterResults:{}, decision:null, risk:'BAIXO', signalScore:0, confluences:0, signalBlocked:false, blockReason:'' };
   RobotEngine.save();

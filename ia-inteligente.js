@@ -1,9 +1,6 @@
 const IAConfig = {
   _key: 'ia-inteligente-config',
-  _robotConfigsKey: 'ia-inteligente-robot-configs',
   _listeners: [],
-  _robotConfigs: {},
-  _activeRobotId: null,
 
   weights: {
     confidence: 35,
@@ -161,7 +158,6 @@ function onLoss(result) {
       if (saved.customFunctions) Object.assign(this.customFunctions, saved.customFunctions);
       if (saved.decisionLog) this.decisionLog = saved.decisionLog;
     }
-    this.loadRobotConfigs();
     return this;
   },
 
@@ -233,9 +229,7 @@ function onLoss(result) {
     this.rules = [];
     this.customFunctions = { evaluate: '', filter: '', prioritize: '', onWin: '', onLoss: '' };
     this.decisionLog = [];
-    this._robotConfigs = {};
     this.save();
-    this.saveRobotConfigs();
     this._emit('reset');
   },
 
@@ -280,120 +274,37 @@ function onLoss(result) {
     this._emit('decisionLogged', entry);
   },
 
-  normalizeWeights(robotId) {
-    const cfg = robotId ? this.getConfigForRobot(robotId) : this;
-    const total = cfg.weights.confidence + cfg.weights.confluences + cfg.weights.winRate + cfg.weights.matched;
+  normalizeWeights() {
+    const total = this.weights.confidence + this.weights.confluences + this.weights.winRate + this.weights.matched;
     if (total === 0) return;
     const factor = 100 / total;
-    cfg.weights.confidence = Math.round(cfg.weights.confidence * factor);
-    cfg.weights.confluences = Math.round(cfg.weights.confluences * factor);
-    cfg.weights.winRate = Math.round(cfg.weights.winRate * factor);
-    cfg.weights.matched = 100 - cfg.weights.confidence - cfg.weights.confluences - cfg.weights.winRate;
-    if (robotId) this.saveRobotConfig(robotId, { weights: cfg.weights });
-    else this.save();
+    this.weights.confidence = Math.round(this.weights.confidence * factor);
+    this.weights.confluences = Math.round(this.weights.confluences * factor);
+    this.weights.winRate = Math.round(this.weights.winRate * factor);
+    this.weights.matched = 100 - this.weights.confidence - this.weights.confluences - this.weights.winRate;
+    this.save();
   },
 
-  evaluateScore(data, robotId) {
-    const cfg = robotId ? this.getConfigForRobot(robotId) : this;
-    const w = cfg.weights;
+  evaluateScore(data) {
+    const w = this.weights;
     let score = 0;
     score += (data.confidence || 0) * (w.confidence / 100);
     score += (data.confluences || 0) * 8 * (w.confluences / 100);
     score += (data.winRate || 0) * (w.winRate / 100);
     score += ((data.matched ? 15 : 0)) * (w.matched / 100);
-    if (cfg.settings.enableMultiplierBoost && data.multiplier) {
+    if (this.settings.enableMultiplierBoost && data.multiplier) {
       score = Math.round(score * (data.multiplier / 50));
     }
-    if (cfg.settings.enablePenalty && data.penalty) {
+    if (this.settings.enablePenalty && data.penalty) {
       score = Math.max(0, score - data.penalty);
     }
-    if (cfg.settings.enableWinStreakBoost && data.winStreak) {
-      const streakBonus = Math.min(cfg.boost.maxBoost, Math.floor(data.winStreak / cfg.boost.streakThreshold) * cfg.boost.onWinStreak);
+    if (this.settings.enableWinStreakBoost && data.winStreak) {
+      const streakBonus = Math.min(this.boost.maxBoost, Math.floor(data.winStreak / this.boost.streakThreshold) * this.boost.onWinStreak);
       score += streakBonus;
     }
-    if (data.confidence >= 90) score += cfg.boost.confidenceAbove90;
-    else if (data.confidence >= 80) score += cfg.boost.confidenceAbove80;
+    if (data.confidence >= 90) score += this.boost.confidenceAbove90;
+    else if (data.confidence >= 80) score += this.boost.confidenceAbove80;
     return Math.round(Math.max(0, Math.min(100, score)));
-  },
-
-  applyRules(evaluation, robotState, robotId) {
-    const cfg = robotId ? this.getConfigForRobot(robotId) : this;
-    let result = { ...evaluation, penalty: evaluation.penalty || 0, boost: evaluation.boost || 0, ignored: false, appliedRules: [] };
-    for (const rule of cfg.rules) {
-      if (!rule.enabled) continue;
-      try {
-        const condFn = new Function('evaluation', 'robotState', 'IAConfig',
-          `with(Math){with(Math.round){return (${rule.condition})}}`
-        );
-        if (condFn(result, robotState, cfg)) {
-          result.appliedRules.push(rule.name);
-          switch (rule.action) {
-            case 'penalty': result.penalty += rule.value; break;
-            case 'boost': result.boost += rule.value; break;
-            case 'multiplier': result.multiplier = (result.multiplier || 1) * rule.value; break;
-            case 'ignore': result.ignored = true; break;
-            case 'setConfidence': result.confidence = rule.value; break;
-            case 'setTarget': result.target = rule.value; break;
-          }
-        }
-      } catch (e) { /* skip rule error */ }
-    }
-    return result;
-  },
-
-  runCustomEvaluate(evaluation, robotId) {
-    const cfg = robotId ? this.getConfigForRobot(robotId) : this;
-    try {
-      const fn = new Function('evaluation', 'IAConfig', cfg.customFunctions.evaluate + '\nreturn customEvaluate(evaluation);');
-      return fn(evaluation, cfg) || evaluation.score;
-    } catch (e) {
-      return evaluation.score;
-    }
-  },
-
-  runCustomFilter(signal, robotId) {
-    const cfg = robotId ? this.getConfigForRobot(robotId) : this;
-    try {
-      const fn = new Function('signal', 'IAConfig', cfg.customFunctions.filter + '\nreturn customFilter(signal);');
-      return fn(signal, cfg);
-    } catch (e) {
-      return true;
-    }
-  },
-
-  runCustomPrioritize(evaluations, robotId) {
-    const cfg = robotId ? this.getConfigForRobot(robotId) : this;
-    try {
-      const fn = new Function('evaluations', 'IAConfig', cfg.customFunctions.prioritize + '\nreturn customPrioritize(evaluations);');
-      return fn(evaluations, cfg) || evaluations;
-    } catch (e) {
-      return evaluations;
-    }
-  },
-
-  runOnWin(result, robotId) {
-    const cfg = robotId ? this.getConfigForRobot(robotId) : this;
-    try {
-      const fn = new Function('result', 'IAConfig', cfg.customFunctions.onWin);
-      fn(result, cfg);
-    } catch (e) { /* skip */ }
-  },
-
-  runOnLoss(result, robotId) {
-    const cfg = robotId ? this.getConfigForRobot(robotId) : this;
-    try {
-      const fn = new Function('result', 'IAConfig', cfg.customFunctions.onLoss);
-      fn(result, cfg);
-    } catch (e) { /* skip */ }
-  },
-
-  addDecisionLog(entry, robotId) {
-    this.decisionLog.push({ ...entry, robotId, timestamp: Date.now() });
-    if (this.decisionLog.length > this._maxLogSize) {
-      this.decisionLog = this.decisionLog.slice(-this._maxLogSize);
-    }
-    this.save();
-    this._emit('decisionLogged', entry);
   },
 
   applyRules(evaluation, robotState) {
@@ -461,15 +372,14 @@ function onLoss(result) {
     } catch (e) { /* skip */ }
   },
 
-  getNormalizedWeights(robotId) {
-    const cfg = robotId ? this.getConfigForRobot(robotId) : this;
-    const total = cfg.weights.confidence + cfg.weights.confluences + cfg.weights.winRate + cfg.weights.matched;
+  getNormalizedWeights() {
+    const total = this.weights.confidence + this.weights.confluences + this.weights.winRate + this.weights.matched;
     if (total === 0) return { confidence: 25, confluences: 25, winRate: 25, matched: 25 };
     return {
-      confidence: Math.round((cfg.weights.confidence / total) * 100),
-      confluences: Math.round((cfg.weights.confluences / total) * 100),
-      winRate: Math.round((cfg.weights.winRate / total) * 100),
-      matched: 100 - Math.round((cfg.weights.confidence / total) * 100) - Math.round((cfg.weights.confluences / total) * 100) - Math.round((cfg.weights.winRate / total) * 100)
+      confidence: Math.round((this.weights.confidence / total) * 100),
+      confluences: Math.round((this.weights.confluences / total) * 100),
+      winRate: Math.round((this.weights.winRate / total) * 100),
+      matched: 100 - Math.round((this.weights.confidence / total) * 100) - Math.round((this.weights.confluences / total) * 100) - Math.round((this.weights.winRate / total) * 100)
     };
   },
 
@@ -514,79 +424,6 @@ function onLoss(result) {
     this._listeners.filter(l => l.event === event).forEach(l => {
       try { l.fn(data); } catch (e) { /* skip */ }
     });
-  },
-
-  loadRobotConfigs() {
-    try {
-      const raw = localStorage.getItem(this._robotConfigsKey);
-      this._robotConfigs = raw ? JSON.parse(raw) : {};
-    } catch (e) {
-      this._robotConfigs = {};
-    }
-  },
-
-  saveRobotConfigs() {
-    try {
-      localStorage.setItem(this._robotConfigsKey, JSON.stringify(this._robotConfigs));
-    } catch (e) { /* skip */ }
-  },
-
-  setActiveRobot(robotId) {
-    this._activeRobotId = robotId;
-  },
-
-  getActiveConfig() {
-    if (!this._activeRobotId || !this._robotConfigs[this._activeRobotId]) {
-      return { weights: this.weights, settings: this.settings, penalty: this.penalty, boost: this.boost, scoreboard: this.scoreboard, rules: this.rules, customFunctions: this.customFunctions };
-    }
-    const rc = this._robotConfigs[this._activeRobotId];
-    return {
-      weights: rc.weights || this.weights,
-      settings: rc.settings || this.settings,
-      penalty: rc.penalty || this.penalty,
-      boost: rc.boost || this.boost,
-      scoreboard: rc.scoreboard || this.scoreboard,
-      rules: rc.rules || this.rules,
-      customFunctions: rc.customFunctions || this.customFunctions
-    };
-  },
-
-  getConfigForRobot(robotId) {
-    if (!robotId || !this._robotConfigs[robotId]) {
-      return { weights: this.weights, settings: this.settings, penalty: this.penalty, boost: this.boost, scoreboard: this.scoreboard, rules: this.rules, customFunctions: this.customFunctions };
-    }
-    const rc = this._robotConfigs[robotId];
-    return {
-      weights: rc.weights || this.weights,
-      settings: rc.settings || this.settings,
-      penalty: rc.penalty || this.penalty,
-      boost: rc.boost || this.boost,
-      scoreboard: rc.scoreboard || this.scoreboard,
-      rules: rc.rules || this.rules,
-      customFunctions: rc.customFunctions || this.customFunctions
-    };
-  },
-
-  saveRobotConfig(robotId, data) {
-    if (!robotId) return;
-    if (!this._robotConfigs[robotId]) this._robotConfigs[robotId] = {};
-    if (data.weights) this._robotConfigs[robotId].weights = { ...data.weights };
-    if (data.settings) this._robotConfigs[robotId].settings = { ...data.settings };
-    if (data.penalty) this._robotConfigs[robotId].penalty = { ...data.penalty };
-    if (data.boost) this._robotConfigs[robotId].boost = { ...data.boost };
-    if (data.scoreboard) this._robotConfigs[robotId].scoreboard = { ...data.scoreboard };
-    if (data.rules) this._robotConfigs[robotId].rules = data.rules.map(r => ({ ...r }));
-    if (data.customFunctions) this._robotConfigs[robotId].customFunctions = { ...data.customFunctions };
-    this.saveRobotConfigs();
-  },
-
-  deleteRobotConfig(robotId) {
-    delete this._robotConfigs[robotId];
-    this.saveRobotConfigs();
-  },
-
-  hasRobotConfig(robotId) {
-    return !!(robotId && this._robotConfigs[robotId]);
   }
 };
 
