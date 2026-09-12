@@ -179,6 +179,8 @@ class Robot {
     if (this._signalTimestamps.length < maxSignals) return false;
     const firstTs = Math.min(...this._signalTimestamps);
     const nextWindowAt = firstTs + intervalMs;
+    localStorage.setItem('signalLimitNotify', JSON.stringify({ robotId: this.id, type: 'update', time: Date.now() }));
+    EventBus.emit('robot:signalLimitUpdate', { robotId: this.id });
     return this.pauseSignalLimitUntil(this._signalTimestamps.length, maxSignals, nextWindowAt, true);
   }
 

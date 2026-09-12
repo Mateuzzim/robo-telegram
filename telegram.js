@@ -2057,16 +2057,9 @@ const TelegramService = {
     const timestamps = (d?.timestamps || robot._signalTimestamps || []).filter(t => t > now - intervalMs);
     const remaining = Math.max(0, (sl.maxSignals || 10) - timestamps.length);
     const name = robot.name || 'Robô';
-    const signalHistory = robot.signalHistory || [];
-    const windowSignals = signalHistory.filter(h => h.time && h.time > now - intervalMs);
-    const emojiMap = { RED: '🔴', BLACK: '⚫', GREY: '⚫', GREEN: '🟢', BLUE: '🔵', VERMELHO: '🔴', PRETO: '⚫', VERDE: '🟢', AZUL: '🔵' };
-    const targetColor = (robot.target?.color || 'any').toUpperCase();
-    const targetLabel = targetColor === 'ANY' ? 'QUALQUER' : (emojiMap[targetColor] || '') + ' ' + targetColor;
-    const resultsLine = windowSignals.length > 0
-      ? windowSignals.map(h => h.type === 'win' ? '✅' : '❌').join('')
-      : 'Sem entradas ainda';
-    const winsCount = windowSignals.filter(h => h.type === 'win').length;
-    const lossesCount = windowSignals.filter(h => h.type === 'loss').length;
+    const resultsLine = 'Sem entradas ainda';
+    const winsCount = 0;
+    const lossesCount = 0;
     const statusLine = remaining <= 2
       ? '⚠️ <i>Poucas entradas restantes!</i>'
       : '✅ Operando normalmente';
@@ -2131,8 +2124,6 @@ const TelegramService = {
       '-----------------------',
       '🧾 PLACAR= ✅ ' + windowWins + 'W | ❌ ' + windowLosses + 'L',
       '-----------------------',
-      '🌐 TOTAL GERAL= ✅ ' + totalWins + 'W | ❌ ' + totalLosses + 'L',
-      '-----------------------',
       '⏱️ Próxima janela às: ' + nextWindowStr,
       '🔒 Sinais bloqueados até liberação'
     ].join('\n');
@@ -2163,13 +2154,16 @@ const TelegramService = {
     const timestamps = (robot._signalTimestamps || []).filter(t => t > now - intervalMs);
     const remaining = Math.max(0, (sl.maxSignals || 10) - timestamps.length);
     const name = robot.name || 'Robô';
+    const isNewWindow = remaining === (sl.maxSignals || 10);
     const signalHistory = robot.signalHistory || [];
     const windowSignals = signalHistory.filter(h => h.time && h.time > now - intervalMs);
-    const resultsLine = windowSignals.length > 0
-      ? windowSignals.map(h => h.type === 'win' ? '✅' : '❌').join('')
-      : 'Sem entradas ainda';
-    const winsCount = windowSignals.filter(h => h.type === 'win').length;
-    const lossesCount = windowSignals.filter(h => h.type === 'loss').length;
+    const resultsLine = isNewWindow
+      ? 'Sem entradas ainda'
+      : (windowSignals.length > 0
+          ? windowSignals.map(h => h.type === 'win' ? '✅' : '❌').join('')
+          : 'Sem entradas ainda');
+    const winsCount = isNewWindow ? 0 : windowSignals.filter(h => h.type === 'win').length;
+    const lossesCount = isNewWindow ? 0 : windowSignals.filter(h => h.type === 'loss').length;
     const statusLine = remaining <= 2
       ? '⚠️ <i>Poucas entradas restantes!</i>'
       : '✅ Operando normalmente';
